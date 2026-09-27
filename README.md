@@ -48,10 +48,18 @@ the session. One row per session (`external_key = session:<id>`); re-sending is 
 never replaces more complete data. The older workout fields (`workouts`, `workout_start`, …) are still accepted.
 Fixtures of messy payloads: `tests/fixtures/shortcuts/`.
 
+## Backups
+
+A Cron Trigger (`17 10 * * 1`, Mondays 10:17 UTC) writes the full JSON export to R2 under `backups/lodge-gym-<date>.json`
+in the `lodge-gym-photos` bucket and keeps the newest 12. Settings → «پشتیبان» downloads the latest one or a fresh
+export (`GET /api/export`). Emailing the backup is not wired: Cloudflare can only send email from a domain on
+Cloudflare DNS (Email Routing / Email Service), and this app runs on `workers.dev`.
+
 ## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
 - `PUT /api/settings` (unit, week start, re-lock minutes, timezone).
+- `GET /api/backups`, `GET /api/backups/latest`, weekly Cron Trigger.
 - `GET /api/reports/progress` («پیشرفت» page) and `?format=csv` on `/api/reports/week|month`; setting `month_calendar` (`gregorian`|`jalali`).
 - `GET /api/photos` (photo list for the gallery; SPEC §11 lists the other photo routes).
 - `PUT /api/body-mass/:date` (manual body weight, source `manual`) and `set_entries.rir` (migration 0002).

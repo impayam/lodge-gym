@@ -34,7 +34,7 @@ test("first-run setup, recovery codes, /setup closes, logout and Face ID login",
   expect(setup.status()).toBe(404);
 
   await page.getByRole("button", { name: "تنظیمات" }).click();
-  await page.getByRole("button", { name: "خروج" }).click();
+  await page.getByRole("button", { name: "خروج", exact: true }).click();
   await expect(page.getByTestId("login")).toBeVisible();
   await page.getByTestId("login").click();
   await expect(page.getByTestId("next-card")).toBeVisible();

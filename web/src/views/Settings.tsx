@@ -1,8 +1,10 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { faNum } from "../../../worker/lib/digits";
 import { isValidTimeZone } from "../../../worker/lib/time";
 import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
-import { errorText } from "../api";
+import { api, errorText } from "../api";
+import { jalali } from "../format";
+import { fetchFile, shareOrDownload } from "../share";
 import { deviceLabel, registerPasskey } from "../passkey";
 import { logout, navigate, saveSettings, syncNow, useStore } from "../store";
 
@@ -101,6 +103,9 @@ export function Settings() {
         <div class="why">{msg}</div>
       </div>
 
+      <h2>پشتیبان</h2>
+      <Backups />
+
       <h2>همگام‌سازی</h2>
       <div class="card stack">
         <div class="kv">
@@ -122,5 +127,45 @@ export function Settings() {
         </button>
       </div>
     </>
+  );
+}
+
+function Backups() {
+  const [list, setList] = useState<{ name: string; bytes: number; uploaded: string }[] | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    api<{ backups: { name: string; bytes: number; uploaded: string }[] }>("GET", "/backups")
+      .then((r) => setList(r.backups))
+      .catch(() => setList(null));
+  }, []);
+  const get = async (path: string) => {
+    setMsg("");
+    try {
+      const { blob, filename } = await fetchFile(path);
+      await shareOrDownload(blob, filename, "پشتیبان Lodge Gym");
+    } catch (e) {
+      setMsg(e instanceof Error && e.message === "http_404" ? "هنوز پشتیبان خودکاری ساخته نشده است." : errorText(e));
+    }
+  };
+  const latest = list?.[0];
+  return (
+    <div class="card stack" data-testid="backups">
+      <p class="why" style={{ margin: 0 }}>
+        هر دوشنبه یک نسخه‌ی کامل (جلسه‌ها، ست‌ها، داده‌ی ساعت، وزن بدن و فهرست عکس‌ها) به‌صورت خودکار ذخیره می‌شود و ۱۲ نسخه‌ی آخر نگه داشته می‌شود.
+      </p>
+      <div class="kv">
+        <span>آخرین پشتیبان خودکار</span>
+        <span data-testid="last-backup">{latest ? `${jalali(latest.uploaded.slice(0, 10))} · ${faNum(Math.round(latest.bytes / 1024))} KB` : list ? "هنوز ساخته نشده" : "–"}</span>
+      </div>
+      <div class="row">
+        <button type="button" class="btn btn-ghost" disabled={!latest} onClick={() => void get("/backups/latest")}>
+          دانلود آخرین پشتیبان
+        </button>
+        <button type="button" class="btn btn-ghost" data-testid="export-now" onClick={() => void get("/export")}>
+          خروجی کامل همین حالا
+        </button>
+      </div>
+      {msg ? <div class="why">{msg}</div> : null}
+    </div>
   );
 }

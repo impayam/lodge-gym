@@ -17,6 +17,10 @@ database_name = "lodge-gym-db"
 database_id = "f8ba012b-9970-423c-83f3-8c32111695e7"
 migrations_dir = "migrations"
 
+# Weekly backup (Monday 10:17 UTC).
+[triggers]
+crons = ["17 10 * * 1"]
+
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "lodge-gym-photos"

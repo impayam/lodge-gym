@@ -15,6 +15,10 @@ binding = "DB"
 database_name = "lodge-gym-test"
 database_id = "local-test-only"
 
+# Weekly backup (Monday 10:17 UTC).
+[triggers]
+crons = ["17 10 * * 1"]
+
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "lodge-gym-test"

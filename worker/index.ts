@@ -8,6 +8,7 @@ import type { AppBindings } from "./env";
 import { SECURITY_HEADERS } from "./headers";
 import { photoRoutes } from "./photos";
 import { reportRoutes } from "./reports";
+import { exportRoutes, runBackup } from "./backup";
 import { ApiError, errorBody } from "./http";
 
 
@@ -50,6 +51,7 @@ api.route("/tokens", tokenRoutes);
 api.route("/health", healthRoutes);
 api.route("/photos", photoRoutes);
 api.route("/reports", reportRoutes);
+api.route("/", exportRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "مسیر پیدا نشد."), 404));
@@ -71,4 +73,12 @@ app.onError((err, c) => {
   return c.json(errorBody("internal", "خطای سرور. دوباره امتحان کن."), 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  /** Weekly Cron Trigger: full JSON backup to R2, newest 12 kept. */
+  async scheduled(_controller: ScheduledController, env: AppBindings["Bindings"], ctx: ExecutionContext) {
+    ctx.waitUntil(
+      runBackup(env).then((r) => console.log(`backup ${r.key} (${r.bytes} bytes), removed ${r.deleted.length}`))
+    );
+  },
+} satisfies ExportedHandler<AppBindings["Bindings"]>;
