@@ -89,6 +89,12 @@ VALUES ('rv-2026-09-21', '2026-09-21', '2026-09-28T08:00:00Z',
 
 Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REPLACE` with the same `id`).
 
+## Approved report rules
+
+- Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 % (primary muscle only).
+- A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
+- Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
+
 ## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
