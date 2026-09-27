@@ -6,6 +6,10 @@ import { ulid } from "../../worker/lib/ulid";
 import ios17 from "../fixtures/shortcuts/ios17-en-us-default.json";
 import ios18 from "../fixtures/shortcuts/ios18-iso8601.json";
 import persian from "../fixtures/shortcuts/persian-locale.json";
+import samplesEnUs from "../fixtures/shortcuts/samples-en-us-default.json";
+import samples7 from "../fixtures/shortcuts/samples-7days-arrays.json";
+import samplesIso from "../fixtures/shortcuts/samples-iso8601.json";
+import samplesPersian from "../fixtures/shortcuts/samples-persian.json";
 import sevenDays from "../fixtures/shortcuts/seven-days-arrays.json";
 import { Client, ORIGIN, resetAuth, setupOwner } from "./helpers";
 
@@ -55,7 +59,11 @@ function session(over: Partial<WorkoutSession> = {}): WorkoutSession {
   };
 }
 const putSession = (s: WorkoutSession) => client.fetch(`/api/sessions/${s.id}`, { method: "PUT", json: s });
-const rows = async () => (await env.DB.prepare("SELECT * FROM health_workouts ORDER BY started_at").all<HealthWorkout & { raw: string; external_key: string }>()).results;
+type Row = HealthWorkout & { raw: string; external_key: string };
+/** Watch workouts from the legacy workout fields. */
+const rows = async () => (await env.DB.prepare("SELECT * FROM health_workouts WHERE external_key NOT LIKE 'session:%' ORDER BY started_at").all<Row>()).results;
+/** Per-session rows computed from Heart Rate / Active Energy samples. */
+const sessionRows = async () => (await env.DB.prepare("SELECT * FROM health_workouts WHERE external_key LIKE 'session:%' ORDER BY started_at").all<Row>()).results;
 
 describe("shortcut tokens", () => {
   it("creates (shown once, stored hashed), lists and revokes", async () => {
@@ -78,7 +86,97 @@ describe("shortcut tokens", () => {
   });
 });
 
-describe("POST /api/health/raw", () => {
+describe("POST /api/health/raw with Heart Rate + Active Energy samples", () => {
+  it("computes avg/max HR and active kcal inside each session; duration comes from the session", async () => {
+    const s = session();
+    const other = session({ local_date: "2026-09-27", started_at: "2026-09-27T23:00:00.000Z", ended_at: "2026-09-28T00:00:00.000Z" });
+    await putSession(s);
+    await putSession(other);
+    const res = await shortcut(JSON.stringify(samplesIso));
+    const body = (await res.json()) as { sessions: number; hr_samples: number; energy_samples: number; stored: number; message: string };
+    expect(body).toMatchObject({ sessions: 1, hr_samples: 6, energy_samples: 6, stored: 0 });
+    expect(body.message).toBe("Lodge Gym: داده‌ی ساعت برای ۱ جلسه ثبت شد.");
+    const [r] = await sessionRows();
+    expect(r).toMatchObject({ matched_session_id: s.id, hr_avg: 142.5, hr_max: 160, active_kcal: 40.5, duration_sec: 3600, started_at: s.started_at, ended_at: s.ended_at });
+    expect(r.external_key).toBe(`session:${s.id}`);
+    expect(await rows()).toEqual([]);
+  });
+
+  it("is idempotent on re-send and across date/locale variants", async () => {
+    const s = session();
+    await putSession(s);
+    for (const p of [samplesIso, samplesIso, samplesEnUs, samplesPersian]) expect((await shortcut(JSON.stringify(p))).status).toBe(200);
+    const all = await sessionRows();
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({ hr_avg: 142.5, hr_max: 160, active_kcal: 40.5 });
+  });
+
+  it("a later partial window never replaces more complete data", async () => {
+    const s = session();
+    await putSession(s);
+    await shortcut(JSON.stringify(samplesIso));
+    // Only the last heart-rate and energy samples (the 6-hour window cut the session).
+    await shortcut(JSON.stringify({ hr: "150 count/min", hr_time: "2026-09-28T17:55:00-06:00", energy: "9.1 kcal", energy_time: "2026-09-28T17:59:00-06:00" }));
+    expect((await sessionRows())[0]).toMatchObject({ hr_avg: 142.5, active_kcal: 40.5 });
+    // A payload with more samples does replace it.
+    const more = {
+      hr: [...samplesIso.hr.split("\n"), "170 count/min"],
+      hr_time: [...samplesIso.hr_time.split("\n"), "2026-09-28T17:58:00-06:00"],
+      energy: samplesIso.energy,
+      energy_time: samplesIso.energy_time,
+    };
+    await shortcut(JSON.stringify(more));
+    expect((await sessionRows())[0]).toMatchObject({ hr_avg: 148, hr_max: 170, active_kcal: 40.5 });
+  });
+
+  it("an active session uses samples until now and fills in as it continues", async () => {
+    const start = new Date(Date.now() - 40 * 60_000);
+    const s = session({ local_date: new Date().toISOString().slice(0, 10), started_at: start.toISOString(), ended_at: null, status: "active" });
+    await putSession(s);
+    const at = (min: number) => new Date(start.getTime() + min * 60_000).toISOString();
+    await shortcut(JSON.stringify({ hr: "120\n130", hr_time: `${at(5)}\n${at(15)}`, energy: "10 kcal", energy_time: at(10) }));
+    expect((await sessionRows())[0]).toMatchObject({ hr_avg: 125, hr_max: 130, active_kcal: 10, duration_sec: null, ended_at: null });
+    await shortcut(JSON.stringify({ hr: "120\n130\n150", hr_time: `${at(5)}\n${at(15)}\n${at(30)}`, energy: "10 kcal\n12 kcal", energy_time: `${at(10)}\n${at(25)}` }));
+    expect((await sessionRows())[0]).toMatchObject({ hr_avg: 133.3, hr_max: 150, active_kcal: 22 });
+  });
+
+  it("a 7-day sync fills every session in range and ignores samples between sessions", async () => {
+    const a = session({ local_date: "2026-09-22", started_at: "2026-09-22T13:30:00.000Z", ended_at: "2026-09-22T14:30:00.000Z" });
+    const b = session();
+    await putSession(a);
+    await putSession(b);
+    const body = (await (await shortcut(JSON.stringify(samples7))).json()) as { sessions: number };
+    expect(body.sessions).toBe(2);
+    const all = await sessionRows();
+    expect(all.map((r) => [r.matched_session_id, r.hr_avg, r.hr_max, r.active_kcal])).toEqual([
+      [a.id, 120, 130, 50.5],
+      [b.id, 145, 150, 3.2],
+    ]);
+  });
+
+  it("samples without a session in the app are reported, not stored", async () => {
+    const body = (await (await shortcut(JSON.stringify(samplesIso))).json()) as { sessions: number; message: string };
+    expect(body.sessions).toBe(0);
+    expect(body.message).toContain("جلسه‌ای در برنامه ثبت نشده");
+    expect(await sessionRows()).toEqual([]);
+  });
+
+  it("bootstrap and status carry the session stats; deleting the session removes them", async () => {
+    const start = new Date(Date.now() - 3 * 3600_000);
+    const s = session({ local_date: new Date().toISOString().slice(0, 10), started_at: start.toISOString(), ended_at: new Date(start.getTime() + 3600_000).toISOString() });
+    await putSession(s);
+    await shortcut(JSON.stringify({ hr: "140\n150", hr_time: `${new Date(start.getTime() + 600_000).toISOString()}\n${new Date(start.getTime() + 1200_000).toISOString()}`, energy: "80 kcal", energy_time: new Date(start.getTime() + 900_000).toISOString() }));
+    const b = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
+    expect(b.watch.find((w) => w.matched_session_id === s.id)).toMatchObject({ kind: "session", hr_avg: 145, active_kcal: 80 });
+    const st = (await (await client.fetch("/api/health/status")).json()) as { workouts: HealthWorkout[]; last_result: { sessions: number } };
+    expect(st.workouts[0]).toMatchObject({ kind: "session", matched_session_id: s.id });
+    expect(st.last_result.sessions).toBe(1);
+    await client.fetch(`/api/sessions/${s.id}`, { method: "DELETE" });
+    expect(await sessionRows()).toEqual([]);
+  });
+});
+
+describe("POST /api/health/raw (legacy workout fields)", () => {
   it("rejects missing and wrong tokens; a session cookie is not enough", async () => {
     expect((await shortcut(JSON.stringify(ios18), "application/json", null)).status).toBe(401);
     expect((await shortcut(JSON.stringify(ios18), "application/json", "Bearer lgt_nope")).status).toBe(401);
@@ -93,7 +191,7 @@ describe("POST /api/health/raw", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; stored: number; matched: number; message: string };
     expect(body).toMatchObject({ ok: true, stored: 1, matched: 1 });
-    expect(body.message).toContain("۱ تمرین دریافت شد");
+    expect(body.message).toContain("۱ تمرین دریافت شد، ۱ مورد به جلسه وصل شد");
     const [w] = await rows();
     expect(w).toMatchObject({
       activity_type: "Traditional Strength Training",

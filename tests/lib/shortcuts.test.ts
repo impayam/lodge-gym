@@ -9,6 +9,10 @@ import {
   parseLooseNumber,
   parseShortcutsPayload,
 } from "../../worker/lib/shortcuts";
+import samplesEnUs from "../fixtures/shortcuts/samples-en-us-default.json";
+import samplesIso from "../fixtures/shortcuts/samples-iso8601.json";
+import samplesPersian from "../fixtures/shortcuts/samples-persian.json";
+import { sessionWatchStats } from "../../worker/lib/watchstats";
 import euDotted from "../fixtures/shortcuts/european-dotted.json";
 import hrNoTimes from "../fixtures/shortcuts/hr-without-times.json";
 import ios17 from "../fixtures/shortcuts/ios17-en-us-default.json";
@@ -179,5 +183,50 @@ describe("payload fixtures", () => {
     expect(parseShortcutsPayload({ foo: "bar" }, TZ, NOW).workouts).toEqual([]);
     expect(parseShortcutsPayload("nonsense", TZ, NOW).workouts).toEqual([]);
     expect(parseShortcutsPayload(null, TZ, NOW).workouts).toEqual([]);
+  });
+});
+
+
+describe("sample payloads (Heart Rate + Active Energy, no workouts)", () => {
+  const session = { started_at: "2026-09-28T23:00:00.000Z", ended_at: "2026-09-29T00:00:00.000Z" };
+  const expected = { hr_avg: 142.5, hr_max: 160, hr_count: 4, active_kcal: 40.5, energy_count: 4, duration_sec: 3600 };
+
+  it.each([
+    ["ISO 8601", samplesIso],
+    ["en-US default style, Title Case keys, CRLF, Cal", samplesEnUs],
+    ["Persian locale, Jalali dates, Persian digits", samplesPersian],
+  ])("%s", (_name, payload) => {
+    const r = parseShortcutsPayload(payload, TZ, NOW);
+    expect(r.workouts).toEqual([]);
+    expect(r.hr_samples).toBe(6);
+    expect(r.energy_samples).toBe(6);
+    expect(r.warnings).toEqual([]);
+    expect(sessionWatchStats(session, r.hr, r.energy, NOW.getTime())).toEqual(expected);
+  });
+
+  it("an active session counts samples until now", () => {
+    const r = parseShortcutsPayload(samplesIso, TZ, NOW);
+    const active = { started_at: "2026-09-28T23:00:00.000Z", ended_at: null };
+    const at = Date.parse("2026-09-28T23:45:00.000Z");
+    expect(sessionWatchStats(active, r.hr, r.energy, at)).toEqual({ hr_avg: 140, hr_max: 160, hr_count: 3, active_kcal: 31.4, energy_count: 3, duration_sec: null });
+  });
+
+  it("samples outside the session give nothing", () => {
+    const r = parseShortcutsPayload(samplesIso, TZ, NOW);
+    const other = { started_at: "2026-09-27T23:00:00.000Z", ended_at: "2026-09-28T00:00:00.000Z" };
+    expect(sessionWatchStats(other, r.hr, r.energy, NOW.getTime())).toMatchObject({ hr_count: 0, energy_count: 0, hr_avg: null, active_kcal: null });
+  });
+
+  it("energy without times is reported, not guessed", () => {
+    const r = parseShortcutsPayload({ energy: "8 kcal\n9 kcal" }, TZ, NOW);
+    expect(r.energy).toEqual([]);
+    expect(r.warnings).toContain("energy_without_time_ignored");
+  });
+
+  it("legacy workout fields still work next to the new ones", () => {
+    const r = parseShortcutsPayload({ ...samplesIso, workouts: "Traditional Strength Training", workout_start: "2026-09-28T17:05:00-06:00", workout_end: "2026-09-28T17:58:00-06:00" }, TZ, NOW);
+    expect(r.workouts).toHaveLength(1);
+    expect(r.workouts[0]).toMatchObject({ hr_avg: 142.5, hr_max: 160, active_kcal: null });
+    expect(r.energy_samples).toBe(6);
   });
 });

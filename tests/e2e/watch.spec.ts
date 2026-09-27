@@ -5,7 +5,7 @@ test.describe.configure({ mode: "serial" });
 
 const denverDate = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
 
-test("Apple Watch page: token, shortcut payload, match status, manual attach, session card", async ({ page, context, baseURL }) => {
+test("legacy workout fields: match status, manual attach, session card, revoke", async ({ page, context, baseURL }) => {
   resetWorkouts();
   sql("DELETE FROM health_workouts");
   sql("DELETE FROM api_tokens");
@@ -70,7 +70,8 @@ test("Apple Watch page: token, shortcut payload, match status, manual attach, se
   await page.getByRole("button", { name: "بررسی دوباره" }).click();
   await expect(page.getByTestId("last-received")).not.toHaveText("هنوز چیزی نرسیده");
   const rowsList = page.getByTestId("watch-row");
-  await expect(rowsList).toHaveCount(2);
+  // The strength workout, the walk, and the per-session row computed from the heart-rate samples.
+  await expect(rowsList).toHaveCount(3);
   const strength = rowsList.filter({ hasText: "تمرین قدرتی" });
   await expect(strength).toContainText("وصل به جلسه");
   await expect(strength).toContainText("۵۰ دقیقه");
@@ -98,4 +99,57 @@ test("Apple Watch page: token, shortcut payload, match status, manual attach, se
   await page.getByRole("button", { name: "مطمئنی؟ باطل کن" }).click();
   await expect(page.getByTestId("token-row")).toHaveCount(0);
   expect((await post({ workouts: "Walking" })).status()).toBe(401);
+});
+
+test("Heart Rate + Active Energy samples: per-session stats on the Apple Watch page and in the session", async ({ page, context, baseURL }) => {
+  resetWorkouts();
+  sql("DELETE FROM health_workouts");
+  sql("DELETE FROM api_tokens");
+  sql("DELETE FROM settings WHERE key LIKE 'health_%'");
+  await signIn(context, baseURL!);
+
+  const start = new Date(Date.now() - 90 * 60_000);
+  const end = new Date(start.getTime() + 60 * 60_000);
+  sql(
+    `INSERT INTO workout_sessions (id, program_day_id, local_date, started_at, ended_at, status, unit, note, created_at, updated_at, source)
+     VALUES ('01SAMP', 'D3', '${denverDate(start)}', '${start.toISOString()}', '${end.toISOString()}', 'done', 'lb', '', '${start.toISOString()}', '${start.toISOString()}', 'app')`
+  );
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "تنظیمات" }).click();
+  await page.getByTestId("open-watch").click();
+  await expect(page.getByText("Active Energy").first()).toBeVisible();
+  await expect(page.getByText("energy_time").first()).toBeVisible();
+  await expect(page.getByText("Workouts", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "ساختن توکن تازه" }).click();
+  const token = await page.getByTestId("fresh-token").inputValue();
+
+  const at = (min: number) => new Date(start.getTime() + min * 60_000).toISOString();
+  const payload = {
+    hr: ["95 count/min", "120 count/min", "140 count/min", "160 count/min", "100 count/min"].join("\n"),
+    hr_time: [at(-10), at(10), at(30), at(50), at(70)].join("\n"),
+    energy: ["4 kcal", "100 kcal", "120,4 kcal", "6 kcal"].join("\n"),
+    energy_time: [at(-5), at(20), at(40), at(65)].join("\n"),
+  };
+  for (let i = 0; i < 2; i++) {
+    const res = await context.request.fetch(`${baseURL}/api/health/raw`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Cookie: "" },
+      data: JSON.stringify(payload),
+    });
+    expect(await res.json()).toMatchObject({ sessions: 1, hr_samples: 5, energy_samples: 4, message: "Lodge Gym: داده‌ی ساعت برای ۱ جلسه ثبت شد." });
+  }
+  expect(sql("SELECT COUNT(*) AS n FROM health_workouts")).toEqual([{ n: 1 }]);
+
+  await page.getByRole("button", { name: "بررسی دوباره" }).click();
+  await expect(page.getByTestId("watch-status")).toContainText("۵ نمونه‌ی ضربان، ۴ نمونه‌ی انرژی، داده برای ۱ جلسه");
+  const row = page.getByTestId("watch-row");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("روز ۳ – پشت");
+  await expect(row).toContainText("۶۰ دقیقه · ۲۲۰ کیلوکالری فعال · ضربان میانگین ۱۴۰ · بیشینه ۱۶۰");
+
+  await row.getByRole("button", { name: /روز ۳ – پشت/ }).click();
+  const card = page.getByTestId("session-watch");
+  await expect(card).toContainText("در طول جلسه");
+  await expect(card).toContainText("۶۰ دقیقه · ۲۲۰ کیلوکالری فعال · ضربان میانگین ۱۴۰ · بیشینه ۱۶۰");
 });

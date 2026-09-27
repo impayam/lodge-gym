@@ -7,7 +7,8 @@ import type { AppBindings, Env } from "./env";
 import { fail, nowISO, readJson } from "./http";
 import { faNum } from "./lib/digits";
 import { matchSession } from "./lib/matching";
-import { parseShortcutsPayload } from "./lib/shortcuts";
+import { parseShortcutsPayload, type TimedValue } from "./lib/shortcuts";
+import { sessionEnd, sessionWatchStats } from "./lib/watchstats";
 import type { HealthWorkout } from "./lib/types";
 import { ID_RE, ulid } from "./lib/ulid";
 import { readSettings } from "./data";
@@ -94,7 +95,12 @@ export async function rematchAround(env: Env, startedAt: string) {
 
 type HealthRow = HealthWorkout & { raw?: string | null; received_at?: string };
 
-const HEALTH_COLUMNS = "hw.id, hw.activity_type, hw.started_at, hw.ended_at, hw.duration_sec, hw.active_kcal, hw.total_kcal, hw.hr_avg, hw.hr_max, hw.matched_session_id, hw.received_at";
+const HEALTH_COLUMNS =
+  "hw.id, hw.activity_type, hw.started_at, hw.ended_at, hw.duration_sec, hw.active_kcal, hw.total_kcal, hw.hr_avg, hw.hr_max, hw.matched_session_id, hw.received_at, " +
+  "CASE WHEN hw.external_key LIKE 'session:%' THEN 'session' ELSE 'workout' END AS kind";
+
+/** Rows computed from Heart Rate / Active Energy samples for one workout session use this external key. */
+export const sessionKey = (sessionId: string) => `session:${sessionId}`;
 
 /** Watch workouts matched to sessions whose local date is in [from, to]. */
 export async function readWatchForSessions(env: Env, from: string, to: string): Promise<HealthWorkout[]> {
@@ -136,6 +142,71 @@ healthRoutes.put("/workouts/:id/match", async (c) => {
   const row = await c.env.DB.prepare(`SELECT ${HEALTH_COLUMNS} FROM health_workouts hw WHERE hw.id = ?`).bind(id).first<HealthRow>();
   return c.json({ ok: true, workout: row });
 });
+
+/* ---------------- per-session stats from samples ---------------- */
+
+interface SessionRow {
+  id: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
+/**
+ * For every workout session overlapping the samples, computes avg/max HR and active kcal from the samples inside
+ * the session and stores them (one row per session). Re-sending is idempotent, and a later payload that covers
+ * a session only partly (e.g. the 6-hour window cut it) never replaces more complete data: each metric is
+ * replaced only when the new sample count is at least the stored one.
+ */
+async function updateSessionStats(env: Env, hr: TimedValue[], energy: TimedValue[], receivedAt: string): Promise<number> {
+  const times = [...hr, ...energy].map((x) => x.t);
+  if (!times.length) return 0;
+  const now = Date.parse(receivedAt);
+  const from = new Date(Math.min(...times)).toISOString();
+  const to = new Date(Math.max(...times)).toISOString();
+  const sessions = await env.DB.prepare(
+    "SELECT id, started_at, ended_at FROM workout_sessions WHERE started_at <= ? AND COALESCE(ended_at, ?) >= ?"
+  )
+    .bind(to, new Date(now).toISOString(), from)
+    .all<SessionRow>();
+  if (!sessions.results.length) return 0;
+  const existing = await env.DB.prepare(
+    "SELECT external_key, hr_avg, hr_max, active_kcal, raw FROM health_workouts WHERE external_key IN (SELECT value FROM json_each(?))"
+  )
+    .bind(JSON.stringify(sessions.results.map((x) => sessionKey(x.id))))
+    .all<{ external_key: string; hr_avg: number | null; hr_max: number | null; active_kcal: number | null; raw: string | null }>();
+  const prev = new Map(existing.results.map((r) => [r.external_key, r]));
+
+  const stmts = [];
+  for (const sess of sessions.results) {
+    const st = sessionWatchStats(sess, hr, energy, now);
+    if (!st.hr_count && !st.energy_count) continue;
+    const key = sessionKey(sess.id);
+    const old = prev.get(key);
+    const oldRaw = old?.raw ? (JSON.parse(old.raw) as { hr_count?: number; energy_count?: number }) : {};
+    const takeHr = !old || st.hr_count >= (oldRaw.hr_count ?? 0);
+    const takeEnergy = !old || st.energy_count >= (oldRaw.energy_count ?? 0);
+    const hr_avg = takeHr ? st.hr_avg : old!.hr_avg;
+    const hr_max = takeHr ? st.hr_max : old!.hr_max;
+    const active_kcal = takeEnergy ? st.active_kcal : old!.active_kcal;
+    const raw = JSON.stringify({
+      kind: "session",
+      hr_count: takeHr ? st.hr_count : oldRaw.hr_count ?? 0,
+      energy_count: takeEnergy ? st.energy_count : oldRaw.energy_count ?? 0,
+      window_end: new Date(sessionEnd(sess, now)).toISOString(),
+    });
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO health_workouts (id, external_key, activity_type, started_at, ended_at, duration_sec, active_kcal, total_kcal, hr_avg, hr_max, matched_session_id, raw, received_at)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+         ON CONFLICT (external_key) DO UPDATE SET started_at = excluded.started_at, ended_at = excluded.ended_at, duration_sec = excluded.duration_sec,
+           active_kcal = excluded.active_kcal, hr_avg = excluded.hr_avg, hr_max = excluded.hr_max, matched_session_id = excluded.matched_session_id,
+           raw = excluded.raw, received_at = excluded.received_at`
+      ).bind(ulid(), key, sess.started_at, sess.ended_at, st.duration_sec, active_kcal, hr_avg, hr_max, sess.id, raw, receivedAt)
+    );
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return stmts.length;
+}
 
 /* ---------------- raw ingest (bearer auth) ---------------- */
 
@@ -221,14 +292,28 @@ export async function ingestRaw(c: import("hono").Context<AppBindings>) {
     matched = r?.n ?? 0;
   }
 
-  const summary = { stored: parsed.workouts.length, matched, hr_samples: parsed.hr_samples, warnings: parsed.warnings };
+  const sessionsUpdated = await updateSessionStats(c.env, parsed.hr, parsed.energy, received_at);
+
+  const summary = {
+    sessions: sessionsUpdated,
+    hr_samples: parsed.hr_samples,
+    energy_samples: parsed.energy_samples,
+    stored: parsed.workouts.length,
+    matched,
+    warnings: parsed.warnings,
+  };
   await c.env.DB.batch([
     c.env.DB.prepare("INSERT INTO settings (key, value) VALUES ('health_last_received_at', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(received_at),
     c.env.DB.prepare("INSERT INTO settings (key, value) VALUES ('health_last_result', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(summary)),
   ]);
 
-  const message = parsed.workouts.length
-    ? `Lodge Gym: ${faNum(parsed.workouts.length)} تمرین دریافت شد، ${faNum(matched)} مورد به جلسه وصل شد.`
-    : "Lodge Gym: داده رسید ولی تمرینی در آن پیدا نشد.";
+  const parts: string[] = [];
+  if (sessionsUpdated) parts.push(`داده‌ی ساعت برای ${faNum(sessionsUpdated)} جلسه ثبت شد`);
+  if (parsed.workouts.length) parts.push(`${faNum(parsed.workouts.length)} تمرین دریافت شد، ${faNum(matched)} مورد به جلسه وصل شد`);
+  const message = parts.length
+    ? `Lodge Gym: ${parts.join("؛ ")}.`
+    : parsed.hr_samples || parsed.energy_samples
+      ? "Lodge Gym: داده رسید ولی در این بازه جلسه‌ای در برنامه ثبت نشده است."
+      : "Lodge Gym: داده رسید ولی نمونه‌ای در آن پیدا نشد.";
   return c.json({ ok: true, ...summary, message });
 }

@@ -213,6 +213,12 @@ function toISO(date: string, t: TimeParts, offset: number | null, tz: string): s
  * and Persian-locale output (Persian digits, Jalali month names or yyyy/m/d Jalali dates, ق.ظ/ب.ظ).
  */
 export function parseLooseDate(input: string, tz: string, now: Date = new Date()): string | null {
+  // Fast path for the recommended ISO 8601 format (thousands of samples per request).
+  const iso = input.trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.test(iso)) {
+    const t = Date.parse(iso.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+    if (Number.isFinite(t)) return new Date(t).toISOString();
+  }
   const s = clean(input);
   if (!s) return null;
 
@@ -370,7 +376,18 @@ export function parseActivityType(input: string): string | null {
 
 /* ---------------- payload ---------------- */
 
-type Field = "workouts" | "workout_type" | "workout_start" | "workout_end" | "workout_duration" | "workout_energy" | "workout_total_energy" | "hr" | "hr_time";
+type Field =
+  | "workouts"
+  | "workout_type"
+  | "workout_start"
+  | "workout_end"
+  | "workout_duration"
+  | "workout_energy"
+  | "workout_total_energy"
+  | "hr"
+  | "hr_time"
+  | "energy"
+  | "energy_time";
 
 const ALIASES: Record<Field, string[]> = {
   workouts: ["workouts", "workout", "workoutsamples", "healthsamples", "samples", "تمرین", "تمرینها"],
@@ -378,9 +395,11 @@ const ALIASES: Record<Field, string[]> = {
   workout_start: ["workoutstart", "workoutstartdate", "workoutstarts", "start", "startdate", "starts", "begin"],
   workout_end: ["workoutend", "workoutenddate", "workoutends", "end", "enddate", "ends", "finish"],
   workout_duration: ["workoutduration", "duration", "durations"],
-  workout_energy: ["workoutenergy", "energy", "activeenergy", "activeenergyburned", "activekcal", "kcal", "calories", "activecalories"],
+  workout_energy: ["workoutenergy", "workoutkcal", "workoutcalories", "workoutactiveenergy", "activeenergyburned"],
   workout_total_energy: ["workouttotalenergy", "totalenergy", "totalenergyburned", "totalkcal", "totalcalories"],
   hr: ["hr", "heartrate", "heartrates", "hrvalue", "hrvalues", "heartratevalue", "heartratevalues", "heartratesamples", "bpm", "ضربان"],
+  energy: ["energy", "energyvalue", "energyvalues", "activeenergy", "activeenergyvalue", "activeenergysamples", "activecalories", "activekcal", "kcal", "calories", "انرژی"],
+  energy_time: ["energytime", "energytimes", "energydate", "energydates", "energystart", "energystartdate", "activeenergytime", "activeenergydate", "activeenergystartdate", "caloriestime", "kcaltime"],
   hr_time: ["hrtime", "hrtimes", "hrdate", "hrdates", "hrstart", "hrstartdate", "heartratetime", "heartratetimes", "heartratedate", "heartratedates", "heartratestart", "heartratestartdate"],
 };
 
@@ -412,15 +431,35 @@ export interface ParsedWorkout {
   hr_count: number;
 }
 
+export interface TimedValue {
+  /** Sample start, ms since epoch. */
+  t: number;
+  v: number;
+}
+
 export interface ParseResult {
+  /** Workouts from the optional legacy workout fields. */
   workouts: ParsedWorkout[];
+  /** Heart-rate samples with a start time (bpm). */
+  hr: TimedValue[];
+  /** Active energy samples with a start time (kcal). */
+  energy: TimedValue[];
   hr_samples: number;
+  energy_samples: number;
   warnings: string[];
 }
 
 interface HrSample {
   t: number | null;
   bpm: number;
+}
+
+/** Energy of one sample in kcal, unrounded (samples are often below 1 kcal). */
+function sampleKcal(input: string): number | null {
+  const s = clean(input);
+  const n = parseLooseNumber(s);
+  if (n === null || n < 0) return null;
+  return /\bkj\b|kilojoule|کیلوژول/i.test(s) ? n / 4.184 : n;
 }
 
 /** Turns the raw payload into workouts with duration, energy and heart-rate stats. */
@@ -446,13 +485,31 @@ export function parseShortcutsPayload(payload: unknown, tz: string, now: Date = 
   });
   if (f.hr_time && f.hr_time.length !== hrLines.length) warnings.push("hr_time_count_mismatch");
 
+  /* active energy samples (energy + energy_time) */
+  const energySeries: TimedValue[] = [];
+  const energyTimes = (f.energy_time ?? []).map((l) => parseLooseDate(l, tz, now));
+  const energyAreSamples = f.energy_time !== undefined || (!f.workout_start && !(f.workouts ?? []).some((l) => findDates(l, tz, now).length));
+  if (energyAreSamples) {
+    (f.energy ?? []).forEach((line, i) => {
+      const inline = parseLooseDate(line, tz, now);
+      const withUnit = clean(line).match(/(\d[\d.,]*)\s*(kcal|cal|kj|کیلوکالری|کالری)/i);
+      const kcal = withUnit ? sampleKcal(withUnit[0]) : inline ? null : sampleKcal(line);
+      const t = inline ?? energyTimes[i] ?? null;
+      if (kcal === null || t === null) return;
+      energySeries.push({ t: Date.parse(t), v: kcal });
+    });
+    if (f.energy_time && f.energy && f.energy_time.length !== f.energy.length) warnings.push("energy_time_count_mismatch");
+    if ((f.energy ?? []).length && !energySeries.length) warnings.push("energy_without_time_ignored");
+  }
+
   /* workouts */
   const starts = (f.workout_start ?? []).map((l) => parseLooseDate(l, tz, now));
   const ends = (f.workout_end ?? []).map((l) => parseLooseDate(l, tz, now));
   const wLines = f.workouts ?? [];
   const typeLines = f.workout_type ?? [];
   const durLines = f.workout_duration ?? [];
-  const energyLines = f.workout_energy ?? [];
+  // Legacy: without energy_time, "energy" next to workout fields is the energy of each workout.
+  const energyLines = f.workout_energy ?? (energyAreSamples ? [] : (f.energy ?? []));
   const totalLines = f.workout_total_energy ?? [];
 
   // Without explicit start dates, take them from the workout text (a line may hold "start – end").
@@ -513,5 +570,14 @@ export function parseShortcutsPayload(payload: unknown, tz: string, now: Date = 
   }
   if (untimed.length && workouts.length > 1) warnings.push("hr_without_time_ignored");
 
-  return { workouts, hr_samples: samples.length, warnings: [...new Set(warnings)] };
+  if (untimed.length && !workouts.length) warnings.push("hr_without_time_ignored");
+
+  return {
+    workouts,
+    hr: timed.map((x) => ({ t: x.t!, v: x.bpm })),
+    energy: energySeries,
+    hr_samples: samples.length,
+    energy_samples: energySeries.length,
+    warnings: [...new Set(warnings)],
+  };
 }

@@ -38,11 +38,14 @@ Bindings are in `wrangler.toml`: D1 `DB` → `lodge-gym-db`, R2 `PHOTOS` → `lo
 
 ## Apple Watch bridge (approved SPEC §9 change)
 
-The shortcut has three actions (Find Health Samples: Workouts; Find Health Samples: Heart Rate; Get Contents of URL)
-and posts the raw results to `POST /api/health/raw` with `Authorization: Bearer <token>`. The Worker parses the
-Shortcuts text (`worker/lib/shortcuts.ts`: locale dates incl. Jalali, units, comma decimals, newline lists), computes
-duration, active kcal and average/max HR per workout, dedupes on `sha256(type + start)` and matches sessions
-(`worker/lib/matching.ts`). Settings → «Apple Watch» has the token, step-by-step instructions and the last 10 workouts.
+Shortcuts has no Workouts sample type, so the shortcut sends samples: Find Health Samples (Heart Rate, last 6 hours),
+Find Health Samples (Active Energy, last 6 hours), then Get Contents of URL → `POST /api/health/raw`
+(`Authorization: Bearer <token>`) with JSON fields `hr`, `hr_time`, `energy`, `energy_time`. The Worker parses the
+Shortcuts text (`worker/lib/shortcuts.ts`: ISO 8601 fast path, locale dates incl. Jalali, units, comma decimals,
+newline lists) and, for every workout session overlapping the samples, computes avg/max HR and total active kcal from
+the samples inside `[started_at, ended_at]` (until now while active; `worker/lib/watchstats.ts`). Duration comes from
+the session. One row per session (`external_key = session:<id>`); re-sending is idempotent and a partial later window
+never replaces more complete data. The older workout fields (`workouts`, `workout_start`, …) are still accepted.
 Fixtures of messy payloads: `tests/fixtures/shortcuts/`.
 
 ## Approved additions beyond SPEC §5/§11

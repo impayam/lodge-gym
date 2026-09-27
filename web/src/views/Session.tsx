@@ -184,9 +184,15 @@ export function Session({ id }: { id: string }) {
           {watch.map((w) => (
             <div class="row-w">
               <b>
-                {workoutTypeFa(w.activity_type)} · <span class="num">{faHM(w.started_at, tz)}{w.ended_at ? `–${faHM(w.ended_at, tz)}` : ""}</span>
+                {w.kind === "session" ? (
+                  "در طول جلسه"
+                ) : (
+                  <>
+                    {workoutTypeFa(w.activity_type)} · <span class="num">{faHM(w.started_at, tz)}{w.ended_at ? `–${faHM(w.ended_at, tz)}` : ""}</span>
+                  </>
+                )}
               </b>
-              <WatchStats w={w} />
+              <WatchStats w={w} session={s} />
             </div>
           ))}
         </section>

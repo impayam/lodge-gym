@@ -92,6 +92,8 @@ export interface HealthWorkout {
   hr_max: number | null;
   matched_session_id: string | null;
   received_at?: string;
+  /** "session": computed from Heart Rate / Active Energy samples for that session; "workout": a watch workout (legacy fields). */
+  kind: "session" | "workout";
 }
 
 export interface Bootstrap {
