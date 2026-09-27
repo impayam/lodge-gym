@@ -1,0 +1,42 @@
+# Lodge Gym
+
+Personal workout PWA (single user, Persian RTL UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`; working rules: `CLAUDE.md`.
+
+Status: **M1** (shell, passkey auth, program seed, offline logging).
+
+## Stack
+
+Worker (Hono, Zod, `@simplewebauthn/server`) serves `/api/*` and the static PWA from `dist/` (Vite + Preact, Workbox `injectManifest`, IndexedDB outbox via `idb`).
+
+```
+worker/        Hono app: auth.ts (passkeys, sessions, rate limit), data.ts (bootstrap, sessions, settings), lib/ (pure, shared with web)
+web/           PWA: src/ (views, store + outbox sync, sw.ts), public/ (manifest, icons)
+migrations/    D1 migrations
+seed/          program.json → seed.sql (npm run seed:build)
+tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
+```
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Rebuilds the PWA on change and runs `wrangler dev` with local D1/R2 on http://localhost:8787 (first: `npm run db:migrate:local && npm run seed:local`, and copy `.dev.vars.example` to `.dev.vars`) |
+| `npm run build` | Checks `seed/seed.sql` is current, builds the PWA into `dist/` |
+| `npm test` | Vitest: pure logic + Worker API in workerd |
+| `npm run e2e` | Playwright, iPhone 15 profile, WebKit and Chromium |
+| `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
+| `npm run seed:local` / `:remote` | Upsert the program seed (idempotent) |
+| `npm run deploy` | Build, migrate + seed remote D1, `wrangler deploy` |
+
+## Deploy (Cloudflare Workers Builds)
+
+- Build command: `npm run build`
+- Deploy command: `npm run deploy:ci` (applies remote migrations and the seed, then `wrangler deploy`)
+- Secret: `SETUP_TOKEN` (a long random string; used once on the phone at `/setup`)
+
+Bindings are in `wrangler.toml`: D1 `DB` → `lodge-gym-db`, R2 `PHOTOS` → `lodge-gym-photos`, static assets `ASSETS` → `dist/`.
+
+## Additions beyond SPEC §5/§11 (pending approval)
+
+- Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
+- `PUT /api/settings` (unit, week start, re-lock minutes, timezone).

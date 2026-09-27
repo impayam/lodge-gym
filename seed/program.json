@@ -1,0 +1,115 @@
+{
+  "settings": {
+    "unit": "lb",
+    "week_start": "mon",
+    "relock_minutes": "0",
+    "timezone": "America/Denver"
+  },
+  "exercises": [
+    { "id": "bench", "name_fa": "پرس سینه هالتر", "name_en": "Barbell Bench Press", "muscle_primary": "chest", "is_lower": 0, "equipment": "barbell", "cue_fa": "حرکت اصلی امروز. کتف‌ها جمع و پایین. هالتر را در ۲ تا ۳ ثانیه تا روی سینه بیاور، مکث کوتاه، بعد فشار بده." },
+    { "id": "incline_db", "name_fa": "پرس بالا سینه دمبل", "name_en": "Incline Dumbbell Press", "muscle_primary": "chest", "is_lower": 0, "equipment": "dumbbell", "cue_fa": "زاویه‌ی نیمکت ۳۰ تا ۴۵ درجه. دمبل‌ها را تا کشش کامل سینه پایین بیاور." },
+    { "id": "rdl", "name_fa": "ددلیفت رومانیایی", "name_en": "Romanian Deadlift", "muscle_primary": "hamstrings_glutes", "is_lower": 1, "equipment": "barbell", "cue_fa": "زانو کمی خم. لگن را به عقب بفرست تا کشش پشت ران را حس کنی. هالتر نزدیک پا." },
+    { "id": "cable_row", "name_fa": "زیربغل کابل نشسته", "name_en": "Seated Cable Row", "muscle_primary": "back", "is_lower": 0, "equipment": "cable", "cue_fa": "کمر صاف. دستگیره را به شکم بکش و کتف‌ها را به هم نزدیک کن." },
+    { "id": "lateral", "name_fa": "نشر جانب", "name_en": "Dumbbell Lateral Raise", "muscle_primary": "shoulders", "is_lower": 0, "equipment": "dumbbell", "cue_fa": "دمبل‌ها را تا ارتفاع شانه بالا بیاور، بدون تاب دادن بدن." },
+    { "id": "facepull", "name_fa": "فیس‌پول", "name_en": "Face Pull", "muscle_primary": "rear_delts", "is_lower": 0, "equipment": "cable", "cue_fa": "طناب را به سمت صورت بکش و دست‌ها را از هم باز کن. آرنج‌ها بالا." },
+    { "id": "squat", "name_fa": "اسکوات هالتر", "name_en": "Barbell Back Squat", "muscle_primary": "quads", "is_lower": 1, "equipment": "barbell", "cue_fa": "حرکت اصلی امروز. پاها کمی بازتر از شانه. تا موازی شدن ران با زمین پایین برو، زانو هم‌جهت پنجه." },
+    { "id": "leg_press", "name_fa": "پرس پا", "name_en": "Leg Press", "muscle_primary": "quads", "is_lower": 1, "equipment": "machine", "cue_fa": "کمر و لگن به پشتی چسبیده. تا جایی پایین بیاور که لگن از پشتی جدا نشود، زانو قفل نشود." },
+    { "id": "incline_bb", "name_fa": "پرس بالا سینه هالتر", "name_en": "Incline Barbell Bench Press", "muscle_primary": "chest", "is_lower": 0, "equipment": "barbell", "cue_fa": "زاویه‌ی ۳۰ درجه. هالتر را تا بالای سینه بیاور، کتف‌ها جمع." },
+    { "id": "pulldown", "name_fa": "لت‌پول‌داون", "name_en": "Lat Pulldown", "muscle_primary": "back", "is_lower": 0, "equipment": "cable", "cue_fa": "سینه بالا، میله را تا بالای سینه بکش. آرنج‌ها به سمت پایین و پهلو." },
+    { "id": "calf_stand", "name_fa": "ساق پا ایستاده", "name_en": "Standing Calf Raise", "muscle_primary": "calves", "is_lower": 1, "equipment": "machine", "cue_fa": "پاشنه را کامل پایین بیاور و بالا یک ثانیه مکث کن." },
+    { "id": "plank", "name_fa": "پلانک", "name_en": "Plank", "muscle_primary": "core", "is_lower": 0, "equipment": "bodyweight", "cue_fa": "بدن در یک خط صاف. شکم و باسن سفت، لگن نیفتد." },
+    { "id": "cs_row", "name_fa": "زیربغل دمبل روی نیمکت شیب‌دار", "name_en": "Chest-Supported Dumbbell Row", "muscle_primary": "back", "is_lower": 0, "equipment": "dumbbell", "cue_fa": "حرکت اصلی امروز. سینه روی نیمکت ۳۰ تا ۴۵ درجه. دمبل‌ها را به سمت لگن بکش و کتف‌ها را جمع کن؛ کمر استراحت می‌کند." },
+    { "id": "pullup", "name_fa": "بارفیکس", "name_en": "Pull-Up / Assisted Pull-Up", "muscle_primary": "back", "is_lower": 0, "equipment": "bodyweight", "cue_fa": "از آویزان کامل شروع کن و چانه را بالای میله ببر. با دستگاه کمکی، وزن کمکی را منفی بنویس (مثلاً ‎-40‎)." },
+    { "id": "bulgarian", "name_fa": "اسکوات بلغاری", "name_en": "Bulgarian Split Squat", "muscle_primary": "quads", "is_lower": 1, "equipment": "dumbbell", "cue_fa": "پای عقب روی نیمکت. مستقیم پایین برو تا ران جلو موازی زمین شود." },
+    { "id": "fly", "name_fa": "قفسه‌ی کابل", "name_en": "Cable Chest Fly", "muscle_primary": "chest", "is_lower": 0, "equipment": "cable", "cue_fa": "آرنج کمی خم و ثابت. در ست آخر چند تکرار نیمه در حالت کشیده (Partials) بزن." },
+    { "id": "curl", "name_fa": "جلو بازو دمبل", "name_en": "Dumbbell Biceps Curl", "muscle_primary": "biceps", "is_lower": 0, "equipment": "dumbbell", "cue_fa": "آرنج کنار بدن و ثابت. آرام پایین بیاور." },
+    { "id": "oh_tri", "name_fa": "پشت بازو کابل از بالای سر", "name_en": "Overhead Cable Triceps Extension", "muscle_primary": "triceps", "is_lower": 0, "equipment": "cable", "cue_fa": "آرنج‌ها کنار سر و ثابت. فقط ساعد حرکت کند و پایین کشش کامل بگیر." },
+    { "id": "deadlift", "name_fa": "ددلیفت", "name_en": "Conventional Deadlift", "muscle_primary": "hamstrings_glutes", "is_lower": 1, "equipment": "barbell", "cue_fa": "حرکت اصلی امروز. هالتر روی وسط پا. کمر صاف، سینه بالا. با فشار پاها بلند شو، نه با کشیدن کمر." },
+    { "id": "ohp", "name_fa": "پرس سرشانه ایستاده", "name_en": "Standing Overhead Press", "muscle_primary": "shoulders", "is_lower": 0, "equipment": "barbell", "cue_fa": "باسن و شکم سفت، کمر قوس زیاد نگیرد. هالتر در خط صاف بالای سر برود." },
+    { "id": "leg_curl", "name_fa": "پشت ران دستگاه", "name_en": "Lying Leg Curl", "muscle_primary": "hamstrings_glutes", "is_lower": 1, "equipment": "machine", "cue_fa": "لگن روی نیمکت بماند. آرام پایین بیاور." },
+    { "id": "knee_raise", "name_fa": "بالا آوردن زانو آویزان", "name_en": "Hanging Knee Raise", "muscle_primary": "core", "is_lower": 0, "equipment": "bodyweight", "cue_fa": "بدون تاب. زانوها را تا سینه بالا بیاور و آرام پایین بیاور." },
+    { "id": "calf_seated", "name_fa": "ساق پا نشسته", "name_en": "Seated Calf Raise", "muscle_primary": "calves", "is_lower": 1, "equipment": "machine", "cue_fa": "دامنه‌ی کامل و مکث در بالا." },
+    { "id": "row", "name_fa": "زیربغل هالتر خم", "name_en": "Barbell Bent-Over Row", "muscle_primary": "back", "is_lower": 0, "equipment": "barbell", "cue_fa": "کمر صاف، لگن به عقب. هالتر را به سمت ناف بکش، بدون تاب دادن بدن." },
+    { "id": "lunge", "name_fa": "لانج با دمبل", "name_en": "Walking Lunge", "muscle_primary": "quads", "is_lower": 1, "equipment": "dumbbell", "cue_fa": "بالاتنه صاف. زانوی عقب نزدیک زمین، زانوی جلو بالای مچ پا." },
+    { "id": "dips", "name_fa": "دیپ سینه", "name_en": "Chest Dips", "muscle_primary": "chest", "is_lower": 0, "equipment": "bodyweight", "cue_fa": "بدن رو به جلو تا فشار روی سینه بیاید. درد شانه = جایگزین با پرس سینه دمبل. در ست آخر Partials." },
+    { "id": "rope_pushdown", "name_fa": "پشت بازو طناب", "name_en": "Triceps Rope Pushdown", "muscle_primary": "triceps", "is_lower": 0, "equipment": "cable", "cue_fa": "" }
+  ],
+  "programs": [
+    {
+      "id": "fullbody4", "name": "فول‌بادی ۴ روزه", "active": 1,
+      "days": [
+        { "id": "D1", "name_fa": "روز ۱ – سینه", "name_en": "Day 1 · Chest", "focus_fa": "تمرکز سینه + بدن کامل", "est_minutes": 60, "ex": [
+          { "x": "bench", "sets": 4, "reps": [5, 5], "rest": 180, "main": 1 },
+          { "x": "incline_db", "sets": 3, "reps": [10, 10], "rest": 120 },
+          { "x": "rdl", "sets": 3, "reps": [8, 8], "rest": 150 },
+          { "x": "cable_row", "sets": 3, "reps": [10, 10], "rest": 90 },
+          { "x": "lateral", "sets": 3, "reps": [12, 12], "rest": 75, "tag": "A1" },
+          { "x": "facepull", "sets": 3, "reps": [15, 15], "rest": 75, "tag": "A2" }
+        ] },
+        { "id": "D2", "name_fa": "روز ۲ – پا", "name_en": "Day 2 · Legs", "focus_fa": "تمرکز پا + بدن کامل", "est_minutes": 60, "ex": [
+          { "x": "squat", "sets": 4, "reps": [5, 5], "rest": 180, "main": 1 },
+          { "x": "leg_press", "sets": 3, "reps": [10, 10], "rest": 120 },
+          { "x": "incline_bb", "sets": 3, "reps": [8, 8], "rest": 150 },
+          { "x": "pulldown", "sets": 3, "reps": [10, 10], "rest": 90 },
+          { "x": "calf_stand", "sets": 3, "reps": [12, 12], "rest": 60, "tag": "A1" },
+          { "x": "plank", "sets": 3, "reps": [45, 45], "rest": 60, "tag": "A2", "time": 1 }
+        ] },
+        { "id": "D3", "name_fa": "روز ۳ – پشت", "name_en": "Day 3 · Back", "focus_fa": "تمرکز پشت + بدن کامل", "est_minutes": 60, "ex": [
+          { "x": "cs_row", "sets": 4, "reps": [8, 8], "rest": 150, "main": 1 },
+          { "x": "pullup", "sets": 3, "reps": [6, 8], "rest": 120 },
+          { "x": "bulgarian", "sets": 3, "reps": [8, 8], "rest": 120, "per_leg": 1 },
+          { "x": "fly", "sets": 3, "reps": [12, 12], "rest": 90 },
+          { "x": "curl", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "A1" },
+          { "x": "oh_tri", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "A2" }
+        ] },
+        { "id": "D4", "name_fa": "روز ۴ – ددلیفت", "name_en": "Day 4 · Deadlift", "focus_fa": "تمرکز پشت پا و ددلیفت + بدن کامل", "est_minutes": 55, "ex": [
+          { "x": "deadlift", "sets": 3, "reps": [5, 5], "rest": 180, "main": 1 },
+          { "x": "ohp", "sets": 3, "reps": [6, 6], "rest": 150 },
+          { "x": "leg_curl", "sets": 3, "reps": [10, 10], "rest": 90 },
+          { "x": "facepull", "sets": 3, "reps": [15, 15], "rest": 75, "tag": "A1" },
+          { "x": "lateral", "sets": 3, "reps": [12, 12], "rest": 75, "tag": "A2" },
+          { "x": "knee_raise", "sets": 3, "reps": [10, 10], "rest": 60, "tag": "B1" },
+          { "x": "calf_seated", "sets": 3, "reps": [15, 15], "rest": 60, "tag": "B2" }
+        ] }
+      ]
+    },
+    {
+      "id": "upperlower", "name": "بالاتنه / پایین‌تنه (برنامه‌ی قبلی)", "active": 0,
+      "days": [
+        { "id": "UA", "name_fa": "بالاتنه A", "name_en": "Upper A", "focus_fa": "قدرت سینه", "est_minutes": 60, "ex": [
+          { "x": "bench", "sets": 4, "reps": [5, 5], "rest": 180 },
+          { "x": "incline_db", "sets": 3, "reps": [8, 8], "rest": 120 },
+          { "x": "row", "sets": 4, "reps": [6, 6], "rest": 150 },
+          { "x": "pulldown", "sets": 3, "reps": [8, 8], "rest": 75, "tag": "A1" },
+          { "x": "fly", "sets": 3, "reps": [12, 12], "rest": 75, "tag": "A2" },
+          { "x": "oh_tri", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "B1" },
+          { "x": "facepull", "sets": 3, "reps": [15, 15], "rest": 75, "tag": "B2" }
+        ] },
+        { "id": "LA", "name_fa": "پایین‌تنه A", "name_en": "Lower A", "focus_fa": "اسکوات", "est_minutes": 55, "ex": [
+          { "x": "squat", "sets": 4, "reps": [5, 5], "rest": 180 },
+          { "x": "rdl", "sets": 3, "reps": [8, 8], "rest": 150 },
+          { "x": "lunge", "sets": 2, "reps": [10, 10], "rest": 90, "per_leg": 1 },
+          { "x": "calf_stand", "sets": 3, "reps": [12, 12], "rest": 60, "tag": "A1" },
+          { "x": "plank", "sets": 3, "reps": [45, 45], "rest": 60, "tag": "A2", "time": 1 }
+        ] },
+        { "id": "UB", "name_fa": "بالاتنه B", "name_en": "Upper B", "focus_fa": "حجم سینه", "est_minutes": 65, "ex": [
+          { "x": "incline_bb", "sets": 4, "reps": [6, 6], "rest": 180 },
+          { "x": "ohp", "sets": 3, "reps": [6, 6], "rest": 150 },
+          { "x": "pullup", "sets": 3, "reps": [6, 8], "rest": 120 },
+          { "x": "dips", "sets": 3, "reps": [8, 10], "rest": 120 },
+          { "x": "cable_row", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "A1" },
+          { "x": "lateral", "sets": 3, "reps": [12, 12], "rest": 75, "tag": "A2" },
+          { "x": "curl", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "B1" },
+          { "x": "facepull", "sets": 3, "reps": [15, 15], "rest": 75, "tag": "B2" }
+        ] },
+        { "id": "LB", "name_fa": "پایین‌تنه B", "name_en": "Lower B", "focus_fa": "ددلیفت", "est_minutes": 55, "ex": [
+          { "x": "deadlift", "sets": 3, "reps": [5, 5], "rest": 180 },
+          { "x": "bulgarian", "sets": 3, "reps": [8, 8], "rest": 120, "per_leg": 1 },
+          { "x": "leg_curl", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "A1" },
+          { "x": "knee_raise", "sets": 3, "reps": [10, 10], "rest": 75, "tag": "A2" },
+          { "x": "calf_seated", "sets": 3, "reps": [15, 15], "rest": 90 }
+        ] }
+      ]
+    }
+  ]
+}

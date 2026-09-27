@@ -1,0 +1,20 @@
+# Test-only config: same bindings as wrangler.toml, assets from a small fixture directory.
+name = "lodge-gym-test"
+main = "../worker/index.ts"
+compatibility_date = "2026-08-15"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./fixtures/assets"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lodge-gym-test"
+database_id = "local-test-only"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "lodge-gym-test"
