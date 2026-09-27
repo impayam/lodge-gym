@@ -5,6 +5,7 @@ import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types
 import { api, errorText } from "../api";
 import { jalali } from "../format";
 import { fetchFile, shareOrDownload } from "../share";
+import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
 import { deviceLabel, registerPasskey } from "../passkey";
 import { logout, navigate, saveSettings, syncNow, useStore } from "../store";
 
@@ -103,6 +104,9 @@ export function Settings() {
         <div class="why">{msg}</div>
       </div>
 
+      <h2>اعلان پایان استراحت</h2>
+      <PushSettings />
+
       <h2>پشتیبان</h2>
       <Backups />
 
@@ -166,6 +170,87 @@ function Backups() {
         </button>
       </div>
       {msg ? <div class="why">{msg}</div> : null}
+    </div>
+  );
+}
+
+function PushSettings() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (pushSupported()) void pushEnabled().then(setOn);
+    else setOn(false);
+  }, []);
+  const enable = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await enablePush();
+      if (r === "enabled") {
+        setOn(true);
+        setMsg("فعال شد. وقتی استراحت تمام شود، حتی اگر برنامه در پس‌زمینه باشد، اعلان می‌آید.");
+      } else if (r === "denied") setMsg("اجازه‌ی اعلان داده نشد. از Settings ← Notifications ← Lodge Gym آن را روشن کن.");
+      else if (r === "not-standalone") setMsg("روی آیفون اعلان فقط در نسخه‌ی نصب‌شده روی Home Screen کار می‌کند. برنامه را از آیکون صفحه‌ی اصلی باز کن.");
+      else setMsg("این مرورگر اعلان وب را پشتیبانی نمی‌کند (آیفون: iOS 16.4 یا جدیدتر لازم است).");
+    } catch (e) {
+      setMsg(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="card stack" data-testid="push-settings">
+      <p class="why" style={{ margin: 0 }}>
+        با شروع استراحت، سرور زمان پایانش را نگه می‌دارد و سر وقت یک اعلان می‌فرستد؛ پس گوشی می‌تواند قفل باشد یا برنامه بسته. {isStandalone() ? "" : "روی آیفون فقط از نسخه‌ی Home Screen کار می‌کند."}
+      </p>
+      <div class="kv">
+        <span>وضعیت</span>
+        <span data-testid="push-status">{on === null ? "–" : on ? "فعال" : "خاموش"}</span>
+      </div>
+      <div class="row">
+        {on ? (
+          <>
+            <button
+              type="button"
+              class="btn btn-ghost"
+              disabled={busy}
+              onClick={async () => {
+                setMsg("");
+                try {
+                  const r = await testPush();
+                  setMsg(r.sent ? "اعلان آزمایشی فرستاده شد." : "ارسال نشد؛ یک بار اعلان را خاموش و دوباره روشن کن.");
+                } catch (e) {
+                  setMsg(errorText(e));
+                }
+              }}
+            >
+              اعلان آزمایشی
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost"
+              disabled={busy}
+              onClick={async () => {
+                await disablePush();
+                setOn(false);
+                setMsg("");
+              }}
+            >
+              خاموش کردن
+            </button>
+          </>
+        ) : (
+          <button type="button" class="btn btn-primary" disabled={busy} data-testid="enable-push" onClick={() => void enable()}>
+            فعال کردن اعلان
+          </button>
+        )}
+      </div>
+      {msg ? (
+        <div class="why" role="status">
+          {msg}
+        </div>
+      ) : null}
     </div>
   );
 }

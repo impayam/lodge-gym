@@ -6,6 +6,7 @@ declare global {
       DB: D1Database;
       PHOTOS: R2Bucket;
       ASSETS: Fetcher;
+      REST_PUSH: DurableObjectNamespace<import("../../worker/push").RestPush>;
       SETUP_TOKEN: string;
       TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
       TEST_SEED_SQL: string;

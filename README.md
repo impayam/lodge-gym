@@ -55,10 +55,18 @@ in the `lodge-gym-photos` bucket and keeps the newest 12. Settings → «پشت�
 export (`GET /api/export`). Emailing the backup is not wired: Cloudflare can only send email from a domain on
 Cloudflare DNS (Email Routing / Email Service), and this app runs on `workers.dev`.
 
+## Rest-timer push
+
+Web Push (VAPID, RFC 8291 aes128gcm, WebCrypto only: `worker/lib/webpush.ts`). A SQLite-backed Durable Object
+(`RestPush`, Free-plan compatible) holds the VAPID key pair (generated on first use), the subscriptions and the pending
+rest end, and sends the push from an alarm. Settings → «اعلان پایان استراحت» asks for permission from a tap. On iPhone it
+works only in the Home Screen app on iOS 16.4+.
+
 ## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
 - `PUT /api/settings` (unit, week start, re-lock minutes, timezone).
+- `/api/push/key|subscribe|unsubscribe|rest|rest/cancel|test`, Durable Object `RestPush`.
 - `GET /api/backups`, `GET /api/backups/latest`, weekly Cron Trigger.
 - `GET /api/reports/progress` («پیشرفت» page) and `?format=csv` on `/api/reports/week|month`; setting `month_calendar` (`gregorian`|`jalali`).
 - `GET /api/photos` (photo list for the gallery; SPEC §11 lists the other photo routes).

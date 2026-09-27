@@ -17,6 +17,15 @@ database_name = "lodge-gym-db"
 database_id = "f8ba012b-9970-423c-83f3-8c32111695e7"
 migrations_dir = "migrations"
 
+# Rest-timer Web Push: one SQLite-backed Durable Object (works on the Free plan) with an alarm per rest.
+[[durable_objects.bindings]]
+name = "REST_PUSH"
+class_name = "RestPush"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RestPush"]
+
 # Weekly backup (Monday 10:17 UTC).
 [triggers]
 crons = ["17 10 * * 1"]

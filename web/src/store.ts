@@ -4,6 +4,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { BodyMetric, Bootstrap, HealthWorkout, Photo, Pose, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
+import { cancelPush, schedulePush } from "./push";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
@@ -26,7 +27,7 @@ export interface State {
   sessions: Record<string, WorkoutSession>;
   view: { name: ViewName; sessionId?: string };
   sync: SyncState;
-  rest: { endsAt: number; label: string } | null;
+  rest: { id: string; endsAt: number; label: string } | null;
   flash: string | null;
   /** Synced photo metadata plus photos still waiting in the outbox. */
   photos: Photo[];
@@ -431,11 +432,18 @@ export async function upsertWatch(list: HealthWorkout[]) {
 /* ---------------- rest timer ---------------- */
 
 export function startRest(seconds: number, label: string) {
-  setState({ rest: { endsAt: Date.now() + seconds * 1000, label } });
+  if (state.rest) cancelPush(state.rest.id);
+  const rest = { id: ulid(), endsAt: Date.now() + seconds * 1000, label };
+  setState({ rest });
+  schedulePush(rest.id, rest.endsAt, label);
 }
 export function extendRest(seconds: number) {
-  if (state.rest) setState({ rest: { ...state.rest, endsAt: state.rest.endsAt + seconds * 1000 } });
+  if (!state.rest) return;
+  const rest = { ...state.rest, endsAt: Math.max(Date.now(), state.rest.endsAt) + seconds * 1000 };
+  setState({ rest });
+  schedulePush(rest.id, rest.endsAt, rest.label);
 }
 export function stopRest() {
+  if (state.rest) cancelPush(state.rest.id);
   setState({ rest: null });
 }

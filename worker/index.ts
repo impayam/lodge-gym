@@ -9,6 +9,9 @@ import { SECURITY_HEADERS } from "./headers";
 import { photoRoutes } from "./photos";
 import { reportRoutes } from "./reports";
 import { exportRoutes, runBackup } from "./backup";
+import { pushRoutes } from "./push";
+
+export { RestPush } from "./push";
 import { ApiError, errorBody } from "./http";
 
 
@@ -52,6 +55,7 @@ api.route("/health", healthRoutes);
 api.route("/photos", photoRoutes);
 api.route("/reports", reportRoutes);
 api.route("/", exportRoutes);
+api.route("/push", pushRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "مسیر پیدا نشد."), 404));
