@@ -61,6 +61,8 @@ export interface SetEntry {
   reps: number | null;
   seconds: number | null;
   done: boolean;
+  /** Reps in reserve: 0, 1, 2, or 3 meaning "3+". Optional. */
+  rir?: number | null;
   updated_at: string;
 }
 
@@ -96,6 +98,15 @@ export interface HealthWorkout {
   kind: "session" | "workout";
 }
 
+/** A body metric (SPEC §5 body_metrics); the app writes body_mass with source "manual". */
+export interface BodyMetric {
+  local_date: string;
+  kind: "body_mass" | "resting_hr" | "hrv" | "sleep_hours";
+  value: number;
+  unit: string | null;
+  source: string;
+}
+
 export interface Bootstrap {
   settings: Settings;
   program: Program;
@@ -104,6 +115,8 @@ export interface Bootstrap {
   sessions: WorkoutSession[];
   /** Watch workouts matched to the sessions above. */
   watch: HealthWorkout[];
+  /** Body metrics for the same 60-day window. */
+  body: BodyMetric[];
   server_time: string;
 }
 

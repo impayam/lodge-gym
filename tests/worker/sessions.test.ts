@@ -179,6 +179,37 @@ describe("GET and DELETE", () => {
   });
 });
 
+describe("RIR and manual body weight", () => {
+  it("stores RIR per set, accepts sets without it, rejects out-of-range values", async () => {
+    const s = makeSession();
+    s.sets[0].rir = 3;
+    s.sets[1].rir = 0;
+    delete (s.sets[2] as { rir?: number | null }).rir;
+    expect((await put(s)).status).toBe(200);
+    const res = (await (await client.fetch("/api/sessions?from=2026-09-27&to=2026-09-27")).json()) as { sessions: WorkoutSession[] };
+    const got = res.sessions.find((x) => x.id === s.id)!.sets.sort((a, b) => a.set_index - b.set_index);
+    expect(got.map((x) => x.rir)).toEqual([3, 0, null, null]);
+    const bad = makeSession();
+    bad.sets[0].rir = 4;
+    expect((await put(bad)).status).toBe(400);
+  });
+
+  it("saves, updates and clears the manual body weight for a day", async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const setBw = (json: unknown) => client.fetch(`/api/body-mass/${date}`, { method: "PUT", json });
+    expect((await setBw({ value: 180.4, unit: "lb" })).status).toBe(200);
+    expect((await setBw({ value: 181.2, unit: "lb" })).status).toBe(200);
+    const rows = await env.DB.prepare("SELECT value, unit, source, kind FROM body_metrics WHERE local_date = ?").bind(date).all();
+    expect(rows.results).toEqual([{ value: 181.2, unit: "lb", source: "manual", kind: "body_mass" }]);
+    const b = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
+    expect(b.body).toContainEqual({ local_date: date, kind: "body_mass", value: 181.2, unit: "lb", source: "manual" });
+    expect((await setBw({ value: null, unit: "lb" })).status).toBe(200);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM body_metrics WHERE local_date = ?").bind(date).first<{ n: number }>())!.n).toBe(0);
+    expect((await setBw({ value: -3, unit: "lb" })).status).toBe(400);
+    expect((await client.fetch("/api/body-mass/2026-13-01", { method: "PUT", json: { value: 80, unit: "kg" } })).status).toBe(400);
+  });
+});
+
 describe("settings", () => {
   it("updates and validates settings", async () => {
     const res = await client.fetch("/api/settings", { method: "PUT", json: { unit: "kg", week_start: "sat", relock_minutes: 5 } });

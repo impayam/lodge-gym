@@ -246,3 +246,12 @@ textarea { width: 100%; min-height: 70px; background: var(--surface-2); border: 
 .watch .row-w b { color: var(--ink); font-size: 14px; }
 .setlink { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: right; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-weight: 700; }
 .setlink small { color: var(--muted); font-weight: 500; }
+
+/* RIR chips and body weight */
+.setwrap { display: flex; flex-direction: column; gap: 4px; }
+.rir { display: flex; align-items: center; gap: 6px; padding-inline-start: 26px; font-size: 11px; color: var(--muted); }
+.rir > span { width: 26px; }
+.rir button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); border-radius: 999px; min-width: 36px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
+.rir button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.bodyw { display: grid; grid-template-columns: minmax(0, 220px) auto; justify-content: start; gap: 6px 10px; align-items: center; }
+.bodyw small { grid-column: 1 / -1; }

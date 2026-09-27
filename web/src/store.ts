@@ -1,7 +1,7 @@
 // App state, offline-first persistence and the outbox sync loop.
 
 import { useEffect, useState } from "preact/hooks";
-import type { Bootstrap, HealthWorkout, Settings, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, HealthWorkout, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, NetworkError } from "./api";
 import * as ldb from "./localdb";
@@ -219,6 +219,18 @@ export async function saveSettings(patch: Partial<Settings>) {
   await enqueue({ key: "settings", op: "settings", patch });
 }
 
+/** Manual body weight for a day (source "manual"); null clears it. */
+export async function saveBodyMass(date: string, value: number | null, unit: Unit) {
+  if (!state.boot) return;
+  const others = (state.boot.body ?? []).filter((m) => !(m.local_date === date && m.kind === "body_mass" && m.source === "manual"));
+  const body: BodyMetric[] = value === null ? others : [...others, { local_date: date, kind: "body_mass", value, unit, source: "manual" }];
+  body.sort((a, b) => a.local_date.localeCompare(b.local_date));
+  const boot = { ...state.boot, body };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
+  await enqueue({ key: "body:" + date, op: "body_mass", date, value, unit });
+}
+
 /* ---------------- sync ---------------- */
 
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -268,6 +280,8 @@ async function syncOnce() {
         }
       } else if (e.op === "delete_session") {
         await api("DELETE", `/sessions/${encodeURIComponent(e.id)}`);
+      } else if (e.op === "body_mass") {
+        await api("PUT", `/body-mass/${e.date}`, { value: e.value, unit: e.unit });
       } else {
         await api("PUT", "/settings", e.patch);
       }

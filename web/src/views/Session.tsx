@@ -9,7 +9,7 @@ import { IconCheck } from "../components/Icons";
 import { Stepper } from "../components/Stepper";
 import { clock, faHM, greg, jalali, ytLink } from "../format";
 import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
-import { flash, getState, navigate, removeSession, saveSession, startRest, stopRest, useStore } from "../store";
+import { flash, getState, navigate, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
 import { targetText } from "./Program";
 import { WatchStats, workoutTypeFa } from "./Watch";
 
@@ -72,6 +72,9 @@ export function Session({ id }: { id: string }) {
   const watch = (boot.watch ?? []).filter((w) => w.matched_session_id === s.id).sort((a, b) => a.started_at.localeCompare(b.started_at));
   const blocks = sessionBlocks(boot, s);
   const hasSuperset = blocks.some((b) => b.plan.superset_tag);
+  const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
+  const bodyToday = manualBody.find((m) => m.local_date === s.local_date) ?? null;
+  const lastBody = [...manualBody].reverse().find((m) => m.unit === s.unit)?.value ?? null;
   const startHM = localHM(tz, s.started_at);
   const endHM = s.ended_at ? localHM(tz, s.ended_at) : "";
 
@@ -222,6 +225,21 @@ export function Session({ id }: { id: string }) {
         }}
       />
 
+      <h2>وزن بدن امروز</h2>
+      <div class="card bodyw" data-testid="body-weight">
+        <Stepper
+          value={bodyToday?.unit === s.unit || !bodyToday ? (bodyToday?.value ?? null) : null}
+          placeholder={bodyToday && bodyToday.unit !== s.unit ? `${faNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
+          base={lastBody ?? 0}
+          step={0.1}
+          min={0}
+          label={`وزن بدن (${s.unit})`}
+          onChange={(v) => void saveBodyMass(s.local_date, v, s.unit)}
+        />
+        <span class="ltr">{s.unit}</span>
+        <small class="muted">اختیاری؛ برای گزارش‌ها ذخیره می‌شود.</small>
+      </div>
+
       <div class="stack" style={{ marginTop: "14px" }}>
         {s.status === "active" ? (
           <button class="btn btn-primary btn-block" type="button" onClick={finish} data-testid="finish">
@@ -272,11 +290,20 @@ function lastText(g: Guidance, isTime: boolean): string {
 
 function suggestionText(g: Guidance): string {
   const sg = g.suggestion;
-  if (sg.kind === "weight") return sg.allHit ? `پیشنهاد: ${faNum(sg.weight)} ${sg.unit}` : `همان ${faNum(sg.weight)} ${sg.unit} تا همه‌ی ست‌ها کامل شود`;
-  if (sg.kind === "bodyweight") return sg.allHit ? "یک تکرار بیشتر، یا وزنه‌ی کمکی کمتر" : "همان";
+  const easy = "، همه‌ی ست‌ها با ۳+ تکرار ذخیره";
+  if (sg.kind === "weight")
+    return sg.allHit ? `پیشنهاد: ${faNum(sg.weight)} ${sg.unit}${sg.easy ? ` (دو پله${easy})` : ""}` : `همان ${faNum(sg.weight)} ${sg.unit} تا همه‌ی ست‌ها کامل شود`;
+  if (sg.kind === "bodyweight") return sg.allHit ? (sg.easy ? "دو تکرار بیشتر، یا وزنه‌ی کمکی کمتر" : "یک تکرار بیشتر، یا وزنه‌ی کمکی کمتر") : "همان";
   if (sg.kind === "time") return sg.allHit ? `هدف: ${faNum(sg.seconds)} ثانیه` : "همان زمان";
   return "";
 }
+
+const RIR_CHOICES: [number, string][] = [
+  [0, "۰"],
+  [1, "۱"],
+  [2, "۲"],
+  [3, "۳+"],
+];
 
 function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock; session: WorkoutSession; g: Guidance; updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void }) {
   const { ex, plan, sets } = block;
@@ -312,7 +339,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       const prev = list[list.length - 1];
       return [
         ...list,
-        { id: ulid(), exercise_id: ex.id, set_index: list.length, weight: prev ? prev.weight : null, reps: null, seconds: null, done: false, updated_at: new Date().toISOString() },
+        { id: ulid(), exercise_id: ex.id, set_index: list.length, weight: prev ? prev.weight : null, reps: null, seconds: null, done: false, rir: null, updated_at: new Date().toISOString() },
       ];
     });
   const removeSet = () => updateSets((list) => list.slice(0, -1));
@@ -329,6 +356,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
         reps: x.reps,
         seconds: x.seconds,
         done: false,
+        rir: null,
         updated_at: new Date().toISOString(),
       }))
     );
@@ -375,7 +403,8 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       </div>
       <div class="sets">
         {sets.map((x, i) => (
-          <div class={`setrow${isTime ? " timed" : ""}${x.done ? " ok" : ""}`} key={x.id}>
+          <div class="setwrap" key={x.id}>
+          <div class={`setrow${isTime ? " timed" : ""}${x.done ? " ok" : ""}`}>
             <span class="n num">{faNum(i + 1)}</span>
             {isTime ? null : (
               <Stepper
@@ -417,6 +446,17 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
             <button type="button" class="check" aria-pressed={x.done} aria-label={`ست ${faNum(i + 1)} انجام شد`} data-testid={`check-${ex.id}-${i}`} onClick={() => toggle(i)}>
               <IconCheck />
             </button>
+          </div>
+          {isTime ? null : (
+            <div class="rir" role="group" aria-label={`تکرار ذخیره (RIR) ست ${faNum(i + 1)}`} data-testid={`rir-${ex.id}-${i}`}>
+              <span>RIR</span>
+              {RIR_CHOICES.map(([v, label]) => (
+                <button type="button" aria-pressed={x.rir === v} aria-label={label} onClick={() => setField(i, { rir: x.rir === v ? null : v })}>
+                  <span class="ltr">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
           </div>
         ))}
       </div>

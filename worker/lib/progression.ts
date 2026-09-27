@@ -51,28 +51,41 @@ export function lastPerformance(exerciseId: string, sessions: PerfSession[], exc
 }
 
 export type Suggestion =
-  | { kind: "weight"; allHit: boolean; weight: number; unit: Unit; lastTop: number }
-  | { kind: "bodyweight"; allHit: boolean; weight: number | null; unit: Unit }
-  | { kind: "time"; allHit: boolean; seconds: number }
+  | { kind: "weight"; allHit: boolean; easy: boolean; weight: number; unit: Unit; lastTop: number }
+  | { kind: "bodyweight"; allHit: boolean; easy: boolean; weight: number | null; unit: Unit }
+  | { kind: "time"; allHit: boolean; easy: boolean; seconds: number }
   | { kind: "none" };
 
+/** RIR 3 stands for "3 or more reps in reserve". */
+export const RIR_EASY = 3;
+
+/**
+ * Progression (SPEC §7 plus approved RIR rules):
+ * - every planned set done at the top of the range with RIR 3+ → double increment ("easy");
+ * - every planned set done at the top of the range → one increment;
+ * - otherwise (including RIR 0 with missed reps) → same weight.
+ */
 export function suggest(plan: Pick<DayExercise, "sets" | "reps_max" | "is_time">, ex: ExerciseInfo, last: PastPerformance | null): Suggestion {
   if (!last) return { kind: "none" };
   const planned = last.sets.slice(0, plan.sets);
+  const enough = last.sets.length >= plan.sets;
+  const easyAll = (hit: boolean) => hit && planned.every((s) => s.rir === RIR_EASY);
   if (plan.is_time) {
     const secs = last.sets.map((s) => s.seconds).filter((v): v is number => v != null);
     if (!secs.length) return { kind: "none" };
-    const allHit = last.sets.length >= plan.sets && planned.every((s) => s.done && (s.seconds ?? 0) >= plan.reps_max);
+    const allHit = enough && planned.every((s) => s.done && (s.seconds ?? 0) >= plan.reps_max);
+    const easy = easyAll(allHit);
     const top = Math.max(...secs);
-    return { kind: "time", allHit, seconds: allHit ? Math.max(top, plan.reps_max) + 15 : top };
+    return { kind: "time", allHit, easy, seconds: allHit ? Math.max(top, plan.reps_max) + (easy ? 30 : 15) : top };
   }
   const withReps = last.sets.filter((s) => s.reps != null);
   if (!withReps.length) return { kind: "none" };
-  const allHit = last.sets.length >= plan.sets && planned.every((s) => s.done && (s.reps ?? 0) >= plan.reps_max);
+  const allHit = enough && planned.every((s) => s.done && (s.reps ?? 0) >= plan.reps_max);
+  const easy = easyAll(allHit);
   const weights = withReps.map((s) => s.weight).filter((w): w is number => w != null);
   const top = weights.length ? Math.max(...weights) : null;
-  if (ex.equipment === "bodyweight") return { kind: "bodyweight", allHit, weight: top, unit: last.unit };
+  if (ex.equipment === "bodyweight") return { kind: "bodyweight", allHit, easy, weight: top, unit: last.unit };
   if (top == null) return { kind: "none" };
   const inc = weightIncrement(ex, last.unit);
-  return { kind: "weight", allHit, weight: allHit ? top + inc : top, unit: last.unit, lastTop: top };
+  return { kind: "weight", allHit, easy, weight: allHit ? top + inc * (easy ? 2 : 1) : top, unit: last.unit, lastTop: top };
 }

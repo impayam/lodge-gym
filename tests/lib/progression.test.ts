@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { lastPerformance, stepperIncrement, suggest, weightIncrement, type PerfSession } from "../../worker/lib/progression";
 import type { SetEntry } from "../../worker/lib/types";
 
-const set = (i: number, weight: number | null, reps: number | null, done = true, seconds: number | null = null, ex = "bench"): SetEntry => ({
+const set = (i: number, weight: number | null, reps: number | null, done = true, seconds: number | null = null, ex = "bench", rir: number | null = null): SetEntry => ({
   id: `${ex}-${i}-${Math.random()}`,
   exercise_id: ex,
   set_index: i,
@@ -10,8 +10,10 @@ const set = (i: number, weight: number | null, reps: number | null, done = true,
   reps,
   seconds,
   done,
+  rir,
   updated_at: "2026-09-20T18:00:00.000Z",
 });
+const withRir = (sets: SetEntry[], rirs: (number | null)[]) => sets.map((x, i) => ({ ...x, rir: rirs[i] }));
 const perf = (sets: SetEntry[], unit: "lb" | "kg" = "lb") => ({ session_id: "s", local_date: "2026-09-20", unit, sets });
 
 const barbellUpper = { equipment: "barbell" as const, is_lower: false };
@@ -37,7 +39,7 @@ describe("increments", () => {
 describe("suggestion", () => {
   it("adds the increment when every planned set hit the top of the range", () => {
     const r = suggest(bench, barbellUpper, perf([set(0, 135, 5), set(1, 135, 5), set(2, 135, 6), set(3, 135, 5)]));
-    expect(r).toEqual({ kind: "weight", allHit: true, weight: 140, unit: "lb", lastTop: 135 });
+    expect(r).toEqual({ kind: "weight", allHit: true, easy: false, weight: 140, unit: "lb", lastTop: 135 });
   });
   it("keeps the weight when a set fell short", () => {
     const r = suggest(bench, barbellUpper, perf([set(0, 135, 5), set(1, 135, 5), set(2, 135, 4), set(3, 135, 5)]));
@@ -53,22 +55,50 @@ describe("suggestion", () => {
   });
   it("uses the top weight and the last session's unit", () => {
     const r = suggest({ sets: 3, reps_max: 5, is_time: false }, barbellLower, perf([set(0, 100, 5), set(1, 110, 5), set(2, 105, 5)], "kg"));
-    expect(r).toEqual({ kind: "weight", allHit: true, weight: 115, unit: "kg", lastTop: 110 });
+    expect(r).toEqual({ kind: "weight", allHit: true, easy: false, weight: 115, unit: "kg", lastTop: 110 });
   });
   it("uses the top of a rep range", () => {
     const plan = { sets: 3, reps_max: 8, is_time: false };
-    expect(suggest(plan, bodyweight, perf([set(0, -40, 8), set(1, -40, 8), set(2, -40, 8)]))).toEqual({ kind: "bodyweight", allHit: true, weight: -40, unit: "lb" });
+    expect(suggest(plan, bodyweight, perf([set(0, -40, 8), set(1, -40, 8), set(2, -40, 8)]))).toEqual({ kind: "bodyweight", allHit: true, easy: false, weight: -40, unit: "lb" });
     expect(suggest(plan, bodyweight, perf([set(0, -40, 8), set(1, -40, 7), set(2, -40, 6)]))).toMatchObject({ kind: "bodyweight", allHit: false });
   });
   it("adds 15 s to timed exercises", () => {
     const plan = { sets: 3, reps_max: 45, is_time: true };
     const ok = [set(0, null, null, true, 45, "plank"), set(1, null, null, true, 50, "plank"), set(2, null, null, true, 45, "plank")];
-    expect(suggest(plan, bodyweight, perf(ok))).toEqual({ kind: "time", allHit: true, seconds: 65 });
+    expect(suggest(plan, bodyweight, perf(ok))).toEqual({ kind: "time", allHit: true, easy: false, seconds: 65 });
     const short = [set(0, null, null, true, 45, "plank"), set(1, null, null, true, 30, "plank"), set(2, null, null, true, 45, "plank")];
-    expect(suggest(plan, bodyweight, perf(short))).toEqual({ kind: "time", allHit: false, seconds: 45 });
+    expect(suggest(plan, bodyweight, perf(short))).toEqual({ kind: "time", allHit: false, easy: false, seconds: 45 });
   });
   it("returns none without history", () => {
     expect(suggest(bench, barbellUpper, null)).toEqual({ kind: "none" });
+  });
+});
+
+describe("RIR rules", () => {
+  const four = [set(0, 135, 5), set(1, 135, 5), set(2, 135, 5), set(3, 135, 5)];
+  it("all sets at top reps with RIR 3+ → double increment", () => {
+    expect(suggest(bench, barbellUpper, perf(withRir(four, [3, 3, 3, 3])))).toMatchObject({ allHit: true, easy: true, weight: 145 });
+    expect(suggest({ sets: 3, reps_max: 5, is_time: false }, barbellLower, perf(withRir(four.slice(0, 3), [3, 3, 3]), "kg"))).toMatchObject({ easy: true, weight: 145 });
+    expect(suggest({ sets: 3, reps_max: 10, is_time: false }, dumbbellLower, perf(withRir([set(0, 40, 10), set(1, 40, 10), set(2, 40, 10)], [3, 3, 3])))).toMatchObject({ weight: 50 });
+  });
+  it("RIR 3+ on only some sets, or RIR missing → normal increment", () => {
+    expect(suggest(bench, barbellUpper, perf(withRir(four, [3, 3, 2, 3])))).toMatchObject({ easy: false, weight: 140 });
+    expect(suggest(bench, barbellUpper, perf(withRir(four, [3, 3, null, 3])))).toMatchObject({ easy: false, weight: 140 });
+  });
+  it("RIR 0 with missed reps → keep weight", () => {
+    const missed = withRir([set(0, 135, 5), set(1, 135, 5), set(2, 135, 4), set(3, 135, 3)], [1, 0, 0, 0]);
+    expect(suggest(bench, barbellUpper, perf(missed))).toMatchObject({ allHit: false, easy: false, weight: 135 });
+  });
+  it("RIR 3+ does not help when reps were missed", () => {
+    const missed = withRir([set(0, 135, 5), set(1, 135, 5), set(2, 135, 4), set(3, 135, 5)], [3, 3, 3, 3]);
+    expect(suggest(bench, barbellUpper, perf(missed))).toMatchObject({ allHit: false, easy: false, weight: 135 });
+  });
+  it("bodyweight and timed exercises", () => {
+    const plan = { sets: 3, reps_max: 8, is_time: false };
+    expect(suggest(plan, bodyweight, perf(withRir([set(0, -40, 8), set(1, -40, 8), set(2, -40, 8)], [3, 3, 3])))).toMatchObject({ kind: "bodyweight", easy: true });
+    const t = { sets: 3, reps_max: 45, is_time: true };
+    const ok = withRir([set(0, null, null, true, 45, "plank"), set(1, null, null, true, 45, "plank"), set(2, null, null, true, 45, "plank")], [3, 3, 3]);
+    expect(suggest(t, bodyweight, perf(ok))).toEqual({ kind: "time", allHit: true, easy: true, seconds: 75 });
   });
 });
 

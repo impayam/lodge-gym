@@ -1,14 +1,15 @@
 // IndexedDB: offline copy of bootstrap data and sessions, plus the outbox of pending writes.
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Bootstrap, Settings, WorkoutSession } from "../../worker/lib/types";
+import type { Bootstrap, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 
 export type BootData = Omit<Bootstrap, "sessions" | "server_time">;
 
 export type OutboxEntry =
   | { key: string; op: "put_session"; id: string; rev: number; queued_at: string }
   | { key: string; op: "delete_session"; id: string; rev: number; queued_at: string }
-  | { key: string; op: "settings"; patch: Partial<Settings>; rev: number; queued_at: string };
+  | { key: string; op: "settings"; patch: Partial<Settings>; rev: number; queued_at: string }
+  | { key: string; op: "body_mass"; date: string; value: number | null; unit: Unit; rev: number; queued_at: string };
 
 interface Schema extends DBSchema {
   kv: { key: string; value: unknown };

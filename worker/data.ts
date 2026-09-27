@@ -8,6 +8,7 @@ import { fail, nowISO, readJson } from "./http";
 import { addDays, DATE_RE, isValidTimeZone, localDate } from "./lib/time";
 import {
   DEFAULT_SETTINGS,
+  type BodyMetric,
   type Bootstrap,
   type DayExercise,
   type Exercise,
@@ -17,7 +18,7 @@ import {
   type Settings,
   type WorkoutSession,
 } from "./lib/types";
-import { ID_RE } from "./lib/ulid";
+import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
 
@@ -102,7 +103,7 @@ async function readExercises(env: Env): Promise<Exercise[]> {
 }
 
 type SessionRow = Omit<WorkoutSession, "sets">;
-type SetRow = Omit<SetEntry, "done"> & { session_id: string; done: number };
+type SetRow = Omit<SetEntry, "done" | "rir"> & { session_id: string; done: number; rir: number | null };
 
 async function readSessions(env: Env, from: string, to: string): Promise<WorkoutSession[]> {
   const [sessions, sets] = await env.DB.batch<SessionRow | SetRow>([
@@ -123,6 +124,7 @@ async function readSessions(env: Env, from: string, to: string): Promise<Workout
       reps: r.reps,
       seconds: r.seconds,
       done: r.done === 1,
+      rir: r.rir ?? null,
       updated_at: r.updated_at,
     });
     bySession.set(r.session_id, list);
@@ -143,6 +145,7 @@ const setSchema = z.object({
   weight: z.number().finite().min(-10_000).max(10_000).nullable(),
   reps: intOrNull,
   seconds: intOrNull,
+  rir: z.number().int().min(0).max(3).nullable().optional(),
   done: z.boolean(),
   updated_at: iso,
 });
@@ -180,14 +183,15 @@ dataRoutes.get("/bootstrap", async (c) => {
   const today = localDate(settings.timezone);
   const from = addDays(today, -60);
   const to = addDays(today, 1);
-  const [{ program, other_days }, exercises, sessions, watch] = await Promise.all([
+  const [{ program, other_days }, exercises, sessions, watch, body] = await Promise.all([
     readProgram(c.env),
     readExercises(c.env),
     readSessions(c.env, from, to),
     readWatchForSessions(c.env, from, to),
+    readBodyMetrics(c.env, from, to),
   ]);
-  const body: Bootstrap = { settings, program, other_days, exercises, sessions, watch, server_time: nowISO() };
-  return c.json(body);
+  const payload: Bootstrap = { settings, program, other_days, exercises, sessions, watch, body, server_time: nowISO() };
+  return c.json(payload);
 });
 
 dataRoutes.put("/settings", async (c) => {
@@ -254,18 +258,49 @@ dataRoutes.put("/sessions/:id", async (c) => {
     ...doc.sets.map((s) =>
       db
         .prepare(
-          `INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, rir, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET exercise_id = excluded.exercise_id, set_index = excluded.set_index, weight = excluded.weight,
-             reps = excluded.reps, seconds = excluded.seconds, done = excluded.done, updated_at = excluded.updated_at`
+             reps = excluded.reps, seconds = excluded.seconds, done = excluded.done, rir = excluded.rir, updated_at = excluded.updated_at`
         )
-        .bind(s.id, doc.id, s.exercise_id, s.set_index, s.weight, s.reps, s.seconds, s.done ? 1 : 0, s.updated_at)
+        .bind(s.id, doc.id, s.exercise_id, s.set_index, s.weight, s.reps, s.seconds, s.done ? 1 : 0, s.rir ?? null, s.updated_at)
     ),
   ];
   await db.batch(stmts);
   // A watch workout may have arrived before this session was synced (SPEC §9.1 matching).
   await rematchAround(c.env, doc.started_at);
   return c.json({ ok: true, applied: true });
+});
+
+/* ---------------- body metrics (manual body weight) ---------------- */
+
+export async function readBodyMetrics(env: Env, from: string, to: string): Promise<BodyMetric[]> {
+  const rows = await env.DB.prepare(
+    "SELECT local_date, kind, value, unit, source FROM body_metrics WHERE local_date BETWEEN ? AND ? ORDER BY local_date, kind, source"
+  )
+    .bind(from, to)
+    .all<BodyMetric>();
+  return rows.results;
+}
+
+const bodyMassSchema = z.object({ value: z.number().positive().max(1000).nullable(), unit: z.enum(["lb", "kg"]) });
+
+/** Manual body weight for a day ("body weight today" at the end of a session); null clears it. */
+dataRoutes.put("/body-mass/:date", async (c) => {
+  const date = c.req.param("date");
+  if (!DATE_RE.test(date)) return fail(c, 400, "invalid_input", "تاریخ معتبر نیست.");
+  const body = await readJson(c, bodyMassSchema);
+  if (body.value === null) {
+    await c.env.DB.prepare("DELETE FROM body_metrics WHERE local_date = ? AND kind = 'body_mass' AND source = 'manual'").bind(date).run();
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO body_metrics (id, local_date, kind, value, unit, source, received_at) VALUES (?, ?, 'body_mass', ?, ?, 'manual', ?)
+       ON CONFLICT (local_date, kind, source) DO UPDATE SET value = excluded.value, unit = excluded.unit, received_at = excluded.received_at`
+    )
+      .bind(ulid(), date, body.value, body.unit, nowISO())
+      .run();
+  }
+  return c.json({ ok: true });
 });
 
 dataRoutes.delete("/sessions/:id", async (c) => {
@@ -296,6 +331,7 @@ async function readSessionsById(env: Env, ids: string[]): Promise<WorkoutSession
         reps: r.reps,
         seconds: r.seconds,
         done: r.done === 1,
+        rir: r.rir ?? null,
         updated_at: r.updated_at,
       })),
     });

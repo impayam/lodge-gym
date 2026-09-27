@@ -5,6 +5,7 @@ test.describe.configure({ mode: "serial" });
 
 test.beforeEach(async ({ context, baseURL }) => {
   resetWorkouts();
+  sql("DELETE FROM body_metrics");
   await signIn(context, baseURL!);
 });
 
@@ -111,6 +112,15 @@ test("suggestion and last performance follow SPEC §7", async ({ page }) => {
   await expect(incline.getByTestId("r-incline_db-2").locator("input")).toHaveValue("۸");
   await expect(incline.getByTestId("w-incline_db-2").locator("input")).toHaveValue("۴۰");
 
+  // RIR chip (tap again clears) and the manual body weight.
+  await page.getByTestId("rir-bench-0").getByRole("button", { name: "۳+" }).click();
+  await expect(page.getByTestId("rir-bench-0").getByRole("button", { name: "۳+" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("rir-bench-1").getByRole("button", { name: "۱" }).click();
+  await page.getByTestId("rir-bench-1").getByRole("button", { name: "۱" }).click();
+  await expect(page.getByTestId("rir-bench-1").getByRole("button", { name: "۱" })).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("body-weight").locator("input").fill("۱۸۰٫۴");
+  await page.getByTestId("body-weight").locator("input").blur();
+
   // Add / remove set.
   await incline.getByRole("button", { name: "+ افزودن ست" }).click();
   await expect(incline.getByTestId("w-incline_db-3")).toBeVisible();
@@ -122,6 +132,25 @@ test("suggestion and last performance follow SPEC §7", async ({ page }) => {
   await page.getByRole("button", { name: "بستن" }).click();
   await expect(page.getByTestId("rest-timer")).toHaveCount(0);
   await waitForSynced(page);
+  expect(sql("SELECT rir FROM set_entries se JOIN workout_sessions ws ON ws.id = se.session_id WHERE ws.id <> '01PREV' AND exercise_id = 'bench' ORDER BY set_index LIMIT 2")).toEqual([{ rir: 3 }, { rir: null }]);
+  expect(sql("SELECT value, unit, source FROM body_metrics WHERE kind = 'body_mass'")).toEqual([{ value: 180.4, unit: "lb", source: "manual" }]);
+});
+
+test("RIR 3+ on every set doubles the next increment", async ({ page }) => {
+  const day = "2026-09-20";
+  sql(
+    `INSERT INTO workout_sessions (id, program_day_id, local_date, started_at, ended_at, status, unit, note, created_at, updated_at, source)
+     VALUES ('01EASY', 'D1', '${day}', '${day}T23:00:00.000Z', '${day}T23:55:00.000Z', 'done', 'lb', '', '${day}T23:00:00.000Z', '${day}T23:55:00.000Z', 'app')`
+  );
+  sql(
+    `INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, rir, updated_at) VALUES ${[0, 1, 2, 3]
+      .map((i) => `('01EB${i}', '01EASY', 'bench', ${i}, 135, 5, NULL, 1, 3, '${day}T23:10:00.000Z')`)
+      .join(", ")}`
+  );
+  await page.goto("/");
+  await page.locator(".dayopt", { hasText: "روز ۱ – سینه" }).click();
+  await expect(page.locator('[data-ex="bench"]').getByTestId("suggestion")).toHaveText("پیشنهاد: ۱۴۵ lb (دو پله، همه‌ی ست‌ها با ۳+ تکرار ذخیره)");
+  await expect(page.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "۱۴۵");
 });
 
 test("home shows the rest advice after two training days in a row", async ({ page }) => {
