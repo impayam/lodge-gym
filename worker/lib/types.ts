@@ -5,9 +5,13 @@ export type WeekStart = "sat" | "sun" | "mon";
 export type Equipment = "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight";
 export type SessionStatus = "active" | "done";
 
+export type MonthCalendar = "gregorian" | "jalali";
+
 export interface Settings {
   unit: Unit;
   week_start: WeekStart;
+  /** Month boundaries for the monthly report (SPEC §10): Gregorian by default. */
+  month_calendar: MonthCalendar;
   relock_minutes: number;
   timezone: string;
 }
@@ -137,6 +141,7 @@ export interface Bootstrap {
 export const DEFAULT_SETTINGS: Settings = {
   unit: "lb",
   week_start: "mon",
+  month_calendar: "gregorian",
   relock_minutes: 0,
   timezone: "America/Denver",
 };

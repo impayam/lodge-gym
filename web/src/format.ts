@@ -20,6 +20,13 @@ const jalaliMonth = fmt("fa-IR-u-ca-persian", { month: "long", year: "numeric" }
 const gregShort = fmt("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 export const jalali = (date: string) => jalaliLong?.format(atNoon(date)) ?? date;
+const jalaliDM = fmt("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
+const persianGregMonth = fmt("fa-IR-u-ca-gregory", { month: "long", year: "numeric" });
+/** "۶ مهر" */
+export const jalaliShort = (date: string) => jalaliDM?.format(atNoon(date)) ?? date;
+/** Month label in the report calendar: "مهر ۱۴۰۵" or "سپتامبر ۲۰۲۶". */
+export const monthLabel = (startDate: string, calendar: "gregorian" | "jalali") =>
+  (calendar === "jalali" ? jalaliMonth : persianGregMonth)?.format(atNoon(startDate)) ?? startDate.slice(0, 7);
 export const jalaliMonthYear = (date: string) => jalaliMonth?.format(atNoon(date)) ?? date.slice(0, 7);
 export const greg = (date: string) => gregShort?.format(atNoon(date)) ?? date;
 

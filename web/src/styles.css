@@ -273,3 +273,68 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .overlay img.top { position: absolute; inset: 0; }
 .overlay input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--accent); }
 .photo-prompt { border-color: var(--accent); }
+
+/* reports & charts */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; }
+.stat b { font-size: 20px; font-weight: 800; }
+.stat small { color: var(--muted); font-size: 12px; }
+.stat .sub { font-size: 11.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.navrow { align-items: center; margin: 6px 0; }
+.navrow b { font-size: 14px; }
+.seg.wide { display: flex; }
+.seg.wide button { flex: 1; padding: 6px 0; }
+.chart { margin: 0; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; touch-action: pan-y; }
+.chart .readout, .musclemap .readout { font-size: 12.5px; color: var(--ink-2); min-height: 1.6em; margin-bottom: 4px; }
+.chart .hit { fill: transparent; }
+.chart .lbl, .chart .val, .chart .tick { font-family: inherit; fill: var(--ink-2); }
+/* SVG text inherits RTL, which would flip text-anchor; anchors in the charts are written for LTR geometry. */
+.chart svg text { direction: ltr; unicode-bidi: plaintext; }
+.chart .lbl { font-size: 11px; fill: var(--ink); }
+.chart .val { font-size: 10px; }
+.chart .tick { font-size: 9px; fill: var(--muted); }
+.chart .track { stroke: var(--surface-2); stroke-width: 12; stroke-linecap: round; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .bar { fill: var(--accent); }
+.chart .bar.prev { fill: var(--muted); opacity: 0.55; }
+.chart .row.on .bar { filter: brightness(1.12); }
+.chart .row.on .lbl { font-weight: 700; }
+.chart .target { stroke: var(--ink); stroke-width: 2; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.chart .dot.muted { fill: var(--muted); }
+.chart .cross { stroke: var(--line); stroke-width: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+.legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+.legend .sw.cur, .legend .sw.line { background: var(--accent); }
+.legend .sw.line { height: 3px; vertical-align: 3px; }
+.legend .sw.prev { background: var(--muted); opacity: 0.55; }
+.legend .sw.dot { background: var(--muted); border-radius: 50%; width: 8px; height: 8px; }
+.tableview { margin-top: 6px; font-size: 12.5px; }
+.tableview summary { color: var(--accent); cursor: pointer; font-weight: 700; }
+.tableview table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.tableview th, .tableview td { border-top: 1px solid var(--line); padding: 4px; text-align: right; }
+.multiples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.multiples .card { padding: 10px; }
+.mtitle { font-size: 13px; }
+
+/* muscle map */
+.figures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.figure { margin: 0; text-align: center; }
+.figure svg { width: 100%; max-height: 260px; }
+.figure figcaption { font-size: 12px; color: var(--muted); }
+.body { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
+.muscle { stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.muscle.active { stroke: var(--ink); }
+.m-none { fill: var(--line); background: var(--line); }
+.m-on { fill: var(--good); background: var(--good); }
+.m-under { fill: url(#tex-under); background: repeating-linear-gradient(45deg, var(--warn) 0 3px, var(--surface) 3px 4px); }
+.m-over { fill: url(#tex-over); background: repeating-linear-gradient(135deg, var(--plate) 0 3px, var(--surface) 3px 4px); }
+.tex-under-bg { fill: var(--warn); }
+.tex-over-bg { fill: var(--plate); }
+.tex-line { stroke: var(--surface); stroke-width: 1.5; }
+.musclelist { list-style: none; padding: 0; margin: 10px 0 0; font-size: 13px; }
+.musclelist li { display: grid; grid-template-columns: 1fr auto 110px; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
+.musclelist .st { font-weight: 700; color: var(--ink-2); }

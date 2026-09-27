@@ -4,7 +4,10 @@
 // Persian digits and Jalali dates, newline-joined lists or JSON arrays, and differences between iOS versions.
 
 import { toLatinDigits } from "./digits";
+import { jalaliToGregorian } from "./jalali";
 import { addDays, localDate, zonedToUtcISO } from "./time";
+
+export { jalaliToGregorian };
 
 /* ---------------- text normalisation ---------------- */
 
@@ -124,32 +127,6 @@ const FA_MONTHS: Record<string, number> = {
 const TZ_ABBR: Record<string, number> = {
   UTC: 0, GMT: 0, Z: 0, EST: -300, EDT: -240, CST: -360, CDT: -300, MST: -420, MDT: -360, PST: -480, PDT: -420, AKST: -540, AKDT: -480, HST: -600, IRST: 210, IRDT: 270,
 };
-
-/** Jalali (Solar Hijri) → Gregorian. */
-export function jalaliToGregorian(jy: number, jm: number, jd: number): [number, number, number] {
-  jy += 1595;
-  let days = -355668 + 365 * jy + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4) + jd + (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
-  let gy = 400 * Math.floor(days / 146097);
-  days %= 146097;
-  if (days > 36524) {
-    days--;
-    gy += 100 * Math.floor(days / 36524);
-    days %= 36524;
-    if (days >= 365) days++;
-  }
-  gy += 4 * Math.floor(days / 1461);
-  days %= 1461;
-  if (days > 365) {
-    gy += Math.floor((days - 1) / 365);
-    days = (days - 1) % 365;
-  }
-  let gd = days + 1;
-  const leap = (gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0;
-  const months = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  let gm = 0;
-  while (gm < 12 && gd > months[gm]) gd -= months[gm++];
-  return [gy, gm + 1, gd];
-}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;

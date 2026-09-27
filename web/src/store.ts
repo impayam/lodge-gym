@@ -10,7 +10,7 @@ import * as ldb from "./localdb";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports";
 
 export interface SyncState {
   pending: number;

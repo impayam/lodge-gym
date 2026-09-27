@@ -55,6 +55,13 @@ export function Settings() {
           </select>
         </div>
         <div class="field">
+          <label for="s-month">ماه در گزارش ماهانه</label>
+          <select id="s-month" value={st.month_calendar} onChange={(e) => set({ month_calendar: (e.currentTarget as HTMLSelectElement).value as SettingsT["month_calendar"] })}>
+            <option value="gregorian">میلادی</option>
+            <option value="jalali">شمسی</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="s-relock">قفل دوباره با Face ID بعد از رفتن به پس‌زمینه</label>
           <select id="s-relock" value={String(st.relock_minutes)} onChange={(e) => set({ relock_minutes: Number((e.currentTarget as HTMLSelectElement).value) })}>
             <option value="0">خاموش</option>

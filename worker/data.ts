@@ -28,6 +28,7 @@ export async function readSettings(env: Env): Promise<Settings> {
   return {
     unit: map.unit === "kg" ? "kg" : map.unit === "lb" ? "lb" : DEFAULT_SETTINGS.unit,
     week_start: map.week_start === "sat" || map.week_start === "sun" || map.week_start === "mon" ? map.week_start : DEFAULT_SETTINGS.week_start,
+    month_calendar: map.month_calendar === "jalali" ? "jalali" : DEFAULT_SETTINGS.month_calendar,
     relock_minutes: Number.isFinite(Number(map.relock_minutes)) ? Number(map.relock_minutes) : DEFAULT_SETTINGS.relock_minutes,
     timezone: map.timezone && isValidTimeZone(map.timezone) ? map.timezone : DEFAULT_SETTINGS.timezone,
   };
@@ -53,7 +54,7 @@ const mapDay = (d: DayRow): Omit<ProgramDay, "exercises"> => ({
   est_minutes: d.est_minutes ?? 0,
 });
 
-async function readProgram(env: Env): Promise<{ program: Program; other_days: Omit<ProgramDay, "exercises">[] }> {
+export async function readProgram(env: Env): Promise<{ program: Program; other_days: Omit<ProgramDay, "exercises">[] }> {
   const prog = await env.DB.prepare("SELECT id, name FROM programs WHERE active = 1 ORDER BY created_at LIMIT 1").first<{ id: string; name: string }>();
   const days = await env.DB.prepare("SELECT * FROM program_days ORDER BY program_id, position").all<DayRow>();
   const dex = await env.DB.prepare(
@@ -89,7 +90,7 @@ async function readProgram(env: Env): Promise<{ program: Program; other_days: Om
   };
 }
 
-async function readExercises(env: Env): Promise<Exercise[]> {
+export async function readExercises(env: Env): Promise<Exercise[]> {
   const rows = await env.DB.prepare("SELECT * FROM exercises ORDER BY id").all<Record<string, string | number | null>>();
   return rows.results.map((r) => ({
     id: r.id as string,
@@ -105,7 +106,7 @@ async function readExercises(env: Env): Promise<Exercise[]> {
 type SessionRow = Omit<WorkoutSession, "sets">;
 type SetRow = Omit<SetEntry, "done" | "rir"> & { session_id: string; done: number; rir: number | null };
 
-async function readSessions(env: Env, from: string, to: string): Promise<WorkoutSession[]> {
+export async function readSessions(env: Env, from: string, to: string): Promise<WorkoutSession[]> {
   const [sessions, sets] = await env.DB.batch<SessionRow | SetRow>([
     env.DB.prepare("SELECT * FROM workout_sessions WHERE local_date BETWEEN ? AND ? ORDER BY local_date DESC, started_at DESC").bind(from, to),
     env.DB.prepare(
@@ -169,6 +170,7 @@ const settingsSchema = z
   .object({
     unit: z.enum(["lb", "kg"]),
     week_start: z.enum(["sat", "sun", "mon"]),
+    month_calendar: z.enum(["gregorian", "jalali"]),
     relock_minutes: z.number().int().min(0).max(1440),
     timezone: z.string().max(64).refine(isValidTimeZone, "timezone"),
   })

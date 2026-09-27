@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, Persian RTL UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set.
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set.
 
 ## Stack
 
@@ -52,6 +52,7 @@ Fixtures of messy payloads: `tests/fixtures/shortcuts/`.
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
 - `PUT /api/settings` (unit, week start, re-lock minutes, timezone).
+- `GET /api/reports/progress` («پیشرفت» page) and `?format=csv` on `/api/reports/week|month`; setting `month_calendar` (`gregorian`|`jalali`).
 - `GET /api/photos` (photo list for the gallery; SPEC §11 lists the other photo routes).
 - `PUT /api/body-mass/:date` (manual body weight, source `manual`) and `set_entries.rir` (migration 0002).
 - `POST /api/health/raw` (replaces `/health/workouts`), `GET /api/health/status`, `PUT /api/health/workouts/:id/match`.
