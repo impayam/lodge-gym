@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { authRoutes, credentialCount, requireSession } from "./auth";
 import { dataRoutes } from "./data";
+import { healthRoutes, ingestRaw, requireHealthToken, tokenRoutes } from "./health";
 import type { AppBindings } from "./env";
 import { SECURITY_HEADERS } from "./headers";
 import { ApiError, errorBody } from "./http";
@@ -20,7 +21,8 @@ app.use("*", async (c, next) => {
 
 // CSRF: SameSite=Strict cookies plus an Origin check on state-changing API requests.
 app.use("/api/*", async (c, next) => {
-  if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method)) {
+  // The Shortcuts bridge authenticates with a bearer token and sends no Origin header.
+  if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method) && c.req.path !== "/api/health/raw") {
     const origin = c.req.header("Origin");
     if (!origin || origin !== new URL(c.req.url).origin) {
       return c.json(errorBody("bad_origin", "درخواست از مبدأ نامعتبر رسید."), 403);
@@ -36,9 +38,14 @@ app.use("/api/*", async (c, next) => {
 
 app.route("/api/auth", authRoutes);
 
+// iOS Shortcuts → raw Health samples (bearer token, approved SPEC §9 change).
+app.post("/api/health/raw", requireHealthToken, ingestRaw);
+
 const api = new Hono<AppBindings>();
 api.use("*", requireSession);
 api.route("/", dataRoutes);
+api.route("/tokens", tokenRoutes);
+api.route("/health", healthRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "مسیر پیدا نشد."), 404));

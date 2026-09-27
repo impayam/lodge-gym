@@ -231,3 +231,18 @@ textarea { width: 100%; min-height: 70px; background: var(--surface-2); border: 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Apple Watch page */
+.copyrow { display: flex; gap: 8px; align-items: center; }
+.copyrow input, .copyrow select { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; min-height: 38px; font-size: 13px; }
+.steps li { margin-bottom: 10px; }
+.steps ul { padding-inline-start: 16px; margin: 6px 0 0; }
+.steps ul li { margin-bottom: 6px; }
+.fields { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12.5px; }
+.fields td { border-top: 1px solid var(--line); padding: 6px 4px; vertical-align: top; }
+.fields td:first-child { font-family: ui-monospace, Menlo, monospace; white-space: nowrap; width: 1%; color: var(--ink); font-weight: 700; }
+.watch { border-color: var(--accent); }
+.watch .row-w { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink-2); }
+.watch .row-w b { color: var(--ink); font-size: 14px; }
+.setlink { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: right; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-weight: 700; }
+.setlink small { color: var(--muted); font-weight: 500; }

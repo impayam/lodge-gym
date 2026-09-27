@@ -10,6 +10,7 @@ import { Home } from "./views/Home";
 import { Program } from "./views/Program";
 import { Session } from "./views/Session";
 import { Settings } from "./views/Settings";
+import { Watch } from "./views/Watch";
 
 /** Client-side re-lock after N minutes in the background (SPEC §4.4). */
 function useRelock() {
@@ -52,7 +53,7 @@ export function App() {
   if (auth === "first-offline" || !hasBoot) return <FirstOffline />;
 
   const t = today();
-  const current = view.name === "session" ? "home" : view.name;
+  const current = view.name === "session" ? "home" : view.name === "watch" ? "settings" : view.name;
   return (
     <>
       <div class="wrap">
@@ -79,6 +80,8 @@ export function App() {
             <Program />
           ) : view.name === "settings" ? (
             <Settings />
+          ) : view.name === "watch" ? (
+            <Watch />
           ) : (
             <Home />
           )}

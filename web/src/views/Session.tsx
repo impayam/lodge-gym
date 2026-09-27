@@ -7,10 +7,11 @@ import type { SetEntry, Unit, WorkoutSession } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { IconCheck } from "../components/Icons";
 import { Stepper } from "../components/Stepper";
-import { clock, greg, jalali, ytLink } from "../format";
+import { clock, faHM, greg, jalali, ytLink } from "../format";
 import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
 import { flash, getState, navigate, removeSession, saveSession, startRest, stopRest, useStore } from "../store";
 import { targetText } from "./Program";
+import { WatchStats, workoutTypeFa } from "./Watch";
 
 function useWakeLock(enabled: boolean) {
   useEffect(() => {
@@ -68,6 +69,7 @@ export function Session({ id }: { id: string }) {
 
   const tz = boot.settings.timezone;
   const day = dayInfo(boot, s.program_day_id);
+  const watch = (boot.watch ?? []).filter((w) => w.matched_session_id === s.id).sort((a, b) => a.started_at.localeCompare(b.started_at));
   const blocks = sessionBlocks(boot, s);
   const hasSuperset = blocks.some((b) => b.plan.superset_tag);
   const startHM = localHM(tz, s.started_at);
@@ -175,6 +177,20 @@ export function Session({ id }: { id: string }) {
         </div>
         {hasSuperset ? <div class="ss-note">حرکت‌های A1/A2 و B1/B2 سوپرست هستند: یکی در میان، بعد از هر دور ۶۰ تا ۹۰ ثانیه استراحت.</div> : null}
       </section>
+
+      {watch.length ? (
+        <section class="card watch stack" style={{ marginTop: "14px" }} data-testid="session-watch">
+          <div class="eyebrow">Apple Watch</div>
+          {watch.map((w) => (
+            <div class="row-w">
+              <b>
+                {workoutTypeFa(w.activity_type)} · <span class="num">{faHM(w.started_at, tz)}{w.ended_at ? `–${faHM(w.ended_at, tz)}` : ""}</span>
+              </b>
+              <WatchStats w={w} />
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <h2>حرکت‌ها</h2>
       <div class="stack">

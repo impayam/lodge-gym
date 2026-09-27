@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, Persian RTL UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging).
+Status: **M1** (shell, passkey auth, program seed, offline logging) and **M4** (Apple Watch bridge via iOS Shortcuts).
 
 ## Stack
 
@@ -36,7 +36,17 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 
 Bindings are in `wrangler.toml`: D1 `DB` → `lodge-gym-db`, R2 `PHOTOS` → `lodge-gym-photos`, static assets `ASSETS` → `dist/`.
 
-## Additions beyond SPEC §5/§11 (pending approval)
+## Apple Watch bridge (approved SPEC §9 change)
+
+The shortcut has three actions (Find Health Samples: Workouts; Find Health Samples: Heart Rate; Get Contents of URL)
+and posts the raw results to `POST /api/health/raw` with `Authorization: Bearer <token>`. The Worker parses the
+Shortcuts text (`worker/lib/shortcuts.ts`: locale dates incl. Jalali, units, comma decimals, newline lists), computes
+duration, active kcal and average/max HR per workout, dedupes on `sha256(type + start)` and matches sessions
+(`worker/lib/matching.ts`). Settings → «Apple Watch» has the token, step-by-step instructions and the last 10 workouts.
+Fixtures of messy payloads: `tests/fixtures/shortcuts/`.
+
+## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
 - `PUT /api/settings` (unit, week start, re-lock minutes, timezone).
+- `POST /api/health/raw` (replaces `/health/workouts`), `GET /api/health/status`, `PUT /api/health/workouts/:id/match`.

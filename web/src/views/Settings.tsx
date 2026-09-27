@@ -4,7 +4,7 @@ import { isValidTimeZone } from "../../../worker/lib/time";
 import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { errorText } from "../api";
 import { deviceLabel, registerPasskey } from "../passkey";
-import { logout, saveSettings, syncNow, useStore } from "../store";
+import { logout, navigate, saveSettings, syncNow, useStore } from "../store";
 
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
 
@@ -72,6 +72,16 @@ export function Settings() {
           </select>
         </div>
       </div>
+
+      <h2>اتصال‌ها</h2>
+      <button type="button" class="setlink" onClick={() => navigate("watch")} data-testid="open-watch">
+        <span>
+          Apple Watch
+          <br />
+          <small>توکن، ساختن میان‌بر، آخرین داده‌های ساعت</small>
+        </span>
+        <span aria-hidden="true">←</span>
+      </button>
 
       <h2>دستگاه‌ها</h2>
       <div class="card stack">

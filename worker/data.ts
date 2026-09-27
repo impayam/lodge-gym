@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppBindings, Env } from "./env";
+import { rematchAround, readWatchForSessions } from "./health";
 import { fail, nowISO, readJson } from "./http";
 import { addDays, DATE_RE, isValidTimeZone, localDate } from "./lib/time";
 import {
@@ -177,12 +178,15 @@ export const dataRoutes = new Hono<AppBindings>();
 dataRoutes.get("/bootstrap", async (c) => {
   const settings = await readSettings(c.env);
   const today = localDate(settings.timezone);
-  const [{ program, other_days }, exercises, sessions] = await Promise.all([
+  const from = addDays(today, -60);
+  const to = addDays(today, 1);
+  const [{ program, other_days }, exercises, sessions, watch] = await Promise.all([
     readProgram(c.env),
     readExercises(c.env),
-    readSessions(c.env, addDays(today, -60), addDays(today, 1)),
+    readSessions(c.env, from, to),
+    readWatchForSessions(c.env, from, to),
   ]);
-  const body: Bootstrap = { settings, program, other_days, exercises, sessions, server_time: nowISO() };
+  const body: Bootstrap = { settings, program, other_days, exercises, sessions, watch, server_time: nowISO() };
   return c.json(body);
 });
 
@@ -259,6 +263,8 @@ dataRoutes.put("/sessions/:id", async (c) => {
     ),
   ];
   await db.batch(stmts);
+  // A watch workout may have arrived before this session was synced (SPEC §9.1 matching).
+  await rematchAround(c.env, doc.started_at);
   return c.json({ ok: true, applied: true });
 });
 
@@ -268,6 +274,7 @@ dataRoutes.delete("/sessions/:id", async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM set_entries WHERE session_id = ?").bind(sid),
     c.env.DB.prepare("DELETE FROM workout_sessions WHERE id = ?").bind(sid),
+    c.env.DB.prepare("UPDATE health_workouts SET matched_session_id = NULL WHERE matched_session_id = ?").bind(sid),
   ]);
   return c.json({ ok: true });
 });

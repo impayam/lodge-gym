@@ -79,12 +79,29 @@ export interface WorkoutSession {
   sets: SetEntry[];
 }
 
+/** An Apple Watch workout received through the Shortcuts bridge. */
+export interface HealthWorkout {
+  id: string;
+  activity_type: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_sec: number | null;
+  active_kcal: number | null;
+  total_kcal: number | null;
+  hr_avg: number | null;
+  hr_max: number | null;
+  matched_session_id: string | null;
+  received_at?: string;
+}
+
 export interface Bootstrap {
   settings: Settings;
   program: Program;
   other_days: Omit<ProgramDay, "exercises">[];
   exercises: Exercise[];
   sessions: WorkoutSession[];
+  /** Watch workouts matched to the sessions above. */
+  watch: HealthWorkout[];
   server_time: string;
 }
 

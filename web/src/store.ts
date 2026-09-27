@@ -1,14 +1,14 @@
 // App state, offline-first persistence and the outbox sync loop.
 
 import { useEffect, useState } from "preact/hooks";
-import type { Bootstrap, Settings, WorkoutSession } from "../../worker/lib/types";
+import type { Bootstrap, HealthWorkout, Settings, WorkoutSession } from "../../worker/lib/types";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, NetworkError } from "./api";
 import * as ldb from "./localdb";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch";
 
 export interface SyncState {
   pending: number;
@@ -304,6 +304,18 @@ export async function logout() {
   }
   await ldb.kvSet("logged_in", false);
   setState({ auth: "login", view: { name: "home" }, rest: null });
+}
+
+/* ---------------- watch data ---------------- */
+
+/** Stores watch workouts (e.g. after a manual attach) in the cached bootstrap so sessions show them offline. */
+export async function upsertWatch(list: HealthWorkout[]) {
+  if (!state.boot) return;
+  const byId = new Map((state.boot.watch ?? []).map((w) => [w.id, w]));
+  for (const w of list) byId.set(w.id, w);
+  const boot = { ...state.boot, watch: [...byId.values()].filter((w) => w.matched_session_id) };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
 }
 
 /* ---------------- rest timer ---------------- */
