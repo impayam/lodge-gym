@@ -5,6 +5,7 @@ import { faHM, jalali } from "../format";
 import { activeSession, dayInfo, exerciseMap, homeModel, newSession } from "../model";
 import { navigate, saveSession, today, useStore } from "../store";
 import { HistoryItem } from "./HistoryItem";
+import { WeeklyReviewCard } from "./Review";
 
 export function Home() {
   const boot = useStore((s) => s.boot)!;
@@ -64,6 +65,10 @@ export function Home() {
           </button>
         </section>
       )}
+
+      <div style={{ marginTop: "12px" }}>
+        <WeeklyReviewCard />
+      </div>
 
       <h2>این هفته</h2>
       <div class="card weekcard" data-testid="week-strip">

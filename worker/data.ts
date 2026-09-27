@@ -15,6 +15,7 @@ import {
   type Program,
   type ProgramDay,
   type SetEntry,
+  type WeeklyReview,
   type Settings,
   type WorkoutSession,
 } from "./lib/types";
@@ -185,14 +186,15 @@ dataRoutes.get("/bootstrap", async (c) => {
   const today = localDate(settings.timezone);
   const from = addDays(today, -60);
   const to = addDays(today, 1);
-  const [{ program, other_days }, exercises, sessions, watch, body] = await Promise.all([
+  const [{ program, other_days }, exercises, sessions, watch, body, review] = await Promise.all([
     readProgram(c.env),
     readExercises(c.env),
     readSessions(c.env, from, to),
     readWatchForSessions(c.env, from, to),
     readBodyMetrics(c.env, from, to),
+    readLatestReview(c.env),
   ]);
-  const payload: Bootstrap = { settings, program, other_days, exercises, sessions, watch, body, server_time: nowISO() };
+  const payload: Bootstrap = { settings, program, other_days, exercises, sessions, watch, body, review, server_time: nowISO() };
   return c.json(payload);
 });
 
@@ -273,6 +275,48 @@ dataRoutes.put("/sessions/:id", async (c) => {
   await rematchAround(c.env, doc.started_at);
   return c.json({ ok: true, applied: true });
 });
+
+/* ---------------- weekly review (written by Claude into D1) ---------------- */
+
+/** Turns a JSON column into a list of strings; tolerates objects ({title, detail}/{text}) and plain text. */
+export function toStringList(raw: unknown): string[] {
+  let v: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      v = JSON.parse(raw);
+    } catch {
+      return raw.trim() ? [raw.trim()] : [];
+    }
+  }
+  if (!Array.isArray(v)) v = v == null ? [] : [v];
+  return (v as unknown[])
+    .map((x) => {
+      if (typeof x === "string") return x.trim();
+      if (x && typeof x === "object") {
+        const o = x as Record<string, unknown>;
+        const title = typeof o.title === "string" ? o.title : typeof o.text === "string" ? o.text : "";
+        const detail = typeof o.detail === "string" ? o.detail : typeof o.body === "string" ? o.body : "";
+        return [title, detail].filter(Boolean).join(": ").trim();
+      }
+      return x == null ? "" : String(x);
+    })
+    .filter(Boolean);
+}
+
+export async function readLatestReview(env: Env): Promise<WeeklyReview | null> {
+  const r = await env.DB.prepare("SELECT * FROM weekly_reviews ORDER BY week_start DESC, created_at DESC LIMIT 1").first<Record<string, string>>();
+  if (!r) return null;
+  return {
+    id: r.id,
+    week_start: r.week_start,
+    created_at: r.created_at,
+    summary_fa: r.summary_fa ?? "",
+    highlights: toStringList(r.highlights),
+    suggestions: toStringList(r.suggestions),
+  };
+}
+
+dataRoutes.get("/reviews/latest", async (c) => c.json({ review: await readLatestReview(c.env) }));
 
 /* ---------------- body metrics (manual body weight) ---------------- */
 

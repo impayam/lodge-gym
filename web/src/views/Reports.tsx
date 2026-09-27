@@ -15,6 +15,7 @@ import * as ldb from "../localdb";
 import { fetchFile, reportCard, shareOrDownload } from "../share";
 import { photoSrc, today, useStore } from "../store";
 import { poseFa } from "./Photos";
+import { WeeklyReviewCard } from "./Review";
 
 type Week = ReturnType<typeof weeklyReport>;
 type Month = ReturnType<typeof monthlyReport>;
@@ -377,6 +378,7 @@ export function Reports() {
   const [tab, setTab] = useState<"week" | "month" | "progress">("week");
   return (
     <>
+      <WeeklyReviewCard />
       <div class="seg wide" role="tablist" aria-label="گزارش‌ها" style={{ margin: "14px 0 6px" }}>
         {(
           [

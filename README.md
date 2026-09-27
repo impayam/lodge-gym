@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, Persian RTL UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set.
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card.
 
 ## Stack
 
@@ -62,10 +62,38 @@ Web Push (VAPID, RFC 8291 aes128gcm, WebCrypto only: `worker/lib/webpush.ts`). A
 rest end, and sends the push from an alarm. Settings → «اعلان پایان استراحت» asks for permission from a tap. On iPhone it
 works only in the Home Screen app on iOS 16.4+.
 
+## Weekly AI review (written by Claude into D1)
+
+The app only reads this table; Claude writes one row per week directly into D1
+(`lodge-gym-db`, id `f8ba012b-9970-423c-83f3-8c32111695e7`, migration `0003_weekly_reviews.sql`). The newest row
+(highest `week_start`, then latest `created_at`) is shown in the «مرور هفتگی» card on the home and reports pages.
+
+| Column | Type | Content |
+|---|---|---|
+| `id` | TEXT, primary key | Any unique id (ULID recommended), e.g. `rv-2026-09-21` |
+| `week_start` | TEXT, `YYYY-MM-DD` | First day of the reviewed week in the app's week-start setting (default Monday) |
+| `created_at` | TEXT | UTC ISO-8601 timestamp, e.g. `2026-09-28T08:00:00Z` |
+| `summary_fa` | TEXT, required | Persian summary; newlines are kept |
+| `highlights` | TEXT, JSON array of strings | What went well, e.g. `["چهار جلسه از چهار"]` (must be valid JSON) |
+| `suggestions` | TEXT, JSON array of strings | Suggestions for next week (must be valid JSON) |
+
+Items may also be objects `{"title": "…", "detail": "…"}`; they are shown as `title: detail`.
+
+```sql
+INSERT INTO weekly_reviews (id, week_start, created_at, summary_fa, highlights, suggestions)
+VALUES ('rv-2026-09-21', '2026-09-21', '2026-09-28T08:00:00Z',
+        'هفته‌ی خوبی بود: چهار جلسه کامل.',
+        '["چهار جلسه از چهار", "رکورد تازه در اسکوات"]',
+        '["یک ست اضافه برای پشت ران", "خواب ۷ ساعت"]');
+```
+
+Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REPLACE` with the same `id`).
+
 ## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
 - `PUT /api/settings` (unit, week start, re-lock minutes, timezone).
+- Table `weekly_reviews` (migration 0003), `review` in `/api/bootstrap`, `GET /api/reviews/latest`.
 - `/api/push/key|subscribe|unsubscribe|rest|rest/cancel|test`, Durable Object `RestPush`.
 - `GET /api/backups`, `GET /api/backups/latest`, weekly Cron Trigger.
 - `GET /api/reports/progress` («پیشرفت» page) and `?format=csv` on `/api/reports/week|month`; setting `month_calendar` (`gregorian`|`jalali`).

@@ -116,6 +116,16 @@ export interface Photo {
   created_at: string;
 }
 
+/** Weekly review written by Claude into D1 (table weekly_reviews). */
+export interface WeeklyReview {
+  id: string;
+  week_start: string;
+  created_at: string;
+  summary_fa: string;
+  highlights: string[];
+  suggestions: string[];
+}
+
 /** A body metric (SPEC §5 body_metrics); the app writes body_mass with source "manual". */
 export interface BodyMetric {
   local_date: string;
@@ -135,6 +145,8 @@ export interface Bootstrap {
   watch: HealthWorkout[];
   /** Body metrics for the same 60-day window. */
   body: BodyMetric[];
+  /** Latest weekly review, if any. */
+  review: WeeklyReview | null;
   server_time: string;
 }
 
