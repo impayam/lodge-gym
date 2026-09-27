@@ -98,6 +98,20 @@ export interface HealthWorkout {
   kind: "session" | "workout";
 }
 
+export type Pose = "front" | "side" | "back" | "other";
+
+/** Progress photo metadata (SPEC §8); the images live in R2. */
+export interface Photo {
+  id: string;
+  session_id: string | null;
+  local_date: string;
+  pose: Pose;
+  width: number;
+  height: number;
+  bytes: number;
+  created_at: string;
+}
+
 /** A body metric (SPEC §5 body_metrics); the app writes body_mass with source "manual". */
 export interface BodyMetric {
   local_date: string;

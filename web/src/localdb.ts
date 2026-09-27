@@ -1,7 +1,7 @@
 // IndexedDB: offline copy of bootstrap data and sessions, plus the outbox of pending writes.
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Bootstrap, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { Bootstrap, Photo, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 
 export type BootData = Omit<Bootstrap, "sessions" | "server_time">;
 
@@ -9,7 +9,9 @@ export type OutboxEntry =
   | { key: string; op: "put_session"; id: string; rev: number; queued_at: string }
   | { key: string; op: "delete_session"; id: string; rev: number; queued_at: string }
   | { key: string; op: "settings"; patch: Partial<Settings>; rev: number; queued_at: string }
-  | { key: string; op: "body_mass"; date: string; value: number | null; unit: Unit; rev: number; queued_at: string };
+  | { key: string; op: "body_mass"; date: string; value: number | null; unit: Unit; rev: number; queued_at: string }
+  | { key: string; op: "photo"; photo: Photo; full: Blob; thumb: Blob; rev: number; queued_at: string }
+  | { key: string; op: "delete_photo"; id: string; rev: number; queued_at: string };
 
 interface Schema extends DBSchema {
   kv: { key: string; value: unknown };
@@ -71,4 +73,8 @@ export async function outboxAck(key: string, rev: number) {
   const cur = await tx.store.get(key);
   if (cur && cur.rev === rev) await tx.store.delete(key);
   await tx.done;
+}
+
+export async function outboxDelete(key: string) {
+  await (await db()).delete("outbox", key);
 }

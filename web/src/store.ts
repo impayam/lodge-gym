@@ -1,14 +1,16 @@
 // App state, offline-first persistence and the outbox sync loop.
 
 import { useEffect, useState } from "preact/hooks";
-import type { BodyMetric, Bootstrap, HealthWorkout, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, HealthWorkout, Photo, Pose, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import { ulid } from "../../worker/lib/ulid";
+import { processPhoto } from "./photos";
 import { addDays, localDate } from "../../worker/lib/time";
-import { api, ApiError, NetworkError } from "./api";
+import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos";
 
 export interface SyncState {
   pending: number;
@@ -26,6 +28,10 @@ export interface State {
   sync: SyncState;
   rest: { endsAt: number; label: string } | null;
   flash: string | null;
+  /** Synced photo metadata plus photos still waiting in the outbox. */
+  photos: Photo[];
+  /** Object URLs for photos not uploaded yet (id → { thumb, full }). */
+  pendingPhotos: Record<string, { thumb: string; full: string }>;
 }
 
 let state: State = {
@@ -36,6 +42,8 @@ let state: State = {
   sync: { pending: 0, online: typeof navigator === "undefined" ? true : navigator.onLine, syncing: false, error: null, lastSync: null },
   rest: null,
   flash: null,
+  photos: [],
+  pendingPhotos: {},
 };
 
 const listeners = new Set<() => void>();
@@ -102,6 +110,7 @@ export async function init() {
     ldb.outboxAll(),
   ]);
   setState({ boot: boot ?? null, sessions: Object.fromEntries(sessions.map((s) => [s.id, s])) });
+  await restorePendingPhotos();
   setSync({ pending: outbox.length });
 
   if (location.pathname === "/setup") {
@@ -231,6 +240,86 @@ export async function saveBodyMass(date: string, value: number | null, unit: Uni
   await enqueue({ key: "body:" + date, op: "body_mass", date, value, unit });
 }
 
+/* ---------------- photos (SPEC §8) ---------------- */
+
+async function restorePendingPhotos() {
+  const pending = (await ldb.outboxAll()).filter((e): e is Extract<OutboxEntry, { op: "photo" }> => e.op === "photo");
+  const urls: State["pendingPhotos"] = {};
+  for (const e of pending) urls[e.photo.id] = { thumb: URL.createObjectURL(e.thumb), full: URL.createObjectURL(e.full) };
+  const cached = (await ldb.kvGet<Photo[]>("photos")) ?? [];
+  const ids = new Set(cached.map((p) => p.id));
+  setState({ pendingPhotos: urls, photos: [...pending.map((e) => e.photo).filter((p) => !ids.has(p.id)), ...cached] });
+}
+
+function sortPhotos(list: Photo[]) {
+  return list.sort((a, b) => (b.local_date + b.created_at).localeCompare(a.local_date + a.created_at));
+}
+
+/** Loads the photo list from the server (keeps photos still waiting for upload). */
+export async function loadPhotos() {
+  try {
+    const r = await api<{ photos: Photo[] }>("GET", "/photos");
+    const deleting = new Set((await ldb.outboxAll()).filter((e) => e.op === "delete_photo").map((e) => (e as { id: string }).id));
+    const server = r.photos.filter((p) => !deleting.has(p.id));
+    await ldb.kvSet("photos", server);
+    const ids = new Set(server.map((p) => p.id));
+    const pending = state.photos.filter((p) => state.pendingPhotos[p.id] && !ids.has(p.id));
+    setState({ photos: sortPhotos([...pending, ...server]) });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
+  }
+}
+
+function photoUploaded(id: string) {
+  const urls = state.pendingPhotos[id];
+  if (!urls) return;
+  const next = { ...state.pendingPhotos };
+  delete next[id];
+  setState({ pendingPhotos: next });
+  void ldb.kvSet("photos", state.photos.filter((p) => !next[p.id]));
+  // Keep the object URLs alive for images already on screen; the browser frees them on reload.
+}
+
+/** Resizes, strips metadata, stores locally and queues the upload. */
+export async function addPhoto(file: Blob, pose: Pose, localDateStr: string, sessionId: string | null) {
+  const processed = await processPhoto(file);
+  const photo: Photo = {
+    id: ulid(),
+    session_id: sessionId,
+    local_date: localDateStr,
+    pose,
+    width: processed.width,
+    height: processed.height,
+    bytes: processed.full.size,
+    created_at: new Date().toISOString(),
+  };
+  setState((s) => ({
+    photos: sortPhotos([photo, ...s.photos]),
+    pendingPhotos: { ...s.pendingPhotos, [photo.id]: { thumb: URL.createObjectURL(processed.thumb), full: URL.createObjectURL(processed.full) } },
+  }));
+  await enqueue({ key: "photo:" + photo.id, op: "photo", photo, full: processed.full, thumb: processed.thumb });
+  return photo;
+}
+
+export async function deletePhoto(id: string) {
+  const wasPending = Boolean(state.pendingPhotos[id]) && (await ldb.outboxGet("photo:" + id));
+  setState((s) => {
+    const pendingPhotos = { ...s.pendingPhotos };
+    delete pendingPhotos[id];
+    return { photos: s.photos.filter((p) => p.id !== id), pendingPhotos };
+  });
+  if (wasPending) {
+    // Never uploaded: just drop it from the queue.
+    await ldb.outboxDelete("photo:" + id);
+    setSync({ pending: (await ldb.outboxAll()).length });
+  } else {
+    await ldb.kvSet("photos", state.photos.filter((p) => !state.pendingPhotos[p.id]));
+    await enqueue({ key: "photo-delete:" + id, op: "delete_photo", id });
+  }
+}
+
+export const photoSrc = (p: Photo, size: "thumb" | "full") => state.pendingPhotos[p.id]?.[size] ?? `/api/photos/${encodeURIComponent(p.id)}?size=${size}`;
+
 /* ---------------- sync ---------------- */
 
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -282,6 +371,13 @@ async function syncOnce() {
         await api("DELETE", `/sessions/${encodeURIComponent(e.id)}`);
       } else if (e.op === "body_mass") {
         await api("PUT", `/body-mass/${e.date}`, { value: e.value, unit: e.unit });
+      } else if (e.op === "photo") {
+        const r = await api<{ upload: { full: string; thumb: string } }>("POST", "/photos", e.photo);
+        await apiUpload(r.upload.full.replace(/^\/api/, ""), e.full);
+        await apiUpload(r.upload.thumb.replace(/^\/api/, ""), e.thumb);
+        photoUploaded(e.photo.id);
+      } else if (e.op === "delete_photo") {
+        await api("DELETE", `/photos/${encodeURIComponent(e.id)}`);
       } else {
         await api("PUT", "/settings", e.patch);
       }

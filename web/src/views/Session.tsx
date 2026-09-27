@@ -9,9 +9,10 @@ import { IconCheck } from "../components/Icons";
 import { Stepper } from "../components/Stepper";
 import { clock, faHM, greg, jalali, ytLink } from "../format";
 import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
-import { flash, getState, navigate, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
+import { flash, getState, navigate, photoSrc, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
 import { targetText } from "./Program";
 import { WatchStats, workoutTypeFa } from "./Watch";
+import { PhotoPicker, poseFa } from "./Photos";
 
 function useWakeLock(enabled: boolean) {
   useEffect(() => {
@@ -58,6 +59,8 @@ export function Session({ id }: { id: string }) {
   const sessions = useStore((s) => s.sessions);
   const s = sessions[id];
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [justFinished, setJustFinished] = useState(false);
+  const photos = useStore((st) => st.photos);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [note, setNote] = useState(s?.note ?? "");
   useWakeLock(s?.status === "active");
@@ -72,6 +75,7 @@ export function Session({ id }: { id: string }) {
   const watch = (boot.watch ?? []).filter((w) => w.matched_session_id === s.id).sort((a, b) => a.started_at.localeCompare(b.started_at));
   const blocks = sessionBlocks(boot, s);
   const hasSuperset = blocks.some((b) => b.plan.superset_tag);
+  const sessionPhotos = photos.filter((p) => p.session_id === s.id);
   const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
   const bodyToday = manualBody.find((m) => m.local_date === s.local_date) ?? null;
   const lastBody = [...manualBody].reverse().find((m) => m.unit === s.unit)?.value ?? null;
@@ -101,6 +105,7 @@ export function Session({ id }: { id: string }) {
     stopRest();
     update((x) => ({ ...x, status: "done", ended_at: new Date().toISOString() }));
     flash("جلسه ثبت شد.");
+    setJustFinished(true);
     window.scrollTo(0, 0);
   };
 
@@ -180,6 +185,29 @@ export function Session({ id }: { id: string }) {
         </div>
         {hasSuperset ? <div class="ss-note">حرکت‌های A1/A2 و B1/B2 سوپرست هستند: یکی در میان، بعد از هر دور ۶۰ تا ۹۰ ثانیه استراحت.</div> : null}
       </section>
+
+      {justFinished ? (
+        <section class="card photo-prompt stack" style={{ marginTop: "14px" }} data-testid="photo-prompt">
+          <b>عکس پیشرفت امروز؟</b>
+          <span class="why">جلو، بغل و پشت؛ اختیاری است.</span>
+          {(["front", "side", "back"] as const).map((pose) => (
+            <PhotoPicker pose={pose} date={s.local_date} sessionId={s.id} compact />
+          ))}
+          <button type="button" class="btn btn-ghost btn-block" onClick={() => setJustFinished(false)}>
+            بعداً
+          </button>
+        </section>
+      ) : null}
+      {sessionPhotos.length ? (
+        <div class="photos" style={{ marginTop: "10px" }} data-testid="session-photos">
+          {sessionPhotos.map((p) => (
+            <button type="button" class="ph" onClick={() => navigate("photos")}>
+              <img src={photoSrc(p, "thumb")} alt={`عکس ${poseFa(p.pose)}`} loading="lazy" />
+              <span class="d">{poseFa(p.pose)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {watch.length ? (
         <section class="card watch stack" style={{ marginTop: "14px" }} data-testid="session-watch">

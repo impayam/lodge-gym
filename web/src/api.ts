@@ -42,6 +42,19 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   return data as T;
 }
 
+/** Uploads a binary body (JPEG) and parses the JSON answer. */
+export async function apiUpload<T>(path: string, body: Blob): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { method: "PUT", credentials: "same-origin", headers: { "Content-Type": "image/jpeg" }, body, cache: "no-store" });
+  } catch {
+    throw new NetworkError();
+  }
+  const data = (await res.json().catch(() => null)) as { error?: { code?: string; message_fa?: string } } | null;
+  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? "http_" + res.status, data?.error?.message_fa ?? "آپلود انجام نشد.");
+  return data as T;
+}
+
 export function errorText(e: unknown): string {
   if (e instanceof ApiError) return e.messageFa;
   if (e instanceof NetworkError) return "اتصال اینترنت برقرار نیست.";

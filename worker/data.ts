@@ -310,6 +310,8 @@ dataRoutes.delete("/sessions/:id", async (c) => {
     c.env.DB.prepare("DELETE FROM set_entries WHERE session_id = ?").bind(sid),
     c.env.DB.prepare("DELETE FROM workout_sessions WHERE id = ?").bind(sid),
     c.env.DB.prepare("DELETE FROM health_workouts WHERE external_key = ?").bind(`session:${sid}`),
+    // Photos are kept (they belong to the date), only unlinked from the deleted session.
+    c.env.DB.prepare("UPDATE photos SET session_id = NULL WHERE session_id = ?").bind(sid),
     c.env.DB.prepare("UPDATE health_workouts SET matched_session_id = NULL WHERE matched_session_id = ?").bind(sid),
   ]);
   return c.json({ ok: true });

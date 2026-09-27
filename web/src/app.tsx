@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
-import { IconHistory, IconProgram, IconSettings, IconTrain } from "./components/Icons";
+import { IconHistory, IconPhotos, IconProgram, IconSettings, IconTrain } from "./components/Icons";
 import { RestTimer } from "./components/RestTimer";
 import { StatusChip } from "./components/StatusChip";
 import { greg, jalali } from "./format";
@@ -7,6 +7,7 @@ import { getState, navigate, setState, today, useStore, type ViewName } from "./
 import { FirstOffline, Locked, Login, Recovery, Setup } from "./views/Auth";
 import { History } from "./views/History";
 import { Home } from "./views/Home";
+import { Photos } from "./views/Photos";
 import { Program } from "./views/Program";
 import { Session } from "./views/Session";
 import { Settings } from "./views/Settings";
@@ -34,6 +35,7 @@ function useRelock() {
 const TABS: { name: ViewName; label: string; Icon: () => preact.JSX.Element }[] = [
   { name: "home", label: "تمرین", Icon: IconTrain },
   { name: "history", label: "سابقه", Icon: IconHistory },
+  { name: "photos", label: "عکس‌ها", Icon: IconPhotos },
   { name: "program", label: "برنامه", Icon: IconProgram },
   { name: "settings", label: "تنظیمات", Icon: IconSettings },
 ];
@@ -76,6 +78,8 @@ export function App() {
             <Session key={view.sessionId} id={view.sessionId} />
           ) : view.name === "history" ? (
             <History />
+          ) : view.name === "photos" ? (
+            <Photos />
           ) : view.name === "program" ? (
             <Program />
           ) : view.name === "settings" ? (

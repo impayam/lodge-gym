@@ -27,3 +27,10 @@ export const IconCheck = () => (
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </svg>
 );
+export const IconPhotos = () => (
+  <svg {...base}>
+    <rect x="3" y="5" width="18" height="15" rx="2" />
+    <circle cx="12" cy="12.5" r="3.5" />
+    <path d="M8 5l1.5-2h5L16 5" />
+  </svg>
+);

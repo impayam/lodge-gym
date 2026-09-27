@@ -6,6 +6,7 @@ import { dataRoutes } from "./data";
 import { healthRoutes, ingestRaw, requireHealthToken, tokenRoutes } from "./health";
 import type { AppBindings } from "./env";
 import { SECURITY_HEADERS } from "./headers";
+import { photoRoutes } from "./photos";
 import { ApiError, errorBody } from "./http";
 
 
@@ -46,6 +47,7 @@ api.use("*", requireSession);
 api.route("/", dataRoutes);
 api.route("/tokens", tokenRoutes);
 api.route("/health", healthRoutes);
+api.route("/photos", photoRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "مسیر پیدا نشد."), 404));
