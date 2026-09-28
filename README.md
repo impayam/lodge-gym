@@ -23,7 +23,7 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 | `npm run dev` | Rebuilds the PWA on change and runs `wrangler dev` with local D1/R2 on http://localhost:8787 (first: `npm run db:migrate:local && npm run seed:local`, and copy `.dev.vars.example` to `.dev.vars`) |
 | `npm run build` | Checks `seed/seed.sql` is current, builds the PWA into `dist/` |
 | `npm test` | Vitest: pure logic + Worker API in workerd |
-| `npm run e2e` | Playwright, iPhone 15 profile, WebKit and Chromium |
+| `npm run e2e` | Playwright, iPhone 15 profile: WebKit against a local HTTPS server (:8789, self-signed) and Chromium against HTTP (:8788); see `scripts/e2e-server.mjs` |
 | `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
 | `npm run seed:local` / `:remote` | Upsert the program seed (idempotent) |
 | `npm run deploy` | Build, migrate + seed remote D1, `wrangler deploy` |

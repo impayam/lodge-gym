@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import type { BrowserContext, Page } from "@playwright/test";
+import { test, type BrowserContext, type Page } from "@playwright/test";
 
-const PERSIST = ".wrangler/e2e";
+/** Local D1 of the server the current project talks to (see scripts/e2e-server.mjs). */
+const persist = () => (test.info().project.name.startsWith("webkit") ? ".wrangler/e2e-https" : ".wrangler/e2e");
 
 /** Runs SQL against the e2e Worker's local D1. */
 export function sql(command: string): unknown[] {
-  const out = execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--persist-to", PERSIST, "--json", "--command", command], {
+  const out = execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--persist-to", persist(), "--json", "--command", command], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   });
