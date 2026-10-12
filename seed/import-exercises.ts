@@ -130,7 +130,8 @@ async function main() {
   const datasetText = t.dataset ? readFileSync(t.dataset, "utf8") : await (await fetchRetry(`${FEDB_RAW}/dist/exercises.json`)).text();
   const dataset = JSON.parse(datasetText) as FedbExercise[];
   const review = readJson<EquipmentReview>("./library/fedb-equipment.json");
-  const unknown = unknownReviewIds(dataset, review);
+  // The review file describes the pinned dataset; a --dataset file (test fixtures) holds only a sample of it.
+  const unknown = t.dataset ? [] : unknownReviewIds(dataset, review);
   if (unknown.length) throw new Error(`seed/library/fedb-equipment.json names entries the dataset does not have: ${unknown.join(", ")}`);
   const seedPrimary = Object.fromEntries(readJson<{ exercises: { id: string; muscle_primary: string }[] }>("./program.json").exercises.map((e) => [e.id, e.muscle_primary]));
   const lib = buildLibrary(

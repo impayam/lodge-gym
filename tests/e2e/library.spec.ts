@@ -33,6 +33,15 @@ test("library: search, filters, detail with media, muscles, instructions, form v
   await expect(detail.getByRole("link", { name: "Watch form video ↗" })).toHaveAttribute("href", "https://www.youtube.com/results?search_query=Trap%20Bar%20Deadlift%20form");
   await expect(detail.locator("ol.rules li").first()).toBeVisible();
   await expect(detail.getByTestId("exercise-history")).toContainText("No sets logged");
+  await expect(detail.getByTestId("category")).toHaveText("Strength");
+  await expect(detail.getByTestId("not-counted")).toHaveCount(0);
+  await detail.getByRole("button", { name: "← Back to the library" }).click();
+
+  // Stretching stays in the library and can be logged, but counts 0 sets (SPEC-v2 §7.4).
+  await list.getByRole("searchbox", { name: "Search exercises" }).fill("hamstring stretch");
+  await list.getByTestId("library-row").filter({ has: page.locator("b", { hasText: /^Hamstring Stretch$/ }) }).click();
+  await expect(detail.getByTestId("category")).toHaveText("Stretching");
+  await expect(detail.getByTestId("not-counted")).toContainText("Not counted in volume");
   await detail.getByRole("button", { name: "← Back to the library" }).click();
 
   // Filters: muscle + equipment + pattern.
@@ -118,9 +127,19 @@ test("custom exercise: create with secondary muscles, find it in the picker, arc
   await expect(detail).toContainText("Your exercise");
   await expect(detail).toContainText("Biceps, Rear delts");
   await expect(detail.getByTestId("media-placeholder")).toBeVisible();
-  expect(sql("SELECT source, muscle_primary, muscles_secondary, equipment, pattern, archived_at FROM exercises WHERE name_en = 'Machine Chest-Supported Row'")).toEqual([
-    { source: "custom", muscle_primary: "back_upper", muscles_secondary: '["biceps","rear_delts"]', equipment: "machine", pattern: "h_pull", archived_at: null },
+  await expect(detail.getByTestId("category")).toHaveText("Strength");
+  await expect(detail.getByTestId("not-counted")).toHaveCount(0);
+  expect(sql("SELECT source, muscle_primary, muscles_secondary, equipment, pattern, category, archived_at FROM exercises WHERE name_en = 'Machine Chest-Supported Row'")).toEqual([
+    { source: "custom", muscle_primary: "back_upper", muscles_secondary: '["biceps","rear_delts"]', equipment: "machine", pattern: "h_pull", category: "strength", archived_at: null },
   ]);
+
+  // Category select (SPEC-v2 §7.4): a non-strength category is logged but not counted in volume.
+  await detail.getByRole("button", { name: "Edit" }).click();
+  await form.getByLabel("Category").selectOption("plyometrics");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(detail.getByTestId("category")).toHaveText("Plyometrics");
+  await expect(detail.getByTestId("not-counted")).toContainText("Not counted in volume");
+  expect(sql("SELECT category FROM exercises WHERE name_en = 'Machine Chest-Supported Row'")).toEqual([{ category: "plyometrics" }]);
   await detail.getByTestId("archive").click();
   await expect(detail.getByTestId("archive")).toHaveText("Restore");
   await detail.getByRole("button", { name: "← Back to the library" }).click();

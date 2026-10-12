@@ -52,6 +52,7 @@ export const exercises = (): Exercise[] =>
       media: [],
       instructions_en: [],
       archived_at: null,
+      category: "strength" as const,
     };
   });
 

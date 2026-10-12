@@ -109,6 +109,19 @@ ALTER TABLE set_entries ADD COLUMN position INTEGER;                     -- disp
 - Each source's muscle names map to these keys through one table, `/worker/lib/muscles.ts`, which is unit-tested.
 - `pattern` and `mechanic` are filled from source fields where they exist. Otherwise a reviewed mapping file fills them, and unmapped rows are listed in the import report rather than guessed.
 
+Migration `0005_exercise_category.sql` **[APPROVED 2026-10-12]** (the program-styles migration of §8.7 moves to `0006_program_styles.sql`, its SQL unchanged):
+
+```sql
+ALTER TABLE exercises ADD COLUMN category TEXT;
+  -- 'strength' | 'powerlifting' | 'olympic_weightlifting'
+  -- | 'strongman' | 'stretching' | 'plyometrics' | 'cardio'
+UPDATE exercises SET category = 'strength'
+  WHERE source IN ('seed', 'custom');
+```
+
+- free-exercise-db rows take the dataset's category; Axle Deadlift, Farmer's Walk and Crucifix are set to `strength` on review. Manual and seeded rows are `strength`. Custom exercises have a Category select (default Strength).
+- **Excluded on review** (not imported), besides the excluded equipment types: the strongman-only Atlas Stone Trainer, Atlas Stones, Car Deadlift, Conan's Wheel, Keg Load, Log Lift, Power Stairs, Rickshaw Carry, Rickshaw Deadlift, Sandbag Load, Tire Flip, Yoke Walk and Circus Bell; and Anterior Tibialis-SMR, Foot-SMR, Neck-SMR, Chain Press, Chain Handle Extension, Sledgehammer Swings, Seated Head Harness Neck Resistance, Seated Band Hamstring Curl and Weighted Sit-Ups - With Bands. Trap Bar Deadlift, Axle Deadlift and Band Assisted Pull-Up stay.
+
 ### 7.3 UI
 
 - **Library tab:**
@@ -137,6 +150,7 @@ ALTER TABLE set_entries ADD COLUMN position INTEGER;                     -- disp
   - Each planned set counts 1 for its primary group and 0.5 for each secondary group, exactly like done sets.
   - Following the program exactly is on target for every group. This replaces the SPEC §10 rule "target = program sets per primary muscle".
   - Traps, forearms, lower back, adductors, abductors and neck stay without a target.
+- **[DECIDED 2026-10-12] Only strength work counts toward volume.** Exercises whose category is strength, powerlifting or olympic weightlifting count toward weekly muscle volume, the targets and the muscle map. Stretching, plyometrics, cardio and strongman stay in the library and can be logged, but count 0 sets. The exercise detail says "Not counted in volume".
 - **[DECIDED 2026-10-12] Calves are not a secondary muscle of squat, leg press, lunge, RDL or deadlift** for the seeded exercises (`seed/library/seed-matches.json`), even though free-exercise-db lists them. Calves count only from calf work.
 
 **Acceptance:**
@@ -306,7 +320,7 @@ Supersets only pair non-competing muscles, for example lateral raise with face p
 
 ### 8.7 Data model changes (needs approval)
 
-Migration `0005_program_styles.sql`:
+Migration `0006_program_styles.sql` (approved as `0005`; renumbered 2026-10-12 after `0005_exercise_category.sql`, SQL unchanged):
 
 ```sql
 ALTER TABLE programs ADD COLUMN style TEXT;           -- 'seed_full_body' for the current program
@@ -343,7 +357,7 @@ ALTER TABLE day_exercises ADD COLUMN slot TEXT;       -- 'main'|'secondary'|'acc
   2. Old sessions still show under the archived program.
   3. Bench press progression continues from the old weights.
 - **Migration test:**
-  - Run 0004 and 0005 on a copy of the production D1 export.
+  - Run 0004, 0005 and 0006 on a copy of the production D1 export.
   - Session, set and photo counts are unchanged.
   - Every old session still resolves its day name.
 
@@ -354,7 +368,7 @@ ALTER TABLE day_exercises ADD COLUMN slot TEXT;       -- 'main'|'secondary'|'acc
 1. Jalali date display: removed.
 2. Weekly AI review: stays in Persian, rendered RTL inside the English UI.
 3. Exercise source: free-exercise-db, plus hand-written gap fill without images, and a YouTube form-video link on every exercise. ExerciseDB is not used because of its storage restriction.
-6. Migrations 0004 and 0005 approved as shown by Claude Code, including the foreign key, the index, the backfill and the archived upper/lower program.
+6. Migrations 0004 and 0005 approved as shown by Claude Code, including the foreign key, the index, the backfill and the archived upper/lower program. (Program styles is now `0006_program_styles.sql`; `0005_exercise_category.sql` approved 2026-10-12.)
 7. Finer muscle keys for seeded exercises are approved. Reports roll them up into the existing targets.
 8. Equipment: if the 5-value limit is app-level only (Zod or TypeScript), extend it to free-exercise-db's equipment values with no table rebuild. If it is a SQL CHECK constraint, map onto the 5 values and list the rest; do not rebuild the table.
 9. Claude Code merges each milestone to `main` once it is green, then verifies the production deploy and migrations.

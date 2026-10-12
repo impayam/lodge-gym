@@ -19,6 +19,7 @@ import {
   type Settings,
   type WorkoutSession,
 } from "./lib/types";
+import { isCategory } from "./lib/category";
 import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
@@ -118,6 +119,7 @@ export function mapExercise(r: Record<string, unknown>): Exercise {
     media: jsonList<Exercise["media"][number]>(r.media),
     instructions_en: jsonList<string>(r.instructions_en),
     archived_at: (r.archived_at as string | null) ?? null,
+    category: isCategory(r.category) ? r.category : null,
   };
 }
 

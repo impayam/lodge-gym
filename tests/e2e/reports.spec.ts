@@ -28,7 +28,7 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   const days = (n: number) => new Date(now.getTime() - n * 86_400_000 - 2 * 3600_000);
   await page.goto("/");
   await put("01R1", days(7), "D1", [["bench", 4, 130, 5]]);
-  await put("01R2", days(0), "D1", [["bench", 4, 135, 5], ["incline_db", 3, 40, 10], ["rdl", 3, 155, 8], ["cable_row", 3, 100, 10], ["lateral", 3, 15, 12], ["facepull", 3, 40, 15]]);
+  await put("01R2", days(0), "D1", [["bench", 4, 135, 5], ["incline_db", 3, 40, 10], ["rdl", 3, 155, 8], ["cable_row", 3, 100, 10], ["lateral", 3, 15, 12], ["facepull", 3, 40, 15], ["fedb-Hamstring_Stretch", 2, 0, 1]]);
   await page.request.put(`${baseURL}/api/body-mass/${denver(days(0))}`, { headers: { Origin: baseURL! }, data: { value: 180, unit: "lb" } });
 
   await page.getByRole("button", { name: "Reports" }).click();
@@ -84,6 +84,8 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await expect(map.locator(".readout")).toContainText("Rear delts: 3 direct · 4.5 fractional of 11 sets · Under target");
   await expect(page.getByTestId("muscle-lower_back")).toContainText("0 · 1.5 / –");
   await expect(page.getByTestId("muscle-lower_back")).toContainText("No target");
+  // Stretching is logged but counts 0 sets (SPEC-v2 §7.4): only the 3 RDL sets count for hamstrings and glutes.
+  await expect(page.getByTestId("muscle-hamstrings_glutes")).toContainText("3 · 3 / 14");
   await page.getByRole("button", { name: "Last 4 weeks" }).click();
   await expect(page.getByTestId("progress-stats")).toContainText("2");
 });

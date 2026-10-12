@@ -87,6 +87,32 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
     expect(lib.report.unmapped_pattern.map((x) => x.id)).toContain("Hamstring_Stretch");
   });
 
+  it("stores the dataset's category, the reviewed override, and strength for manual rows (SPEC-v2 §7.4)", () => {
+    expect(byId.get("fedb-Hamstring_Stretch")?.category).toBe("stretching");
+    expect(byId.get("fedb-Sled_Push")?.category).toBe("strongman");
+    expect(byId.get("fedb-Farmers_Walk")?.category).toBe("strength");
+    expect(byId.get("fedb-Trap_Bar_Deadlift")?.category).toBe("strength");
+    expect(lib.rows.filter((r) => r.source === "manual").every((r) => r.category === "strength")).toBe(true);
+    expect(lib.report.category_overrides).toEqual([{ id: "Farmers_Walk", name: "Farmer's Walk", from: "strongman", to: "strength" }]);
+    expect(lib.report.not_counted_strongman).toEqual([{ id: "Sled_Push", name: "Sled Push" }]);
+    expect(lib.report.categories).toEqual(
+      expect.arrayContaining([
+        { category: "stretching", counted: false, count: 1 },
+        { category: "strongman", counted: false, count: 1 },
+      ])
+    );
+    const md = reportMarkdown(lib.report);
+    expect(md).toContain("| stretching | no | 1 |");
+    expect(md).toContain("- Farmer's Walk: strongman → strength");
+    expect(md).toContain("## Strongman rows that count 0 sets (1)");
+  });
+
+  it("refuses a category the dataset adds and an invalid reviewed override", () => {
+    const odd = (sample as FedbExercise[]).map((x) => (x.id === "Hamstring_Stretch" ? { ...x, category: "yoga" } : x));
+    expect(() => build(odd)).toThrow(/unknown free-exercise-db category "yoga"/);
+    expect(validateInputs([], [], { X: { pattern: null, category: "yoga" as never } }, review)).toEqual(["patterns X: category yoga"]);
+  });
+
   it("leaves out the entries excluded on review, whatever their equipment", () => {
     expect(byId.has("fedb-Atlas_Stones")).toBe(false);
     expect(byId.has("fedb-Neck-SMR")).toBe(false);
@@ -105,7 +131,7 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
 
   it("report: counts, equipment table and the full 'other' list", () => {
     const r = lib.report;
-    expect(r.dataset.total).toBe(42);
+    expect(r.dataset.total).toBe(43);
     expect(r.equipment.find((e) => e.from === "kettlebells")).toEqual({ from: "kettlebells", to: "excluded", count: 1 });
     expect(r.reviewed_equipment).toEqual(
       expect.arrayContaining([
@@ -114,7 +140,7 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
       ])
     );
     const md = reportMarkdown(r);
-    expect(md).toContain("- Equipment mapped onto the five allowed values: 13");
+    expect(md).toContain("- Equipment mapped onto the five allowed values: 14");
     expect(md).toContain("- Excluded by equipment (kettlebell, bands, medicine ball, exercise ball, foam roll): 2");
     expect(md).toContain("- Excluded on review (strongman-only and others, seed/library/fedb-equipment.json): 2");
     expect(md).toContain("- Atlas Stones (strongman-only)");
@@ -143,6 +169,7 @@ describe("library SQL", () => {
     const sql = librarySql(lib.rows, lib.seedUpdates);
     expect(sql).toHaveLength(lib.rows.length + lib.seedUpdates.length);
     expect(sql[0]).toMatch(/^INSERT INTO exercises .* ON CONFLICT \(id\) DO UPDATE SET .* WHERE exercises\.name_en IS NOT excluded\.name_en OR /);
+    expect(sql[0]).toContain(" OR exercises.category IS NOT excluded.category;");
     expect(sql[sql.length - 1]).toMatch(/^UPDATE exercises SET .* WHERE id = '[a-z_]+' AND source = 'seed' AND \(.* IS NOT .*\);$/);
   });
 });

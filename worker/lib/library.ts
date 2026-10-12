@@ -2,6 +2,7 @@
 // and the hand-written gap fill into exercise rows, the SQL that upserts them, and the import report.
 // Pure: no I/O. The import script (seed/import-exercises.ts) does the fetching and writing.
 
+import { countsVolume, fedbCategory, isCategory, type Category } from "./category";
 import { fedbMuscles, isLowerBody, isMuscle, type Muscle } from "./muscles";
 import type { Equipment } from "./types";
 
@@ -98,6 +99,7 @@ export interface LibraryRow {
   level: Level | null;
   media: Media[];
   instructions_en: string[];
+  category: Category;
 }
 
 /** Enrichment of a seeded exercise from its matched library entry (the row keeps its id, SPEC-v2 §7.2). */
@@ -133,8 +135,11 @@ export interface ManualExercise {
   mechanic: Mechanic;
 }
 
-/** seed/library/fedb-patterns.json: reviewed pattern (and missing mechanic) per free-exercise-db id. */
-export type PatternFile = Record<string, { pattern: Pattern | null; mechanic?: Mechanic }>;
+/**
+ * seed/library/fedb-patterns.json: reviewed pattern (and missing mechanic) per free-exercise-db id, and the category
+ * where Payam overrode the dataset's (decided 2026-10-12: Axle Deadlift, Farmer's Walk and Crucifix count as strength).
+ */
+export type PatternFile = Record<string, { pattern: Pattern | null; mechanic?: Mechanic; category?: Category }>;
 
 export interface ImportReport {
   dataset: { sha: string; total: number };
@@ -150,6 +155,11 @@ export interface ImportReport {
   unmapped_mechanic: { id: string; name: string }[];
   /** Every "other" and missing-equipment mapping, for review. */
   reviewed_equipment: { id: string; name: string; from: "other" | "missing"; to: Equipment }[];
+  /** Rows written per stored category, and whether that category counts toward muscle volume. */
+  categories: { category: Category; counted: boolean; count: number }[];
+  category_overrides: { id: string; name: string; from: string | null; to: Category }[];
+  /** Imported rows that count 0 sets: the strongman ones, listed by name (the other categories are listed by count). */
+  not_counted_strongman: { id: string; name: string }[];
 }
 
 const asLevel = (v: string | null): Level | null => (v === "beginner" || v === "intermediate" || v === "expert" ? v : null);
@@ -183,6 +193,7 @@ export function validateInputs(seedMatches: SeedMatch[], manual: ManualExercise[
   for (const [id, p] of Object.entries(patterns)) {
     if (p.pattern !== null && !PATTERNS.includes(p.pattern)) errors.push(`patterns ${id}: ${p.pattern}`);
     if (p.mechanic !== undefined && !asMechanic(p.mechanic)) errors.push(`patterns ${id}: mechanic ${p.mechanic}`);
+    if (p.category !== undefined && !isCategory(p.category)) errors.push(`patterns ${id}: category ${p.category}`);
   }
   return errors;
 }
@@ -218,6 +229,9 @@ export function buildLibrary(
     unmapped_pattern: [],
     unmapped_mechanic: [],
     reviewed_equipment: [],
+    categories: [],
+    category_overrides: [],
+    not_counted_strongman: [],
   };
   const tally = new Map<string, { from: string; to: Equipment | "excluded"; count: number }>();
 
@@ -266,6 +280,9 @@ export function buildLibrary(
     if (!pattern) report.unmapped_pattern.push({ id: x.id, name: x.name, category: x.category });
     const mechanic = asMechanic(x.mechanic) ?? p?.mechanic ?? null;
     if (!mechanic) report.unmapped_mechanic.push({ id: x.id, name: x.name });
+    const category = p?.category ?? fedbCategory(x.category);
+    if (p?.category) report.category_overrides.push({ id: x.id, name: x.name, from: x.category, to: p.category });
+    if (category === "strongman") report.not_counted_strongman.push({ id: x.id, name: x.name });
     rows.push({
       id: fedbExerciseId(x.id),
       name_en: x.name,
@@ -280,6 +297,7 @@ export function buildLibrary(
       level: asLevel(x.level),
       media: media(x.images),
       instructions_en: x.instructions,
+      category,
     });
   }
   for (const g of manual) {
@@ -297,9 +315,13 @@ export function buildLibrary(
       level: null,
       media: [],
       instructions_en: [],
+      category: "strength",
     });
   }
   report.imported = rows.length;
+  const perCategory = new Map<Category, number>();
+  for (const r of rows) perCategory.set(r.category, (perCategory.get(r.category) ?? 0) + 1);
+  report.categories = [...perCategory].map(([category, count]) => ({ category, counted: countsVolume(category), count })).sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
   report.equipment = [...tally.values()].sort((a, b) => b.count - a.count || a.from.localeCompare(b.from));
   return { rows, seedUpdates, report };
 }
@@ -315,7 +337,7 @@ const json = (v: unknown) => q(JSON.stringify(v));
  */
 export function librarySql(rows: LibraryRow[], seedUpdates: SeedUpdate[]): string[] {
   const out: string[] = [];
-  const cols = ["name_en", "muscle_primary", "is_lower", "equipment", "source", "source_id", "muscles_secondary", "pattern", "mechanic", "level", "media", "instructions_en"];
+  const cols = ["name_en", "muscle_primary", "is_lower", "equipment", "source", "source_id", "muscles_secondary", "pattern", "mechanic", "level", "media", "instructions_en", "category"];
   const changed = cols.map((c) => `exercises.${c} IS NOT excluded.${c}`).join(" OR ");
   for (const r of rows) {
     const vals = [
@@ -335,9 +357,10 @@ export function librarySql(rows: LibraryRow[], seedUpdates: SeedUpdate[]): strin
       q(r.level),
       json(r.media),
       json(r.instructions_en),
+      q(r.category),
     ];
     out.push(
-      `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, cue_en, source, source_id, muscles_secondary, pattern, mechanic, level, media, instructions_en) VALUES (${vals.join(", ")})` +
+      `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, cue_en, source, source_id, muscles_secondary, pattern, mechanic, level, media, instructions_en, category) VALUES (${vals.join(", ")})` +
         ` ON CONFLICT (id) DO UPDATE SET ${cols.map((c) => `${c} = excluded.${c}`).join(", ")} WHERE ${changed};`
     );
   }
@@ -401,6 +424,18 @@ export function reportMarkdown(r: ImportReport): string {
   list("No equipment in the dataset: mapping for review", missing, (x) => `${x.name} → ${x.to}`);
   list("Seeded exercises and their library match", r.seed_matches, (s) => (s.fedb ? `\`${s.id}\` ← ${s.name} (\`${s.fedb}\`)` : `\`${s.id}\`: no faithful match; pattern and muscles written by hand, no media`));
   list("Manual gap fill, for review (source 'manual', no media)", r.manual, (m) => `\`${m.id}\` ${m.name_en}: ${m.muscle_primary}, ${m.equipment}, ${m.pattern}`);
+  lines.push(
+    "## Categories and volume counting (SPEC-v2 §7.4)",
+    "",
+    "Only strength, powerlifting and olympic weightlifting count toward weekly muscle volume and the muscle map. The other rows stay in the library and can be logged, but count 0 sets.",
+    "",
+    "| Category | Counts toward volume | Rows |",
+    "|---|---|---|",
+    ...r.categories.map((c) => `| ${c.category} | ${c.counted ? "yes" : "no"} | ${c.count} |`),
+    ""
+  );
+  list("Category set on review (fedb-patterns.json)", r.category_overrides, (x) => `${x.name}: ${x.from ?? "none"} → ${x.to}`);
+  list("Strongman rows that count 0 sets", r.not_counted_strongman, (x) => x.name);
   list("Not imported: excluded equipment", r.excluded_equipment, (x) => `${x.name} (${x.equipment})`);
   list("Not imported: excluded on review", r.excluded_review, (x) => `${x.name} (${x.reason})`);
   list("Not imported: no primary muscle key", r.excluded_no_muscle, (x) => `${x.name} (${x.muscles.join(", ")})`);

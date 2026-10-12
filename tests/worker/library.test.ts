@@ -42,6 +42,21 @@ describe("library import into D1 (SPEC-v2 §7 acceptance)", () => {
     const bench = await env.DB.prepare("SELECT id, source, muscles_secondary, pattern, level, json_array_length(media) AS media FROM exercises WHERE id = 'bench'").first();
     expect(bench).toEqual({ id: "bench", source: "seed", muscles_secondary: '["shoulders_front","triceps"]', pattern: "h_push", level: "beginner", media: 2 });
   });
+  it("stores a category on every row: the dataset's, the reviewed override, strength for seed and manual (SPEC-v2 §7.4)", async () => {
+    const none = await env.DB.prepare("SELECT COUNT(*) AS n FROM exercises WHERE category IS NULL").first<{ n: number }>();
+    expect(none?.n).toBe(0);
+    const rows = await env.DB.prepare(
+      "SELECT id, category FROM exercises WHERE id IN ('bench', 'fedb-Hamstring_Stretch', 'fedb-Farmers_Walk', 'manual-pendlay-row') ORDER BY id"
+    ).all();
+    expect(rows.results).toEqual([
+      { id: "bench", category: "strength" },
+      { id: "fedb-Farmers_Walk", category: "strength" },
+      { id: "fedb-Hamstring_Stretch", category: "stretching" },
+      { id: "manual-pendlay-row", category: "strength" },
+    ]);
+    const seeds = await env.DB.prepare("SELECT DISTINCT category FROM exercises WHERE source = 'seed'").all();
+    expect(seeds.results).toEqual([{ category: "strength" }]);
+  });
 });
 
 describe("exercise API", () => {
@@ -66,6 +81,18 @@ describe("exercise API", () => {
     expect((await client.fetch(`/api/exercises/${ulid()}`, { method: "PUT", json: { ...body, muscle_primary: "hip_flexors" } })).status).toBe(400);
     const b = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
     expect(b.exercises.find((e) => e.id === id)?.archived_at).toBeTruthy();
+  });
+
+  it("custom category: strength by default, set from the form, kept when an edit omits it, validated", async () => {
+    const id = ulid();
+    const body = { name_en: "Couch Stretch", muscle_primary: "quads", muscles_secondary: [], equipment: "bodyweight", pattern: null, archived: false };
+    const put = async (json: object) => (await (await client.fetch(`/api/exercises/${id}`, { method: "PUT", json })).json()) as { exercise: Exercise };
+    expect((await put(body)).exercise.category).toBe("strength");
+    expect((await put({ ...body, category: "stretching" })).exercise.category).toBe("stretching");
+    expect((await put({ ...body, archived: true })).exercise.category).toBe("stretching");
+    expect((await client.fetch(`/api/exercises/${id}`, { method: "PUT", json: { ...body, category: "yoga" } })).status).toBe(400);
+    const all = (await (await client.fetch("/api/exercises")).json()) as { exercises: Exercise[] };
+    expect(all.exercises.find((e) => e.id === id)?.category).toBe("stretching");
   });
 
   it("stores a custom exercise photo in R2 and serves library media only from the library prefixes", async () => {

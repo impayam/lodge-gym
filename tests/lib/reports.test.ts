@@ -8,6 +8,7 @@ import {
   monthRange,
   monthlyReport,
   muscleTargets,
+  volumePerMuscle,
   progressReport,
   setsCsv,
   shiftMonth,
@@ -210,6 +211,33 @@ describe("progress page", () => {
       chest: "on", back: "on", quads: "on", hamstrings_glutes: "under", shoulders: "under", rear_delts: "under", calves: "under", core: "under", biceps: "on", triceps: "on",
       traps: "none", forearms: "untracked", lower_back: "untracked", adductors: "untracked", abductors: "none", neck: "none",
     });
+  });
+});
+
+describe("only strength work counts toward volume (SPEC-v2 §7.4, decided 2026-10-12)", () => {
+  // Face pull marked as stretching: its 3 done sets this week (40 lb × 15) and its 6 planned sets drop out.
+  const d = reportData();
+  const asStretching = { ...d, exercises: d.exercises.map((e) => (e.id === "facepull" ? { ...e, category: "stretching" as const } : e)) };
+  const row = (r: ReturnType<typeof weeklyReport>, m: string) => r.muscles.find((x) => x.muscle === m)!;
+
+  it("sets, fractional sets and targets", () => {
+    const r = weeklyReport(asStretching, "2026-09-23");
+    // Rear delts: face pull was the only direct work (3) and 6 of the 11 target; the rows' 0.5 stays: 8 − 3 = 5 of 11 − 6 = 5.
+    expect(row(r, "rear_delts")).toMatchObject({ sets: 0, fractional: 5, target: 5, status: "on" });
+    // Back: face pull's back_upper secondary was 3 × 0.5 done and 6 × 0.5 planned: 14.5 − 1.5 of 17.5 − 3.
+    expect(row(r, "back")).toMatchObject({ sets: 13, fractional: 13, target: 14.5, status: "on" });
+    expect(row(r, "chest")).toMatchObject({ sets: 13, fractional: 13, target: 13 });
+  });
+
+  it("volume (weight × reps) per muscle", () => {
+    const week = d.sessions.filter((s) => s.status === "done" && s.local_date >= "2026-09-21" && s.local_date <= "2026-09-27");
+    expect(volumePerMuscle(week, new Map(d.exercises.map((e) => [e.id, e])), "lb").rear_delts).toBe(1800);
+    expect(volumePerMuscle(week, new Map(asStretching.exercises.map((e) => [e.id, e])), "lb").rear_delts).toBe(0);
+  });
+
+  it("an exercise without a category never counts", () => {
+    const none = { ...d, exercises: d.exercises.map((e) => (e.id === "facepull" ? { ...e, category: null } : e)) };
+    expect(row(weeklyReport(none, "2026-09-23"), "rear_delts")).toMatchObject({ sets: 0, fractional: 5 });
   });
 });
 

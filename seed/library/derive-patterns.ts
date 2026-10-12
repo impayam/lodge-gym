@@ -4,8 +4,9 @@
 // `pattern: null` and are listed in the import report instead of being guessed.
 //   npx tsx seed/library/derive-patterns.ts [dataset.json]   (default: the pinned dataset from GitHub)
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import type { Category } from "../../worker/lib/category";
 import { FEDB_RAW, resolveEquipment, type EquipmentReview, type FedbExercise, type Mechanic, type Pattern, type PatternFile, type SeedMatch } from "../../worker/lib/library";
 import { fedbMuscles, type Muscle } from "../../worker/lib/muscles";
 
@@ -59,15 +60,18 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const seed = JSON.parse(readFileSync(here("./seed-matches.json"), "utf8")) as SeedMatch[];
   const matched = new Set(seed.map((s) => s.fedb));
   const review = JSON.parse(readFileSync(here("./fedb-equipment.json"), "utf8")) as EquipmentReview;
+  // Category overrides are review decisions, not derived: a regenerated draft keeps them.
+  const previous: PatternFile = existsSync(here("./fedb-patterns.json")) ? JSON.parse(readFileSync(here("./fedb-patterns.json"), "utf8")) : {};
   const out: PatternFile = {};
   for (const x of [...dataset].sort((a, b) => a.id.localeCompare(b.id))) {
     if (matched.has(x.id) || x.id in review.excluded || !resolveEquipment(x, review)) continue;
     const { primary } = fedbMuscles(x);
     if (!primary) continue;
     const pattern = derivePattern(x, primary);
-    const entry: { pattern: Pattern | null; mechanic?: Mechanic } = { pattern };
+    const entry: { pattern: Pattern | null; mechanic?: Mechanic; category?: Category } = { pattern };
     if (x.mechanic !== "compound" && x.mechanic !== "isolation" && pattern) entry.mechanic = COMPOUND.has(pattern) ? "compound" : pattern === "isolation" ? "isolation" : undefined;
     if (entry.mechanic === undefined) delete entry.mechanic;
+    if (previous[x.id]?.category) entry.category = previous[x.id].category;
     out[x.id] = entry;
   }
   const lines = Object.entries(out).map(([id, v]) => `  ${JSON.stringify(id)}: ${JSON.stringify(v)}`);

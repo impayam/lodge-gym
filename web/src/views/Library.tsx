@@ -3,6 +3,7 @@
 // same list as a picker for adding an exercise to the session.
 
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { CATEGORIES, countsVolume, type Category } from "../../../worker/lib/category";
 import { CANONICAL_MUSCLES } from "../../../worker/lib/muscles";
 import { bestSet } from "../../../worker/lib/reports";
 import type { Exercise, Pattern, SetEntry, WorkoutSession } from "../../../worker/lib/types";
@@ -59,6 +60,15 @@ export const PATTERN_LABEL: Record<Pattern, string> = {
   isolation: "Isolation",
   core: "Core",
   carry: "Carry",
+};
+export const CATEGORY_LABEL: Record<Category, string> = {
+  strength: "Strength",
+  powerlifting: "Powerlifting",
+  olympic_weightlifting: "Olympic weightlifting",
+  strongman: "Strongman",
+  stretching: "Stretching",
+  plyometrics: "Plyometrics",
+  cardio: "Cardio",
 };
 const SOURCE_LABEL: Record<Exercise["source"], string> = { seed: "Program", fedb: "free-exercise-db", manual: "Added by hand", custom: "Your exercise" };
 
@@ -213,6 +223,7 @@ function CustomForm({ initial, onDone, onCancel }: { initial: Exercise | null; o
   const [secondary, setSecondary] = useState<string[]>(initial?.muscles_secondary ?? []);
   const [equipment, setEquipment] = useState<Exercise["equipment"]>(initial?.equipment ?? "dumbbell");
   const [pattern, setPattern] = useState<Pattern | "">(initial?.pattern ?? "");
+  const [category, setCategory] = useState<Category>(initial?.category ?? "strength");
   const [photo, setPhoto] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -226,6 +237,7 @@ function CustomForm({ initial, onDone, onCancel }: { initial: Exercise | null; o
         muscles_secondary: secondary.filter((m) => m !== primary),
         equipment,
         pattern: pattern || null,
+        category,
         archived: Boolean(initial?.archived_at),
       };
       let ex = await saveCustomExercise(initial?.id ?? ulid(), input);
@@ -283,6 +295,14 @@ function CustomForm({ initial, onDone, onCancel }: { initial: Exercise | null; o
         </select>
       </div>
       <div class="field">
+        <label for="cx-category">Category</label>
+        <select id="cx-category" value={category} onChange={(e) => setCategory((e.currentTarget as HTMLSelectElement).value as Category)}>
+          {CATEGORIES.map((k) => (
+            <option value={k}>{CATEGORY_LABEL[k]}</option>
+          ))}
+        </select>
+      </div>
+      <div class="field">
         <label for="cx-photo">Photo (optional)</label>
         <input id="cx-photo" type="file" accept="image/*" onChange={(e) => setPhoto((e.currentTarget as HTMLInputElement).files?.[0] ?? null)} />
       </div>
@@ -310,7 +330,7 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
     setBusy(true);
     setErr("");
     try {
-      await saveCustomExercise(ex.id, { name_en: ex.name_en, muscle_primary: ex.muscle_primary, muscles_secondary: ex.muscles_secondary, equipment: ex.equipment, pattern: ex.pattern, archived });
+      await saveCustomExercise(ex.id, { name_en: ex.name_en, muscle_primary: ex.muscle_primary, muscles_secondary: ex.muscles_secondary, equipment: ex.equipment, pattern: ex.pattern, category: ex.category ?? undefined, archived });
     } catch (e) {
       setErr(errorText(e));
     } finally {
@@ -324,6 +344,12 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
         ← Back to the library
       </button>
       <h2 style={{ margin: "4px 0 0" }}>{ex.name_en}</h2>
+      {/* A missing category only comes from a copy cached before the category existed: say nothing rather than guess. */}
+      {!ex.category || countsVolume(ex.category) ? null : (
+        <p class="muted" data-testid="not-counted" style={{ margin: 0 }}>
+          <span class="pill">Not counted in volume</span> Sets are logged, but count 0 toward weekly muscle volume and the muscle map.
+        </p>
+      )}
       {images.length ? (
         <div class="exmedia">
           {images.slice(0, 2).map((m, i) => (
@@ -352,6 +378,10 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
         <div class="kv">
           <span>Pattern</span>
           <span>{ex.pattern ? PATTERN_LABEL[ex.pattern] : "–"}</span>
+        </div>
+        <div class="kv">
+          <span>Category</span>
+          <span data-testid="category">{ex.category ? CATEGORY_LABEL[ex.category] : "–"}</span>
         </div>
         <div class="kv">
           <span>Mechanic · level</span>

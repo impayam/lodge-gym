@@ -1,5 +1,7 @@
 // Domain types shared by the Worker and the PWA.
 
+import type { Category } from "./category";
+
 export type Unit = "lb" | "kg";
 export type WeekStart = "sat" | "sun" | "mon";
 export type Equipment = "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight";
@@ -42,6 +44,8 @@ export interface Exercise {
   media: ExerciseMedia[];
   instructions_en: string[];
   archived_at: string | null;
+  /** SPEC-v2 §7.4: only strength, powerlifting and olympic weightlifting count toward muscle volume. */
+  category: Category | null;
 }
 
 export interface DayExercise {

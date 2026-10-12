@@ -103,6 +103,10 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   and show their sets only.
 - Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
   secondary muscle (decided 2026-10-12).
+- Only strength work counts (decided 2026-10-12): exercises whose `category` (migration `0005_exercise_category.sql`)
+  is strength, powerlifting or olympic weightlifting count toward sets per muscle, the targets, per-muscle volume and
+  the muscle map. Stretching, plyometrics, cardio and strongman are logged but count 0 sets; the exercise detail says
+  "Not counted in volume". The rule lives in `worker/lib/category.ts`.
 - A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
 - Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
 
@@ -125,8 +129,9 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `deploy:ci` runs the D1 part before `wrangler deploy` and the image copy after it, with a 12-minute budget (Workers
   Builds stops a build at 20 minutes); a later deploy finishes any images left.
 - Reviewed mapping files in `seed/library/`: `fedb-equipment.json` (every "other" and missing-equipment entry mapped
-  to one of the five equipment values; kettlebell, bands, medicine ball, exercise ball and foam roll are excluded),
-  `fedb-patterns.json` (movement pattern per entry, drafted by `derive-patterns.ts`, unplaced ones left null),
+  to one of the five equipment values; kettlebell, bands, medicine ball, exercise ball and foam roll are excluded; its
+  `excluded` list holds the 22 entries excluded on review, with a reason), `fedb-patterns.json` (movement pattern per
+  entry, drafted by `derive-patterns.ts`, unplaced ones left null, plus the reviewed `category` overrides),
   `seed-matches.json` (the seeded exercises' library match, pattern, mechanic and secondary muscles; they keep their
   ids) and `manual.json` (hand-written gap fill, source `manual`, no media).
 - `npm run library:report` writes `seed/library/IMPORT-REPORT.md` for review.
@@ -143,4 +148,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - `GET /api/reports/progress` (Progress page) and `?format=csv` on `/api/reports/week|month`. Months are Gregorian only (SPEC-v2 M6 removed the `month_calendar` setting).
 - `GET /api/photos` (photo list for the gallery; SPEC §11 lists the other photo routes).
 - `PUT /api/body-mass/:date` (manual body weight, source `manual`) and `set_entries.rir` (migration 0002).
+- Exercise library (SPEC-v2 M7, approved 2026-10-12): `GET /api/exercises`, `PUT /api/exercises/:id` (custom exercises
+  only, with `category`), `PUT /api/exercises/:id/photo`, `GET /api/library/media/*` (library and custom prefixes only,
+  behind sign-in); session sets accept `is_extra` and `position`; `/api/bootstrap` carries only the exercises the app
+  needs offline; the backup export adds `custom_exercises`. Migration `0005_exercise_category.sql`.
 - `POST /api/health/raw` (replaces `/health/workouts`), `GET /api/health/status`, `PUT /api/health/workouts/:id/match`.

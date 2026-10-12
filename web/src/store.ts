@@ -1,6 +1,7 @@
 // App state, offline-first persistence and the outbox sync loop.
 
 import { useEffect, useState } from "preact/hooks";
+import type { Category } from "../../worker/lib/category";
 import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
@@ -402,6 +403,8 @@ export interface CustomExerciseInput {
   muscles_secondary: string[];
   equipment: Exercise["equipment"];
   pattern: Exercise["pattern"];
+  /** Omitted: the server keeps the stored category (strength for a new exercise). */
+  category?: Category;
   archived: boolean;
 }
 

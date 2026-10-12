@@ -3,6 +3,7 @@
 // settings unit.
 
 import { addDays, daysBetween } from "./time";
+import { countsVolume } from "./category";
 import { groupOf, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "./muscles";
 import { weekRange } from "./cycle";
 import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, Settings, Unit, WorkoutSession } from "./types";
@@ -69,14 +70,14 @@ export function mainLifts(d: ReportData): string[] {
 /**
  * Weekly target per muscle group: the program's own fractional volume (SPEC-v2 §7.4, decided 2026-10-12). Each planned
  * set counts 1 for its primary group and 0.5 for each secondary group, the same way done sets are counted, so following
- * the program exactly is on target for every group.
+ * the program exactly is on target for every group. Only strength work counts (SPEC-v2 §7.4, `countsVolume`).
  */
 export function muscleTargets(d: ReportData): Record<string, number> {
   const exMap = new Map(d.exercises.map((e) => [e.id, e]));
   const t: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
   for (const day of d.program.days) for (const de of day.exercises) {
     const e = exMap.get(de.exercise_id);
-    if (!e) continue;
+    if (!e || !countsVolume(e.category)) continue;
     for (const [g, w] of setContribution(e.muscle_primary, e.muscles_secondary)) if (g in t) t[g] += w * de.sets;
   }
   return t;
@@ -110,13 +111,16 @@ export interface GroupSets {
   fractional: number;
 }
 
-/** Done sets per report group, direct and fractional. Planned and extra exercises count alike. */
+/**
+ * Done sets per report group, direct and fractional. Planned and extra exercises count alike; stretching,
+ * plyometrics, cardio and strongman sets count 0 (SPEC-v2 §7.4, `countsVolume`).
+ */
 export function setsPerMuscle(sessions: WorkoutSession[], ex: Map<string, Exercise>): Record<string, GroupSets> {
   const out: Record<string, GroupSets> = Object.fromEntries(REPORT_GROUPS.map((m) => [m, { direct: 0, fractional: 0 }]));
   for (const s of sessions) for (const x of s.sets) {
     if (!x.done) continue;
     const e = ex.get(x.exercise_id);
-    if (!e) continue;
+    if (!e || !countsVolume(e.category)) continue;
     const primary = groupOf(e.muscle_primary);
     for (const [g, w] of setContribution(e.muscle_primary, e.muscles_secondary)) {
       out[g].fractional += w;
@@ -126,12 +130,14 @@ export function setsPerMuscle(sessions: WorkoutSession[], ex: Map<string, Exerci
   return out;
 }
 
-/** Volume (weight × reps, report unit) of done sets per primary muscle. */
+/** Volume (weight × reps, report unit) of done sets per primary muscle; only strength work counts (SPEC-v2 §7.4). */
 export function volumePerMuscle(sessions: WorkoutSession[], ex: Map<string, Exercise>, unit: Unit): Record<string, number> {
   const out: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
   for (const s of sessions) for (const x of s.sets) {
     if (!x.done || x.weight == null || x.reps == null || x.weight <= 0 || x.reps <= 0) continue;
-    const g = groupOf(ex.get(x.exercise_id)?.muscle_primary);
+    const e = ex.get(x.exercise_id);
+    if (!e || !countsVolume(e.category)) continue;
+    const g = groupOf(e.muscle_primary);
     if (g && g in out) out[g] += convertWeight(x.weight, s.unit, unit) * x.reps;
   }
   for (const k of Object.keys(out)) out[k] = Math.round(out[k]);

@@ -7,6 +7,7 @@ import type { AppBindings } from "./env";
 import { fail, nowISO, readJson } from "./http";
 import { mapExercise } from "./data";
 import { isJpeg, stripJpegMetadata } from "./lib/jpeg";
+import { CATEGORIES } from "./lib/category";
 import { FEDB_PREFIX, PATTERNS } from "./lib/library";
 import { CANONICAL_MUSCLES, isLowerBody } from "./lib/muscles";
 import { ID_RE, ulid } from "./lib/ulid";
@@ -23,6 +24,8 @@ const customSchema = z.object({
   muscles_secondary: z.array(muscle).max(8),
   equipment: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
   pattern: z.enum(PATTERNS).nullable(),
+  // SPEC-v2 §7.4. Optional so an edit queued by an older app version keeps the stored category; new rows are strength.
+  category: z.enum(CATEGORIES).optional(),
   archived: z.boolean(),
 });
 
@@ -44,12 +47,13 @@ exerciseRoutes.put("/:id", async (c) => {
   const secondary = [...new Set(body.muscles_secondary)].filter((m) => m !== body.muscle_primary);
   const archivedAt = body.archived ? (existing?.archived_at ?? nowISO()) : null;
   await c.env.DB.prepare(
-    `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, source, source_id, muscles_secondary, pattern, media, instructions_en, archived_at)
-     VALUES (?, '', ?, ?, ?, ?, '', 'custom', ?, ?, ?, '[]', '[]', ?)
+    `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, source, source_id, muscles_secondary, pattern, media, instructions_en, archived_at, category)
+     VALUES (?, '', ?, ?, ?, ?, '', 'custom', ?, ?, ?, '[]', '[]', ?, COALESCE(?, 'strength'))
      ON CONFLICT (id) DO UPDATE SET name_en = excluded.name_en, muscle_primary = excluded.muscle_primary, is_lower = excluded.is_lower,
-       equipment = excluded.equipment, muscles_secondary = excluded.muscles_secondary, pattern = excluded.pattern, archived_at = excluded.archived_at`
+       equipment = excluded.equipment, muscles_secondary = excluded.muscles_secondary, pattern = excluded.pattern, archived_at = excluded.archived_at,
+       category = COALESCE(?, exercises.category)`
   )
-    .bind(id, body.name_en, body.muscle_primary, isLowerBody(body.muscle_primary) ? 1 : 0, body.equipment, id, JSON.stringify(secondary), body.pattern, archivedAt)
+    .bind(id, body.name_en, body.muscle_primary, isLowerBody(body.muscle_primary) ? 1 : 0, body.equipment, id, JSON.stringify(secondary), body.pattern, archivedAt, body.category ?? null, body.category ?? null)
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM exercises WHERE id = ?").bind(id).first<Record<string, unknown>>();
   return c.json({ ok: true, exercise: mapExercise(row!) });
