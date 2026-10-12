@@ -45,7 +45,7 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
 
   // Readout on tap.
   await page.locator(".chart .row").first().click();
-  await expect(page.locator(".chart .readout").first()).toContainText("Chest: 7 sets of target 13");
+  await expect(page.locator(".chart .readout").first()).toContainText("Chest: 7 fractional sets of target 13 (direct 7)");
 
   // CSV and PNG downloads (headless Chromium has no share sheet, so both download).
   const csvDownload = page.waitForEvent("download");
@@ -76,10 +76,13 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   const map = page.getByTestId("muscle-map");
   await expect(map.locator('path[data-muscle="chest"]').first()).toHaveAttribute("data-status", "under");
   await expect(map.locator('path[data-muscle="quads"]').first()).toHaveAttribute("data-status", "none");
-  await expect(page.getByTestId("muscle-chest")).toContainText("7 / 13");
+  await expect(page.getByTestId("muscle-chest")).toContainText("7 · 7 / 13");
   await expect(page.getByTestId("muscle-chest")).toContainText("Under target");
   await map.locator('path[data-muscle="rear_delts"]').first().click();
-  await expect(map.locator(".readout")).toContainText("Rear delts: 3 of 6 sets");
+  // Fractional (SPEC-v2 §7.4): face pull 3 sets (primary) + seated cable row 3 sets × 0.5 (secondary) = 4.5 of 6.
+  await expect(map.locator(".readout")).toContainText("Rear delts: 3 direct · 4.5 fractional of 6 sets · Under target");
+  await expect(page.getByTestId("muscle-lower_back")).toContainText("0 · 1.5 / –");
+  await expect(page.getByTestId("muscle-lower_back")).toContainText("No target");
   await page.getByRole("button", { name: "Last 4 weeks" }).click();
   await expect(page.getByTestId("progress-stats")).toContainText("2");
 });
