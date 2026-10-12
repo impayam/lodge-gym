@@ -97,8 +97,12 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   1 per done set) and **fractional** (primary 1 set, each secondary muscle's group 0.5; a group counts once per set).
   Planned and extra exercises count alike. The muscle map shows both numbers.
 - Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 %, applied to the
-  **fractional** number. The weekly targets are the program's sets per primary muscle group (SPEC §10). Traps,
-  forearms, lower back, adductors, abductors and neck have no target and show their sets only.
+  **fractional** number. The weekly target of a group is the program's own fractional volume (SPEC-v2 §7.4, decided
+  2026-10-12): each planned set counts 1 for its primary group and 0.5 for each secondary group, so following the
+  program exactly is on target everywhere. Traps, forearms, lower back, adductors, abductors and neck have no target
+  and show their sets only.
+- Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
+  secondary muscle (decided 2026-10-12).
 - A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
 - Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
 

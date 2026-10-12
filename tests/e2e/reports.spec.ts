@@ -79,8 +79,9 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await expect(page.getByTestId("muscle-chest")).toContainText("7 · 7 / 13");
   await expect(page.getByTestId("muscle-chest")).toContainText("Under target");
   await map.locator('path[data-muscle="rear_delts"]').first().click();
-  // Fractional (SPEC-v2 §7.4): face pull 3 sets (primary) + seated cable row 3 sets × 0.5 (secondary) = 4.5 of 6.
-  await expect(map.locator(".readout")).toContainText("Rear delts: 3 direct · 4.5 fractional of 6 sets · Under target");
+  // Fractional (SPEC-v2 §7.4): face pull 3 sets (primary) + seated cable row 3 sets × 0.5 (secondary) = 4.5, against the
+  // program's own fractional rear-delt volume of 11 (face pulls 6 + rows and lat pulldown as secondary 5).
+  await expect(map.locator(".readout")).toContainText("Rear delts: 3 direct · 4.5 fractional of 11 sets · Under target");
   await expect(page.getByTestId("muscle-lower_back")).toContainText("0 · 1.5 / –");
   await expect(page.getByTestId("muscle-lower_back")).toContainText("No target");
   await page.getByRole("button", { name: "Last 4 weeks" }).click();

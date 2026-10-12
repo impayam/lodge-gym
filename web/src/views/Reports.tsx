@@ -361,7 +361,7 @@ function ProgressView() {
       <h2>Muscle balance this week</h2>
       <div class="card">
         <p class="why" style={{ marginTop: 0 }}>
-          Done sets per group vs the program target, {dayMonth(r.balance.week.start)} – {dayMonth(r.balance.week.end)}. Direct counts the primary muscle only; fractional adds 0.5 for each secondary muscle. Below 80% of the target (fractional) counts as under, above 120% as over.
+          Done sets per group vs the program target, {dayMonth(r.balance.week.start)} – {dayMonth(r.balance.week.end)}. Direct counts the primary muscle only; fractional adds 0.5 for each secondary muscle. The target is the program's planned sets, counted the same fractional way. Below 80% of the target (fractional) counts as under, above 120% as over.
         </p>
         <MuscleMap muscles={r.balance.muscles} />
       </div>

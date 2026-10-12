@@ -28,8 +28,9 @@ describe("building blocks", () => {
     expect(convertWeight(50, "lb", "lb")).toBe(50);
     expect(convertWeight(50, null, "kg")).toBe(50);
   });
-  it("targets from the program match SPEC §10", () => {
-    expect(muscleTargets(reportData())).toEqual({ chest: 13, back: 13, quads: 10, hamstrings_glutes: 9, shoulders: 9, rear_delts: 6, calves: 6, core: 6, biceps: 3, triceps: 3 });
+  it("targets are the program's fractional volume per group (SPEC-v2 §7.4)", () => {
+    // Primary 1 + each secondary group 0.5 per planned set, e.g. back: 13 direct + pulls and deadlift secondaries = 17.5.
+    expect(muscleTargets(reportData())).toEqual({ chest: 13, back: 17.5, quads: 11.5, hamstrings_glutes: 14, shoulders: 15.5, rear_delts: 11, calves: 6, core: 6, biceps: 9.5, triceps: 9.5 });
     expect(mainLifts(reportData())).toEqual(["bench", "squat", "cs_row", "deadlift", "ohp"]);
   });
   it("Gregorian months", () => {
@@ -70,15 +71,15 @@ describe("weekly report", () => {
     // Hand-computed from the week's sets and seed/library/seed-matches.json: [direct, fractional, target, status].
     expect(Object.fromEntries(r.muscles.map((m) => [m.muscle, [m.sets, m.fractional, m.target, m.status]]))).toEqual({
       chest: [13, 13, 13, "on"],
-      back: [13, 14.5, 13, "on"],
-      quads: [10, 10, 10, "on"],
-      hamstrings_glutes: [3, 8, 9, "on"],
-      shoulders: [3, 9.5, 9, "on"],
-      rear_delts: [3, 8, 6, "over"],
-      calves: [3, 8, 6, "over"],
+      back: [13, 14.5, 17.5, "on"],
+      quads: [10, 10, 11.5, "on"],
+      hamstrings_glutes: [3, 8, 14, "under"],
+      shoulders: [3, 9.5, 15.5, "under"],
+      rear_delts: [3, 8, 11, "under"],
+      calves: [3, 3, 6, "under"],
       core: [3, 3, 6, "under"],
-      biceps: [3, 9.5, 3, "over"],
-      triceps: [3, 8, 3, "over"],
+      biceps: [3, 9.5, 9.5, "on"],
+      triceps: [3, 8, 9.5, "on"],
       traps: [0, 0, null, "none"],
       forearms: [0, 3.5, null, "untracked"],
       lower_back: [0, 3.5, null, "untracked"],
@@ -206,7 +207,7 @@ describe("progress page", () => {
     expect(p.balance.week).toEqual({ start: "2026-09-21", end: "2026-09-27" });
     // The 80 % / 120 % thresholds apply to the fractional number (SPEC-v2 §7.4).
     expect(Object.fromEntries(p.balance.muscles.map((m) => [m.muscle, m.status]))).toEqual({
-      chest: "on", back: "on", quads: "on", hamstrings_glutes: "on", shoulders: "on", rear_delts: "over", calves: "over", core: "under", biceps: "over", triceps: "over",
+      chest: "on", back: "on", quads: "on", hamstrings_glutes: "under", shoulders: "under", rear_delts: "under", calves: "under", core: "under", biceps: "on", triceps: "on",
       traps: "none", forearms: "untracked", lower_back: "untracked", adductors: "untracked", abductors: "none", neck: "none",
     });
   });

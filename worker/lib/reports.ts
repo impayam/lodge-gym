@@ -66,13 +66,18 @@ export function mainLifts(d: ReportData): string[] {
   return ids;
 }
 
-/** Program sets per muscle group per week, primary muscle only: the SPEC §10 targets come out of the program. */
+/**
+ * Weekly target per muscle group: the program's own fractional volume (SPEC-v2 §7.4, decided 2026-10-12). Each planned
+ * set counts 1 for its primary group and 0.5 for each secondary group, the same way done sets are counted, so following
+ * the program exactly is on target for every group.
+ */
 export function muscleTargets(d: ReportData): Record<string, number> {
   const exMap = new Map(d.exercises.map((e) => [e.id, e]));
   const t: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
   for (const day of d.program.days) for (const de of day.exercises) {
-    const g = groupOf(exMap.get(de.exercise_id)?.muscle_primary);
-    if (g && g in t) t[g] += de.sets;
+    const e = exMap.get(de.exercise_id);
+    if (!e) continue;
+    for (const [g, w] of setContribution(e.muscle_primary, e.muscles_secondary)) if (g in t) t[g] += w * de.sets;
   }
   return t;
 }

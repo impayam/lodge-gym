@@ -133,6 +133,11 @@ ALTER TABLE set_entries ADD COLUMN position INTEGER;                     -- disp
   - Why it matters for safety: with direct-only counting, the generator would add extra triceps and front-delt work on top of heavy pressing. That over-counts fatigue on small joints.
   - The muscle map shows both numbers, direct and fractional. The 80% and 120% thresholds apply to the fractional number.
   - This replaces the earlier direct-only rule. Update the README section "Approved report rules"
+- **[DECIDED 2026-10-12] Weekly targets are the program's own fractional volume** (option T2).
+  - Each planned set counts 1 for its primary group and 0.5 for each secondary group, exactly like done sets.
+  - Following the program exactly is on target for every group. This replaces the SPEC §10 rule "target = program sets per primary muscle".
+  - Traps, forearms, lower back, adductors, abductors and neck stay without a target.
+- **[DECIDED 2026-10-12] Calves are not a secondary muscle of squat, leg press, lunge, RDL or deadlift** for the seeded exercises (`seed/library/seed-matches.json`), even though free-exercise-db lists them. Calves count only from calf work.
 
 **Acceptance:**
 
