@@ -60,6 +60,11 @@ export interface DayExercise {
   rest_sec: number;
   superset_tag: string | null;
   is_main: boolean;
+  /** Target reps in reserve for the slot (SPEC-v2 §8.4); null on the seed programs. */
+  target_rir_min: number | null;
+  target_rir_max: number | null;
+  /** Generator slot (SPEC-v2 §8.7); null on the seed programs. */
+  slot: "main" | "secondary" | "accessory" | "isolation" | "core" | null;
 }
 
 export interface ProgramDay {

@@ -30,6 +30,9 @@ export function program(): Program {
         rest_sec: x.rest,
         superset_tag: (x as { tag?: string }).tag ?? null,
         is_main: Boolean((x as { main?: number }).main),
+        target_rir_min: null,
+        target_rir_max: null,
+        slot: null,
       })),
     })),
   };

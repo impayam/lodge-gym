@@ -77,6 +77,9 @@ export async function readProgram(env: Env): Promise<{ program: Program; other_d
       rest_sec: r.rest_sec as number,
       superset_tag: (r.superset_tag as string | null) ?? null,
       is_main: r.is_main === 1,
+      target_rir_min: (r.target_rir_min as number | null | undefined) ?? null,
+      target_rir_max: (r.target_rir_max as number | null | undefined) ?? null,
+      slot: (r.slot as DayExercise["slot"] | undefined) ?? null,
     });
     byDay.set(r.day_id as string, list);
   }
