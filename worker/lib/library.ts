@@ -49,10 +49,14 @@ export const FEDB_EQUIPMENT: Readonly<Record<string, Equipment>> = {
 };
 export const FEDB_EXCLUDED_EQUIPMENT: readonly string[] = ["kettlebells", "bands", "medicine ball", "exercise ball", "foam roll"];
 
-/** seed/library/fedb-equipment.json: reviewed mapping of every "other" and every missing-equipment entry. */
+/**
+ * seed/library/fedb-equipment.json: reviewed mapping of every "other" and every missing-equipment entry, plus the
+ * entries Payam excluded on review (dataset id → reason), whatever their equipment.
+ */
 export interface EquipmentReview {
   other: Record<string, Equipment>;
   missing: Record<string, Equipment>;
+  excluded: Record<string, string>;
 }
 
 /** Equipment of a dataset entry, or null when its equipment type is excluded. Throws for an unreviewed entry. */
@@ -137,9 +141,10 @@ export interface ImportReport {
   imported: number;
   seed_matches: { id: string; fedb: string | null; name: string | null }[];
   manual: { id: string; name_en: string; muscle_primary: Muscle; equipment: Equipment; pattern: Pattern }[];
-  /** Dataset entries (seed matches excluded) per equipment value: how many were mapped and to what. */
+  /** Dataset entries (seed matches and review exclusions left out) per equipment value: how many were mapped and to what. */
   equipment: { from: string; to: Equipment | "excluded"; count: number }[];
   excluded_equipment: { id: string; name: string; equipment: string | null }[];
+  excluded_review: { id: string; name: string; reason: string }[];
   excluded_no_muscle: { id: string; name: string; muscles: string[] }[];
   unmapped_pattern: { id: string; name: string; category: string | null }[];
   unmapped_mechanic: { id: string; name: string }[];
@@ -154,6 +159,11 @@ const media = (images: string[]): Media[] => images.map((p) => ({ kind: "image" 
 export function validateInputs(seedMatches: SeedMatch[], manual: ManualExercise[], patterns: PatternFile, review: EquipmentReview): string[] {
   const errors: string[] = [];
   for (const [id, e] of [...Object.entries(review.other), ...Object.entries(review.missing)]) if (!EQUIPMENT.includes(e)) errors.push(`equipment ${id}: ${e}`);
+  for (const [id, reason] of Object.entries(review.excluded)) {
+    if (typeof reason !== "string" || !reason.trim()) errors.push(`excluded ${id}: a reason is required`);
+    if (id in review.other || id in review.missing) errors.push(`excluded ${id}: also has an equipment mapping`);
+    if (seedMatches.some((s) => s.fedb === id)) errors.push(`excluded ${id}: matched to a seeded exercise`);
+  }
   const ids = new Set<string>();
   for (const s of seedMatches) {
     if (!PATTERNS.includes(s.pattern)) errors.push(`seed ${s.id}: pattern ${s.pattern}`);
@@ -177,6 +187,12 @@ export function validateInputs(seedMatches: SeedMatch[], manual: ManualExercise[
   return errors;
 }
 
+/** Ids in the review file that the dataset does not have (a typo or a dataset change); the import refuses to run with any. */
+export function unknownReviewIds(dataset: Pick<FedbExercise, "id">[], review: EquipmentReview): string[] {
+  const ids = new Set(dataset.map((x) => x.id));
+  return [...Object.keys(review.other), ...Object.keys(review.missing), ...Object.keys(review.excluded)].filter((id) => !ids.has(id)).sort();
+}
+
 /** @param seedPrimary primary muscle of each seeded exercise (seed/program.json); never repeated as a secondary. */
 export function buildLibrary(
   dataset: FedbExercise[],
@@ -197,6 +213,7 @@ export function buildLibrary(
     manual: manual.map((m) => ({ id: m.id, name_en: m.name_en, muscle_primary: m.muscle_primary, equipment: m.equipment, pattern: m.pattern })),
     equipment: [],
     excluded_equipment: [],
+    excluded_review: [],
     excluded_no_muscle: [],
     unmapped_pattern: [],
     unmapped_mechanic: [],
@@ -226,6 +243,10 @@ export function buildLibrary(
   const rows: LibraryRow[] = [];
   for (const x of [...dataset].sort((a, b) => a.id.localeCompare(b.id))) {
     if (matched.has(x.id)) continue;
+    if (x.id in review.excluded) {
+      report.excluded_review.push({ id: x.id, name: x.name, reason: review.excluded[x.id] });
+      continue;
+    }
     const equipment = resolveEquipment(x, review);
     const from = x.equipment ?? "missing";
     const t = `${from}→${equipment ?? "excluded"}`;
@@ -363,6 +384,7 @@ export function reportMarkdown(r: ImportReport): string {
     `- Matched to the seeded exercises (enriched in place, ids unchanged): ${r.seed_matches.filter((s) => s.fedb).length}`,
     `- Equipment mapped onto the five allowed values: ${mapped}`,
     `- Excluded by equipment (kettlebell, bands, medicine ball, exercise ball, foam roll): ${excluded}`,
+    `- Excluded on review (strongman-only and others, seed/library/fedb-equipment.json): ${r.excluded_review.length}`,
     `- Excluded for having no primary muscle key: ${r.excluded_no_muscle.length}`,
     `- Rows written by the import: ${r.imported} (free-exercise-db ${r.imported - r.manual.length} + manual ${r.manual.length})`,
     "",
@@ -380,6 +402,7 @@ export function reportMarkdown(r: ImportReport): string {
   list("Seeded exercises and their library match", r.seed_matches, (s) => (s.fedb ? `\`${s.id}\` ← ${s.name} (\`${s.fedb}\`)` : `\`${s.id}\`: no faithful match; pattern and muscles written by hand, no media`));
   list("Manual gap fill, for review (source 'manual', no media)", r.manual, (m) => `\`${m.id}\` ${m.name_en}: ${m.muscle_primary}, ${m.equipment}, ${m.pattern}`);
   list("Not imported: excluded equipment", r.excluded_equipment, (x) => `${x.name} (${x.equipment})`);
+  list("Not imported: excluded on review", r.excluded_review, (x) => `${x.name} (${x.reason})`);
   list("Not imported: no primary muscle key", r.excluded_no_muscle, (x) => `${x.name} (${x.muscles.join(", ")})`);
   list("Imported without a pattern (not guessed)", r.unmapped_pattern, (x) => `${x.name}${x.category ? ` (${x.category})` : ""}`);
   list("Imported without a mechanic (not guessed)", r.unmapped_mechanic, (x) => x.name);

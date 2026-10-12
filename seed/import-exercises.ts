@@ -21,6 +21,7 @@ import {
   imageKeys,
   librarySql,
   reportMarkdown,
+  unknownReviewIds,
   type EquipmentReview,
   type FedbExercise,
   type ManualExercise,
@@ -128,6 +129,9 @@ async function main() {
   const t = parseArgs(process.argv.slice(2));
   const datasetText = t.dataset ? readFileSync(t.dataset, "utf8") : await (await fetchRetry(`${FEDB_RAW}/dist/exercises.json`)).text();
   const dataset = JSON.parse(datasetText) as FedbExercise[];
+  const review = readJson<EquipmentReview>("./library/fedb-equipment.json");
+  const unknown = unknownReviewIds(dataset, review);
+  if (unknown.length) throw new Error(`seed/library/fedb-equipment.json names entries the dataset does not have: ${unknown.join(", ")}`);
   const seedPrimary = Object.fromEntries(readJson<{ exercises: { id: string; muscle_primary: string }[] }>("./program.json").exercises.map((e) => [e.id, e.muscle_primary]));
   const lib = buildLibrary(
     dataset,
@@ -135,12 +139,12 @@ async function main() {
     readJson<SeedMatch[]>("./library/seed-matches.json"),
     readJson<ManualExercise[]>("./library/manual.json"),
     seedPrimary,
-    readJson<EquipmentReview>("./library/fedb-equipment.json")
+    review
   );
 
   if (t.mode === "report") {
     writeFileSync(here("./library/IMPORT-REPORT.md"), reportMarkdown(lib.report) + "\n");
-    console.log(`seed/library/IMPORT-REPORT.md: ${lib.report.imported} rows, ${lib.report.excluded_equipment.length} excluded by equipment, ${lib.report.reviewed_equipment.length} reviewed equipment mappings, ${lib.report.unmapped_pattern.length} without a pattern`);
+    console.log(`seed/library/IMPORT-REPORT.md: ${lib.report.imported} rows, ${lib.report.excluded_equipment.length} excluded by equipment, ${lib.report.excluded_review.length} excluded on review, ${lib.report.reviewed_equipment.length} reviewed equipment mappings, ${lib.report.unmapped_pattern.length} without a pattern`);
     return;
   }
 

@@ -12,6 +12,7 @@ import {
   librarySql,
   reportMarkdown,
   resolveEquipment,
+  unknownReviewIds,
   validateInputs,
   type EquipmentReview,
   type FedbExercise,
@@ -38,10 +39,22 @@ describe("equipment (decisions 2026-10-13)", () => {
     expect(() => resolveEquipment({ id: "Not_Reviewed", equipment: "other" }, review)).toThrow(/not reviewed/);
     expect(() => resolveEquipment({ id: "a", equipment: "spaceship" }, review)).toThrow(/unknown equipment/);
   });
-  it("the reviewed file covers 122 'other' and 77 missing entries with allowed values", () => {
-    expect(Object.keys(review.other)).toHaveLength(122);
+  it("the reviewed file covers 100 'other' and 77 missing entries with allowed values, and 22 exclusions", () => {
+    expect(Object.keys(review.other)).toHaveLength(100);
     expect(Object.keys(review.missing)).toHaveLength(77);
+    expect(Object.values(review.excluded).filter((r) => r === "strongman-only")).toHaveLength(13);
+    expect(Object.values(review.excluded).filter((r) => r === "excluded on review")).toHaveLength(9);
+    expect(review.other).toMatchObject({ Trap_Bar_Deadlift: "barbell", Axle_Deadlift: "barbell", "Band_Assisted_Pull-Up": "bodyweight" });
     expect(validateInputs(seedMatches as SeedMatch[], manual as ManualExercise[], patterns as PatternFile, review)).toEqual([]);
+  });
+  it("refuses an exclusion without a reason, one that is also mapped, one matched to a seed, and ids the dataset lacks", () => {
+    const bad: EquipmentReview = { other: { Atlas_Stones: "barbell" }, missing: {}, excluded: { Atlas_Stones: "strongman-only", "Neck-SMR": " ", "Barbell_Bench_Press_-_Medium_Grip": "x" } };
+    expect(validateInputs(seedMatches as SeedMatch[], [], {}, bad)).toEqual([
+      "excluded Atlas_Stones: also has an equipment mapping",
+      "excluded Neck-SMR: a reason is required",
+      "excluded Barbell_Bench_Press_-_Medium_Grip: matched to a seeded exercise",
+    ]);
+    expect(unknownReviewIds([{ id: "A" }], { other: { A: "barbell", B: "dumbbell" }, missing: { M: "bodyweight" }, excluded: { C: "x" } })).toEqual(["B", "C", "M"]);
   });
 });
 
@@ -74,6 +87,16 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
     expect(lib.report.unmapped_pattern.map((x) => x.id)).toContain("Hamstring_Stretch");
   });
 
+  it("leaves out the entries excluded on review, whatever their equipment", () => {
+    expect(byId.has("fedb-Atlas_Stones")).toBe(false);
+    expect(byId.has("fedb-Neck-SMR")).toBe(false);
+    expect(lib.report.excluded_review).toEqual([
+      { id: "Atlas_Stones", name: "Atlas Stones", reason: "strongman-only" },
+      { id: "Neck-SMR", name: "Neck-SMR", reason: "excluded on review" },
+    ]);
+    expect(lib.report.reviewed_equipment.map((x) => x.id)).not.toContain("Atlas_Stones");
+  });
+
   it("adds the hand-written gap fill as source 'manual' without media", () => {
     const m = lib.rows.filter((r) => r.source === "manual");
     expect(m).toHaveLength((manual as ManualExercise[]).length);
@@ -82,7 +105,7 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
 
   it("report: counts, equipment table and the full 'other' list", () => {
     const r = lib.report;
-    expect(r.dataset.total).toBe(40);
+    expect(r.dataset.total).toBe(42);
     expect(r.equipment.find((e) => e.from === "kettlebells")).toEqual({ from: "kettlebells", to: "excluded", count: 1 });
     expect(r.reviewed_equipment).toEqual(
       expect.arrayContaining([
@@ -93,6 +116,8 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
     const md = reportMarkdown(r);
     expect(md).toContain("- Equipment mapped onto the five allowed values: 13");
     expect(md).toContain("- Excluded by equipment (kettlebell, bands, medicine ball, exercise ball, foam roll): 2");
+    expect(md).toContain("- Excluded on review (strongman-only and others, seed/library/fedb-equipment.json): 2");
+    expect(md).toContain("- Atlas Stones (strongman-only)");
     expect(md).toContain("- Trap Bar Deadlift → barbell");
     expect(md).toContain("| other | barbell |");
   });

@@ -936,5 +936,54 @@
   "category": "strength",
   "images": [],
   "id": "Dumbbell_Bench_Press"
+ },
+ {
+  "name": "Atlas Stones",
+  "force": "pull",
+  "level": "expert",
+  "mechanic": "compound",
+  "equipment": "other",
+  "primaryMuscles": [
+   "lower back"
+  ],
+  "secondaryMuscles": [
+   "abdominals",
+   "adductors",
+   "biceps",
+   "calves",
+   "forearms",
+   "glutes",
+   "hamstrings",
+   "middle back",
+   "quadriceps",
+   "traps"
+  ],
+  "instructions": [
+   "Begin with the atlas stone between your feet. Bend at the hips to wrap your arms vertically around the Atlas Stone, attempting to get your fingers underneath the stone. Many stones will have a small flat portion on the bottom, which will make the stone easier to hold.",
+   "Pulling the stone into your torso, drive through the back half of your feet to pull the stone from the ground.",
+   "As the stone passes the knees, lap it by sitting backward, pulling the stone on top of your thighs.",
+   "Sit low, getting the stone high onto your chest as you change your grip to reach over the stone. Stand, driving through with your hips. Close distance to the loading platform, and lean back, extending the hips to get the stone as high as possible."
+  ],
+  "category": "strongman",
+  "images": [],
+  "id": "Atlas_Stones"
+ },
+ {
+  "name": "Neck-SMR",
+  "force": "static",
+  "level": "intermediate",
+  "mechanic": null,
+  "equipment": "other",
+  "primaryMuscles": [
+   "neck"
+  ],
+  "secondaryMuscles": [],
+  "instructions": [
+   "Using a muscle roller or a rolling pin, place the roller behind your head and against your neck. Make sure that you do not place the roller directly against the spine, but turned slightly so that the roller is pressed against the muscles to either side of the spine. This will be your starting position.",
+   "Starting at the top of your neck, slowly roll down the muscles of your neck, pausing at points of tension for 10-30 seconds."
+  ],
+  "category": "stretching",
+  "images": [],
+  "id": "Neck-SMR"
  }
 ]

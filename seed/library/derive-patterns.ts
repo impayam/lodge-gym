@@ -61,7 +61,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const review = JSON.parse(readFileSync(here("./fedb-equipment.json"), "utf8")) as EquipmentReview;
   const out: PatternFile = {};
   for (const x of [...dataset].sort((a, b) => a.id.localeCompare(b.id))) {
-    if (matched.has(x.id) || !resolveEquipment(x, review)) continue;
+    if (matched.has(x.id) || x.id in review.excluded || !resolveEquipment(x, review)) continue;
     const { primary } = fedbMuscles(x);
     if (!primary) continue;
     const pattern = derivePattern(x, primary);
