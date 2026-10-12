@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import program from "../../seed/program.json";
+import seedMatches from "../../seed/library/seed-matches.json";
 import { CANONICAL_MUSCLES, fedbMuscle, fedbMuscles, groupOf, isLowerBody, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "../../worker/lib/muscles";
 
 describe("canonical muscle keys (SPEC-v2 §7.2)", () => {
@@ -37,6 +39,23 @@ describe("fractional set contribution (SPEC-v2 §7.4)", () => {
     expect(Object.fromEntries(setContribution("quads", ["glutes", "hamstrings"]))).toEqual({ quads: 1, hamstrings_glutes: 0.5 });
     expect(Object.fromEntries(setContribution("core", []))).toEqual({ core: 1 });
     expect(setContribution("unknown", ["also unknown"]).size).toBe(0);
+  });
+  it("per set a group gets at most 1.0: primary 1.0 (secondaries in the group add nothing), secondaries only 0.5 (Payam, 2026-10-12)", () => {
+    const sec = Object.fromEntries((seedMatches as { id: string; muscles_secondary: string[] }[]).map((s) => [s.id, s.muscles_secondary]));
+    const prim = Object.fromEntries(program.exercises.map((e) => [e.id, e.muscle_primary]));
+    const per = (id: string, group: string) => setContribution(prim[id], sec[id]).get(group as never) ?? 0;
+    // Deadlift: lats and upper back are both secondaries → back 0.5, not 1.0; glutes primary + hamstrings → 1.0.
+    expect(sec.deadlift).toEqual(expect.arrayContaining(["back_lats", "back_upper", "hamstrings"]));
+    expect(per("deadlift", "back")).toBe(0.5);
+    expect(per("deadlift", "hamstrings_glutes")).toBe(1);
+    // Squat, leg press, Bulgarian split squat: glutes and hamstrings secondaries → 0.5.
+    for (const id of ["squat", "leg_press", "bulgarian"]) expect(per(id, "hamstrings_glutes"), id).toBe(0.5);
+    // Rows and pulldowns: primary back plus a back secondary → 1.0, not 1.5.
+    for (const id of ["cable_row", "cs_row", "pulldown", "pullup"]) expect(per(id, "back"), id).toBe(1);
+    // RDL: hamstrings primary + glutes secondary → 1.0.
+    expect(per("rdl", "hamstrings_glutes")).toBe(1);
+    // Bench: front-delt secondary → shoulders 0.5.
+    expect(per("bench", "shoulders")).toBe(0.5);
   });
 });
 
