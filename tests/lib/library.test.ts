@@ -172,4 +172,13 @@ describe("library SQL", () => {
     expect(sql[0]).toContain(" OR exercises.category IS NOT excluded.category;");
     expect(sql[sql.length - 1]).toMatch(/^UPDATE exercises SET .* WHERE id = '[a-z_]+' AND source = 'seed' AND \(.* IS NOT .*\);$/);
   });
+  it("never writes a seeded row's category, whatever its library match says (seeds stay strength)", () => {
+    const odd = (sample as FedbExercise[]).map((x) => (x.id === "Face_Pull" ? { ...x, category: "stretching" } : x.id === "Barbell_Bench_Press_-_Medium_Grip" ? { ...x, category: "cardio" } : x));
+    const lib = build(odd);
+    expect(lib.seedUpdates.every((u) => !("category" in u))).toBe(true);
+    expect(lib.rows.some((r) => r.source_id === "Face_Pull" || r.source_id === "Barbell_Bench_Press_-_Medium_Grip")).toBe(false);
+    const seedSql = librarySql(lib.rows, lib.seedUpdates).filter((x) => x.startsWith("UPDATE"));
+    expect(seedSql).toHaveLength(27);
+    for (const x of seedSql) expect(x).not.toContain("category");
+  });
 });

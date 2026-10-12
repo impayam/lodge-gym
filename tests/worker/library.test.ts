@@ -57,6 +57,17 @@ describe("library import into D1 (SPEC-v2 §7 acceptance)", () => {
     const seeds = await env.DB.prepare("SELECT DISTINCT category FROM exercises WHERE source = 'seed'").all();
     expect(seeds.results).toEqual([{ category: "strength" }]);
   });
+  it("never overwrites a seeded row's category, even when its library match has another one", async () => {
+    // Face Pull and the bench press matched to entries marked stretching and cardio: the seed rows stay strength.
+    const odd = (sample as FedbExercise[]).map((x) => (x.id === "Face_Pull" ? { ...x, category: "stretching" } : x.id === "Barbell_Bench_Press_-_Medium_Grip" ? { ...x, category: "cardio" } : x));
+    const other = buildLibrary(odd, patterns as PatternFile, seedMatches as SeedMatch[], manual as ManualExercise[], seedPrimary, equipmentReview as EquipmentReview);
+    await env.DB.batch(librarySql(other.rows, other.seedUpdates).map((s) => env.DB.prepare(s)));
+    const seeds = await env.DB.prepare("SELECT id, category FROM exercises WHERE source = 'seed' ORDER BY id").all<{ id: string; category: string }>();
+    expect(seeds.results).toHaveLength(27);
+    expect(seeds.results.every((r) => r.category === "strength")).toBe(true);
+    expect(seeds.results.find((r) => r.id === "facepull")).toEqual({ id: "facepull", category: "strength" });
+    expect(await runImport()).toBe(0);
+  });
 });
 
 describe("exercise API", () => {
