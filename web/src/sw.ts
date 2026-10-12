@@ -1,9 +1,11 @@
 /// <reference lib="webworker" />
-// Service worker: precached app shell (Workbox injectManifest). API calls always go to the network.
+// Service worker: precached app shell (Workbox injectManifest). API calls go to the network, except library images,
+// which are immutable (a new key per upload) and kept in a cache for offline use.
 
 import { clientsClaim } from "workbox-core";
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
+import { CacheFirst } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null }> };
 
@@ -14,6 +16,8 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 // Every in-app navigation opens the cached shell; /setup and /api never do (setup must 404 once done).
 registerRoute(new NavigationRoute(createHandlerBoundToURL("/index.html"), { denylist: [/^\/api\//, /^\/setup/] }));
+
+registerRoute(({ url, request }) => request.method === "GET" && url.pathname.startsWith("/api/library/media/"), new CacheFirst({ cacheName: "library-media" }));
 
 // Rest-timer push (Web Push): always show a notification (iOS revokes subscriptions that push silently).
 self.addEventListener("push", (event) => {
@@ -29,8 +33,8 @@ self.addEventListener("push", (event) => {
       tag: data.tag ?? "lodge-gym",
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      lang: "fa",
-      dir: "rtl",
+      lang: "en",
+      dir: "ltr",
     })
   );
 });

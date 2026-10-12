@@ -64,11 +64,16 @@ export interface ExerciseBlock {
   ex: Exercise;
   plan: DayExercise;
   sets: SetEntry[];
+  /** Added during this session from the library (SPEC-v2 §7.3): no plan and no progression target. */
+  extra: boolean;
 }
 
-/** Exercise cards for a session: the day's plan in order, plus any other exercises present in the logged sets. */
-export function sessionBlocks(boot: BootData, s: WorkoutSession): ExerciseBlock[] {
-  const exMap = exerciseMap(boot);
+/**
+ * Exercise cards for a session: the day's plan in order, then the exercises added during the session (by position),
+ * then any other exercise present in the logged sets (e.g. imported history).
+ * @param exMap every known exercise (library plus bootstrap), so extra exercises resolve offline.
+ */
+export function sessionBlocks(boot: BootData, s: WorkoutSession, exMap: Map<string, Exercise> = exerciseMap(boot)): ExerciseBlock[] {
   const day = boot.program.days.find((d) => d.id === s.program_day_id);
   const plans = day ? day.exercises : [];
   const blocks: ExerciseBlock[] = [];
@@ -77,9 +82,13 @@ export function sessionBlocks(boot: BootData, s: WorkoutSession): ExerciseBlock[
     const ex = exMap.get(plan.exercise_id);
     if (!ex) continue;
     seen.add(plan.exercise_id);
-    blocks.push({ ex, plan, sets: s.sets.filter((x) => x.exercise_id === plan.exercise_id).sort((a, b) => a.set_index - b.set_index) });
+    blocks.push({ ex, plan, sets: s.sets.filter((x) => x.exercise_id === plan.exercise_id).sort((a, b) => a.set_index - b.set_index), extra: false });
   }
-  const extra = [...new Set(s.sets.map((x) => x.exercise_id))].filter((id) => !seen.has(id));
+  const positionOf = (id: string) => {
+    const p = s.sets.find((x) => x.exercise_id === id && x.is_extra)?.position;
+    return p ?? Number.MAX_SAFE_INTEGER;
+  };
+  const extra = [...new Set(s.sets.map((x) => x.exercise_id))].filter((id) => !seen.has(id)).sort((a, b) => positionOf(a) - positionOf(b));
   for (const id of extra) {
     const ex = exMap.get(id);
     if (!ex) continue;
@@ -102,6 +111,7 @@ export function sessionBlocks(boot: BootData, s: WorkoutSession): ExerciseBlock[
         is_main: false,
       },
       sets,
+      extra: sets.some((x) => x.is_extra),
     });
   }
   return blocks;
@@ -118,7 +128,8 @@ export interface Guidance {
 
 export function guidance(block: ExerciseBlock, s: WorkoutSession, sessions: Record<string, WorkoutSession>): Guidance {
   const last = lastPerformance(block.ex.id, Object.values(sessions), s.id);
-  const suggestion = suggest(block.plan, block.ex, last);
+  // An exercise added during the session has no progression target (SPEC-v2 §7.3).
+  const suggestion: Suggestion = block.extra ? { kind: "none" } : suggest(block.plan, block.ex, last);
   let prefillWeight: number | null = null;
   if ((suggestion.kind === "weight" || suggestion.kind === "bodyweight") && suggestion.unit === s.unit) prefillWeight = suggestion.weight;
   const prefillSeconds = block.plan.is_time ? (suggestion.kind === "time" ? suggestion.seconds : block.plan.reps_max) : null;

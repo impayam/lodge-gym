@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md` and `SPEC-v2.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2).
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library).
 
 ## Stack
 
@@ -31,7 +31,11 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 ## Deploy (Cloudflare Workers Builds)
 
 - Build command: `npm run build`
-- Deploy command: `npm run deploy:ci` (applies remote migrations and the seed, then `wrangler deploy`)
+- Deploy command: `npm run deploy:ci` (prints the D1 Time Travel bookmark, applies remote migrations and the seed,
+  imports the exercise library, then `wrangler deploy` and the library image copy)
+- Restore point: every production deploy first runs `wrangler d1 time-travel info lodge-gym-db`, so the Workers Builds
+  log holds the bookmark from before that deploy's migrations. Restore with
+  `npx wrangler d1 time-travel restore lodge-gym-db --bookmark=<bookmark>` or `--timestamp=<RFC3339 time>`.
 - Secret: `SETUP_TOKEN` (a long random string; used once on the phone at `/setup`)
 
 Bindings are in `wrangler.toml`: D1 `DB` → `lodge-gym-db`, R2 `PHOTOS` → `lodge-gym-photos`, static assets `ASSETS` → `dist/`.
@@ -93,7 +97,20 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 
 ## Approved report rules
 
-- Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 % (primary muscle only).
+- Sets per muscle are counted two ways (SPEC-v2 §7.4, decided 2026-10-12): **direct** (the primary muscle's group gets
+  1 per done set) and **fractional** (primary 1 set, each secondary muscle's group 0.5; a group counts once per set).
+  Planned and extra exercises count alike. The muscle map shows both numbers.
+- Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 %, applied to the
+  **fractional** number. The weekly target of a group is the program's own fractional volume (SPEC-v2 §7.4, decided
+  2026-10-12): each planned set counts 1 for its primary group and 0.5 for each secondary group, so following the
+  program exactly is on target everywhere. Traps, forearms, lower back, adductors, abductors and neck have no target
+  and show their sets only.
+- Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
+  secondary muscle (decided 2026-10-12).
+- Only strength work counts (decided 2026-10-12): exercises whose `category` (migration `0005_exercise_category.sql`)
+  is strength, powerlifting or olympic weightlifting count toward sets per muscle, the targets, per-muscle volume and
+  the muscle map. Stretching, plyometrics, cardio and strongman are logged but count 0 sets; the exercise detail says
+  "Not counted in volume". The rule lives in `worker/lib/category.ts`.
 - A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
 - Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
 
@@ -106,6 +123,25 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - API errors keep the SPEC §11 shape `{error:{code,message_fa}}`; the `message_fa` field now carries English text.
 - The Shortcuts bridge still parses Persian-locale Shortcuts output (Persian digits, Jalali dates).
 
+## Exercise library (SPEC-v2 M7)
+
+- Source: [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense), pinned to commit
+  `FEDB_SHA` in `worker/lib/library.ts`. ExerciseDB is not used (its terms forbid storing data or media).
+- `seed/import-exercises.ts` (`npm run library:import -- --remote|--local …`) upserts the rows into D1 and copies the
+  images into the private R2 bucket under `library/free-exercise-db/images/`, with the dataset snapshot at
+  `library/free-exercise-db/<date>.json` and a manifest of copied images (resume). Re-running changes nothing.
+  `deploy:ci` runs the D1 part before `wrangler deploy` and the image copy after it, with a 12-minute budget (Workers
+  Builds stops a build at 20 minutes); a later deploy finishes any images left.
+- Reviewed mapping files in `seed/library/`: `fedb-equipment.json` (every "other" and missing-equipment entry mapped
+  to one of the five equipment values; kettlebell, bands, medicine ball, exercise ball and foam roll are excluded; its
+  `excluded` list holds the 22 entries excluded on review, with a reason), `fedb-patterns.json` (movement pattern per
+  entry, drafted by `derive-patterns.ts`, unplaced ones left null, plus the reviewed `category` overrides),
+  `seed-matches.json` (the seeded exercises' library match, pattern, mechanic and secondary muscles; they keep their
+  ids) and `manual.json` (hand-written gap fill, source `manual`, no media).
+- `npm run library:report` writes `seed/library/IMPORT-REPORT.md` for review.
+- Muscle names map to the canonical keys in one table, `worker/lib/muscles.ts`.
+- Every exercise shows a "Watch form video" link: a YouTube search for `name_en + " form"`, built at render time.
+
 ## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
@@ -116,4 +152,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - `GET /api/reports/progress` (Progress page) and `?format=csv` on `/api/reports/week|month`. Months are Gregorian only (SPEC-v2 M6 removed the `month_calendar` setting).
 - `GET /api/photos` (photo list for the gallery; SPEC §11 lists the other photo routes).
 - `PUT /api/body-mass/:date` (manual body weight, source `manual`) and `set_entries.rir` (migration 0002).
+- Exercise library (SPEC-v2 M7, approved 2026-10-12): `GET /api/exercises`, `PUT /api/exercises/:id` (custom exercises
+  only, with `category`), `PUT /api/exercises/:id/photo`, `GET /api/library/media/*` (library and custom prefixes only,
+  behind sign-in); session sets accept `is_extra` and `position`; `/api/bootstrap` carries only the exercises the app
+  needs offline; the backup export adds `custom_exercises`. Migration `0005_exercise_category.sql`.
 - `POST /api/health/raw` (replaces `/health/workouts`), `GET /api/health/status`, `PUT /api/health/workouts/:id/match`.

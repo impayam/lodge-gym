@@ -40,7 +40,7 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   await expect(page.locator('[data-ex="bench"]')).toBeVisible();
   await expect(page.locator('[data-ex="bench"] .cue')).toBeVisible();
   await check("session");
-  for (const tab of ["History", "Photos", "Reports", "Program", "Settings"]) {
+  for (const tab of ["History", "Library", "Photos", "Reports", "Program", "Settings"]) {
     await page.getByRole("navigation").getByRole("button", { name: tab }).click();
     await page.waitForLoadState("networkidle");
     await check(tab);

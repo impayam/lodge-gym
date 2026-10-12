@@ -1,6 +1,7 @@
 // Seeded fixture for report tests: the real program seed plus a small, hand-computed training history.
 
 import seed from "../../seed/program.json";
+import seedMatches from "../../seed/library/seed-matches.json";
 import type { BodyMetric, Exercise, HealthWorkout, Photo, Program, Settings, SetEntry, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { ReportData } from "../../worker/lib/reports";
 
@@ -34,7 +35,26 @@ export function program(): Program {
   };
 }
 
-export const exercises = (): Exercise[] => seed.exercises.map((e) => ({ ...e, cue_en: (e as { cue_en?: string }).cue_en ?? null, is_lower: e.is_lower === 1, equipment: e.equipment as Exercise["equipment"] }));
+/** The seeded exercises as the app reads them after the library import (secondary muscles, pattern, mechanic). */
+export const exercises = (): Exercise[] =>
+  seed.exercises.map((e) => {
+    const m = seedMatches.find((s) => s.id === e.id)!;
+    return {
+      ...e,
+      cue_en: (e as { cue_en?: string }).cue_en || null,
+      is_lower: e.is_lower === 1,
+      equipment: e.equipment as Exercise["equipment"],
+      source: "seed" as const,
+      muscles_secondary: m.muscles_secondary,
+      pattern: m.pattern as Exercise["pattern"],
+      mechanic: m.mechanic as Exercise["mechanic"],
+      level: null,
+      media: [],
+      instructions_en: [],
+      archived_at: null,
+      category: "strength" as const,
+    };
+  });
 
 let n = 0;
 /** sets: [exercise, count, weight, reps, seconds?] */

@@ -7,6 +7,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { startProxy } from "./e2e-proxy.mjs";
+import { loadLibrary } from "./e2e-library.mjs";
 
 export const SERVERS = [
   { protocol: "http", port: process.env.E2E_HTTP_PORT ?? "8788", persist: ".wrangler/e2e" },
@@ -39,6 +40,7 @@ for (const s of SERVERS) {
   const w = (...args) => execFileSync("npx", ["wrangler", ...args, "--local", "--persist-to", s.persist], { stdio: "inherit" });
   w("d1", "migrations", "apply", "DB");
   w("d1", "execute", "DB", "--file", "seed/seed.sql");
+  loadLibrary(s.persist);
   const dev = spawn(
     "npx",
     ["wrangler", "dev", "--port", s.port, "--local-protocol", s.protocol, "--persist-to", s.persist, "--var", "SETUP_TOKEN:e2e-setup-token-0123456789"],

@@ -49,7 +49,7 @@ export function TargetBars({
   legend,
   fmt = (n: number) => fmtNum(n),
 }: {
-  rows: { label: string; value: number; target?: number; compare?: number }[];
+  rows: { label: string; value: number; target?: number; compare?: number; direct?: number }[];
   unitLabel: string;
   legend?: [string, string];
   fmt?: (n: number) => string;
@@ -64,7 +64,11 @@ export function TargetBars({
   const plot = W - LABEL - 52;
   const a = active != null ? rows[active] : null;
   const detail = (r: (typeof rows)[number]) =>
-    `${r.label}: ${fmt(r.value)} ${unitLabel}` + (r.target !== undefined ? ` of target ${fmtNum(r.target)}` : "") + (r.compare !== undefined && legend ? ` · ${legend[1]}: ${fmt(r.compare)}` : "");
+    `${r.label}: ${fmt(r.value)} ${unitLabel}` +
+    (r.target !== undefined ? ` of target ${fmtNum(r.target)}` : "") +
+    (r.direct !== undefined ? ` (direct ${fmtNum(r.direct)})` : "") +
+    (r.compare !== undefined && legend ? ` · ${legend[1]}: ${fmt(r.compare)}` : "");
+  const hasDirect = rows.some((r) => r.direct !== undefined);
   return (
     <figure class="chart">
       {legend ? (
@@ -104,8 +108,10 @@ export function TargetBars({
         })}
       </svg>
       <Table
-        head={legend ? ["", legend[0], legend[1]] : hasTarget ? ["Group", unitLabel, "Target"] : ["", unitLabel]}
-        rows={rows.map((r) => (legend ? [r.label, r.value, r.compare ?? 0] : hasTarget ? [r.label, r.value, r.target ?? 0] : [r.label, r.value]))}
+        head={legend ? ["", legend[0], legend[1]] : hasTarget ? ["Group", unitLabel, ...(hasDirect ? ["Direct"] : []), "Target"] : ["", unitLabel]}
+        rows={rows.map((r) =>
+          legend ? [r.label, r.value, r.compare ?? 0] : hasTarget ? [r.label, r.value, ...(hasDirect ? [r.direct ?? 0] : []), r.target ?? 0] : [r.label, r.value]
+        )}
       />
     </figure>
   );

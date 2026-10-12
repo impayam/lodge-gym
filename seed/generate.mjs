@@ -14,8 +14,8 @@ for (const [k, v] of Object.entries(data.settings)) {
 }
 for (const e of data.exercises) {
   out.push(
-    `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, cue_en, source, source_id) VALUES (${[e.id, e.name_fa, e.name_en, e.muscle_primary, e.is_lower, e.equipment, e.cue_fa, e.cue_en || null, "seed", e.id].map(q).join(", ")})` +
-      ` ON CONFLICT (id) DO UPDATE SET name_fa = excluded.name_fa, name_en = excluded.name_en, muscle_primary = excluded.muscle_primary, is_lower = excluded.is_lower, equipment = excluded.equipment, cue_fa = excluded.cue_fa, cue_en = excluded.cue_en;`
+    `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, cue_en, source, source_id, category) VALUES (${[e.id, e.name_fa, e.name_en, e.muscle_primary, e.is_lower, e.equipment, e.cue_fa, e.cue_en || null, "seed", e.id, "strength"].map(q).join(", ")})` +
+      ` ON CONFLICT (id) DO UPDATE SET name_fa = excluded.name_fa, name_en = excluded.name_en, muscle_primary = excluded.muscle_primary, is_lower = excluded.is_lower, equipment = excluded.equipment, cue_fa = excluded.cue_fa, cue_en = excluded.cue_en, category = excluded.category;`
   );
 }
 for (const p of data.programs) {

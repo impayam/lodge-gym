@@ -1,5 +1,7 @@
 // Domain types shared by the Worker and the PWA.
 
+import type { Category } from "./category";
+
 export type Unit = "lb" | "kg";
 export type WeekStart = "sat" | "sun" | "mon";
 export type Equipment = "barbell" | "dumbbell" | "cable" | "machine" | "bodyweight";
@@ -12,16 +14,38 @@ export interface Settings {
   timezone: string;
 }
 
+export type ExerciseSource = "seed" | "fedb" | "manual" | "custom";
+export type Pattern = "squat" | "hinge" | "lunge" | "h_push" | "v_push" | "h_pull" | "v_pull" | "isolation" | "core" | "carry";
+
+/** Image or animation of an exercise; library media lives in the private R2 bucket (served by /api/library/media). */
+export interface ExerciseMedia {
+  kind: "image" | "gif";
+  r2_key?: string;
+  url?: string;
+}
+
 export interface Exercise {
   id: string;
   name_fa: string;
   name_en: string;
+  /** Canonical muscle key (worker/lib/muscles.ts); rows written before SPEC-v2 may hold a report group key. */
   muscle_primary: string;
   is_lower: boolean;
   equipment: Equipment;
   cue_fa: string;
   /** English form cue (SPEC-v2 M6). */
   cue_en: string | null;
+  /** SPEC-v2 §7.2 library columns. */
+  source: ExerciseSource;
+  muscles_secondary: string[];
+  pattern: Pattern | null;
+  mechanic: "compound" | "isolation" | null;
+  level: "beginner" | "intermediate" | "expert" | null;
+  media: ExerciseMedia[];
+  instructions_en: string[];
+  archived_at: string | null;
+  /** SPEC-v2 §7.4: only strength, powerlifting and olympic weightlifting count toward muscle volume. */
+  category: Category | null;
 }
 
 export interface DayExercise {
@@ -65,6 +89,10 @@ export interface SetEntry {
   done: boolean;
   /** Reps in reserve: 0, 1, 2, or 3 meaning "3+". Optional. */
   rir?: number | null;
+  /** Exercise added during the session, not in the day's plan (SPEC-v2 §7.3). */
+  is_extra?: boolean;
+  /** Display order of an extra exercise inside the session. */
+  position?: number | null;
   updated_at: string;
 }
 

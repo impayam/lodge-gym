@@ -19,6 +19,7 @@ import {
   type Settings,
   type WorkoutSession,
 } from "./lib/types";
+import { isCategory } from "./lib/category";
 import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
@@ -90,22 +91,67 @@ export async function readProgram(env: Env): Promise<{ program: Program; other_d
   };
 }
 
-export async function readExercises(env: Env): Promise<Exercise[]> {
-  const rows = await env.DB.prepare("SELECT * FROM exercises ORDER BY id").all<Record<string, string | number | null>>();
-  return rows.results.map((r) => ({
+const jsonList = <T>(raw: unknown): T[] => {
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return Array.isArray(v) ? (v as T[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+export function mapExercise(r: Record<string, unknown>): Exercise {
+  return {
     id: r.id as string,
-    name_fa: r.name_fa as string,
+    name_fa: (r.name_fa as string | null) ?? "",
     name_en: r.name_en as string,
     muscle_primary: r.muscle_primary as string,
     is_lower: r.is_lower === 1,
     equipment: r.equipment as Exercise["equipment"],
     cue_fa: (r.cue_fa as string | null) ?? "",
-    cue_en: (r.cue_en as string | null | undefined) ?? null,
-  }));
+    cue_en: (r.cue_en as string | null | undefined) || null,
+    source: ((r.source as string | null) ?? "seed") as Exercise["source"],
+    muscles_secondary: jsonList<string>(r.muscles_secondary),
+    pattern: (r.pattern as Exercise["pattern"]) ?? null,
+    mechanic: (r.mechanic as Exercise["mechanic"]) ?? null,
+    level: (r.level as Exercise["level"]) ?? null,
+    media: jsonList<Exercise["media"][number]>(r.media),
+    instructions_en: jsonList<string>(r.instructions_en),
+    archived_at: (r.archived_at as string | null) ?? null,
+    category: isCategory(r.category) ? r.category : null,
+  };
+}
+
+/**
+ * Exercises the app needs offline without the library list: every exercise in a program, every exercise with
+ * logged sets (history, reports, extra exercises) and every custom exercise. The full library is GET /api/exercises.
+ */
+export async function readExercises(env: Env): Promise<Exercise[]> {
+  const rows = await env.DB.prepare(
+    `SELECT * FROM exercises
+     WHERE id IN (SELECT exercise_id FROM day_exercises) OR id IN (SELECT DISTINCT exercise_id FROM set_entries) OR source IN ('seed', 'custom')
+     ORDER BY id`
+  ).all<Record<string, unknown>>();
+  return rows.results.map(mapExercise);
 }
 
 type SessionRow = Omit<WorkoutSession, "sets">;
-type SetRow = Omit<SetEntry, "done" | "rir"> & { session_id: string; done: number; rir: number | null };
+type SetRow = Omit<SetEntry, "done" | "rir" | "is_extra"> & { session_id: string; done: number; rir: number | null; is_extra: number };
+
+const mapSet = (r: SetRow): SetEntry => ({
+  id: r.id,
+  exercise_id: r.exercise_id,
+  set_index: r.set_index,
+  weight: r.weight,
+  reps: r.reps,
+  seconds: r.seconds,
+  done: r.done === 1,
+  rir: r.rir ?? null,
+  is_extra: r.is_extra === 1,
+  position: r.position ?? null,
+  updated_at: r.updated_at,
+});
 
 export async function readSessions(env: Env, from: string, to: string): Promise<WorkoutSession[]> {
   const [sessions, sets] = await env.DB.batch<SessionRow | SetRow>([
@@ -118,17 +164,7 @@ export async function readSessions(env: Env, from: string, to: string): Promise<
   const bySession = new Map<string, SetEntry[]>();
   for (const r of sets.results as SetRow[]) {
     const list = bySession.get(r.session_id) ?? [];
-    list.push({
-      id: r.id,
-      exercise_id: r.exercise_id,
-      set_index: r.set_index,
-      weight: r.weight,
-      reps: r.reps,
-      seconds: r.seconds,
-      done: r.done === 1,
-      rir: r.rir ?? null,
-      updated_at: r.updated_at,
-    });
+    list.push(mapSet(r));
     bySession.set(r.session_id, list);
   }
   return (sessions.results as SessionRow[]).map((s) => ({ ...s, sets: bySession.get(s.id) ?? [] }));
@@ -149,6 +185,8 @@ const setSchema = z.object({
   seconds: intOrNull,
   rir: z.number().int().min(0).max(3).nullable().optional(),
   done: z.boolean(),
+  is_extra: z.boolean().optional(),
+  position: z.number().int().min(0).max(99).nullable().optional(),
   updated_at: iso,
 });
 
@@ -261,12 +299,13 @@ dataRoutes.put("/sessions/:id", async (c) => {
     ...doc.sets.map((s) =>
       db
         .prepare(
-          `INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, rir, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, rir, is_extra, position, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET exercise_id = excluded.exercise_id, set_index = excluded.set_index, weight = excluded.weight,
-             reps = excluded.reps, seconds = excluded.seconds, done = excluded.done, rir = excluded.rir, updated_at = excluded.updated_at`
+             reps = excluded.reps, seconds = excluded.seconds, done = excluded.done, rir = excluded.rir, is_extra = excluded.is_extra,
+             position = excluded.position, updated_at = excluded.updated_at`
         )
-        .bind(s.id, doc.id, s.exercise_id, s.set_index, s.weight, s.reps, s.seconds, s.done ? 1 : 0, s.rir ?? null, s.updated_at)
+        .bind(s.id, doc.id, s.exercise_id, s.set_index, s.weight, s.reps, s.seconds, s.done ? 1 : 0, s.rir ?? null, s.is_extra ? 1 : 0, s.position ?? null, s.updated_at)
     ),
   ];
   await db.batch(stmts);
@@ -370,17 +409,7 @@ async function readSessionsById(env: Env, ids: string[]): Promise<WorkoutSession
     const sets = await env.DB.prepare("SELECT * FROM set_entries WHERE session_id = ? ORDER BY exercise_id, set_index").bind(sid).all<SetRow>();
     out.push({
       ...s,
-      sets: sets.results.map((r) => ({
-        id: r.id,
-        exercise_id: r.exercise_id,
-        set_index: r.set_index,
-        weight: r.weight,
-        reps: r.reps,
-        seconds: r.seconds,
-        done: r.done === 1,
-        rir: r.rir ?? null,
-        updated_at: r.updated_at,
-      })),
+      sets: sets.results.map(mapSet),
     });
   }
   return out;

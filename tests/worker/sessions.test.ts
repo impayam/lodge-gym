@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Bootstrap, WorkoutSession } from "../../worker/lib/types";
+import { groupOf } from "../../worker/lib/muscles";
 import { ulid } from "../../worker/lib/ulid";
 import { Client, resetAuth, setupOwner } from "./helpers";
 
@@ -72,7 +73,12 @@ describe("bootstrap", () => {
     const b = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
     const ex = Object.fromEntries(b.exercises.map((e) => [e.id, e]));
     const totals: Record<string, number> = {};
-    for (const d of b.program.days) for (const de of d.exercises) totals[ex[de.exercise_id].muscle_primary] = (totals[ex[de.exercise_id].muscle_primary] ?? 0) + de.sets;
+    // Seeded exercises use the finer muscle keys (approved 2026-10-13); they roll up into the SPEC §10 groups.
+    for (const d of b.program.days)
+      for (const de of d.exercises) {
+        const g = groupOf(ex[de.exercise_id].muscle_primary)!;
+        totals[g] = (totals[g] ?? 0) + de.sets;
+      }
     expect(totals).toEqual({ chest: 13, back: 13, quads: 10, hamstrings_glutes: 9, shoulders: 9, rear_delts: 6, calves: 6, core: 6, biceps: 3, triceps: 3 });
   });
 });

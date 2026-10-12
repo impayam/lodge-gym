@@ -48,7 +48,7 @@ export function Program() {
                     </small>
                   </div>
                   <a href={ytLink(e.name_en)} target="_blank" rel="noopener noreferrer">
-                    Form video ↗
+                    Watch form video ↗
                   </a>
                 </div>
               );

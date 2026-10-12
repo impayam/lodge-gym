@@ -42,4 +42,5 @@ export const plural = (n: number, one: string, many = one + "s") => `${fmtNum(n)
 
 export { fmtNum };
 
-export const ytLink = (en: string) => "https://www.youtube.com/results?search_query=" + encodeURIComponent(`${en} proper form`);
+/** YouTube search for the exercise's form (SPEC-v2 §7.1): English name + " form", built at render time. */
+export const ytLink = (en: string) => "https://www.youtube.com/results?search_query=" + encodeURIComponent(`${en} form`);

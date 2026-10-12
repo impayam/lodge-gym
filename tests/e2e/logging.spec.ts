@@ -21,7 +21,7 @@ test("logs a full session in airplane mode; after reconnecting it is in D1 exact
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.locator('[data-ex="bench"]').getByText("Barbell Bench Press")).toBeVisible();
   await expect(page.getByText("پرس سینه هالتر")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Form video ↗" }).first()).toHaveAttribute("href", /search_query=Barbell%20Bench%20Press%20proper%20form/);
+  await expect(page.getByRole("link", { name: "Watch form video ↗" }).first()).toHaveAttribute("href", "https://www.youtube.com/results?search_query=Barbell%20Bench%20Press%20form");
 
   // Persian digits are still accepted in the weight field; then one tap per set.
   await page.getByTestId("w-bench-0").locator("input").fill("۱۳۵");

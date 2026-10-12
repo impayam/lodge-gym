@@ -8,6 +8,7 @@ import {
   monthRange,
   monthlyReport,
   muscleTargets,
+  volumePerMuscle,
   progressReport,
   setsCsv,
   shiftMonth,
@@ -28,8 +29,9 @@ describe("building blocks", () => {
     expect(convertWeight(50, "lb", "lb")).toBe(50);
     expect(convertWeight(50, null, "kg")).toBe(50);
   });
-  it("targets from the program match SPEC §10", () => {
-    expect(muscleTargets(reportData())).toEqual({ chest: 13, back: 13, quads: 10, hamstrings_glutes: 9, shoulders: 9, rear_delts: 6, calves: 6, core: 6, biceps: 3, triceps: 3 });
+  it("targets are the program's fractional volume per group (SPEC-v2 §7.4)", () => {
+    // Primary 1 + each secondary group 0.5 per planned set, e.g. back: 13 direct + pulls and deadlift secondaries = 17.5.
+    expect(muscleTargets(reportData())).toEqual({ chest: 13, back: 17.5, quads: 11.5, hamstrings_glutes: 14, shoulders: 15.5, rear_delts: 11, calves: 6, core: 6, biceps: 9.5, triceps: 9.5 });
     expect(mainLifts(reportData())).toEqual(["bench", "squat", "cs_row", "deadlift", "ohp"]);
   });
   it("Gregorian months", () => {
@@ -66,9 +68,25 @@ describe("weekly report", () => {
     });
   });
 
-  it("sets per muscle group vs targets (primary muscle only)", () => {
-    expect(Object.fromEntries(r.muscles.map((m) => [m.muscle, [m.sets, m.target]]))).toEqual({
-      chest: [13, 13], back: [13, 13], quads: [10, 10], hamstrings_glutes: [3, 9], shoulders: [3, 9], rear_delts: [3, 6], calves: [3, 6], core: [3, 6], biceps: [3, 3], triceps: [3, 3],
+  it("sets per muscle group vs targets: direct (primary) and fractional (secondary 0.5), SPEC-v2 §7.4", () => {
+    // Hand-computed from the week's sets and seed/library/seed-matches.json: [direct, fractional, target, status].
+    expect(Object.fromEntries(r.muscles.map((m) => [m.muscle, [m.sets, m.fractional, m.target, m.status]]))).toEqual({
+      chest: [13, 13, 13, "on"],
+      back: [13, 14.5, 17.5, "on"],
+      quads: [10, 10, 11.5, "on"],
+      hamstrings_glutes: [3, 8, 14, "under"],
+      shoulders: [3, 9.5, 15.5, "under"],
+      rear_delts: [3, 8, 11, "under"],
+      calves: [3, 3, 6, "under"],
+      core: [3, 3, 6, "under"],
+      biceps: [3, 9.5, 9.5, "on"],
+      triceps: [3, 8, 9.5, "on"],
+      traps: [0, 0, null, "none"],
+      forearms: [0, 3.5, null, "untracked"],
+      lower_back: [0, 3.5, null, "untracked"],
+      adductors: [0, 1.5, null, "untracked"],
+      abductors: [0, 0, null, "none"],
+      neck: [0, 0, null, "none"],
     });
   });
 
@@ -188,9 +206,38 @@ describe("progress page", () => {
 
   it("muscle balance for this week", () => {
     expect(p.balance.week).toEqual({ start: "2026-09-21", end: "2026-09-27" });
+    // The 80 % / 120 % thresholds apply to the fractional number (SPEC-v2 §7.4).
     expect(Object.fromEntries(p.balance.muscles.map((m) => [m.muscle, m.status]))).toEqual({
       chest: "on", back: "on", quads: "on", hamstrings_glutes: "under", shoulders: "under", rear_delts: "under", calves: "under", core: "under", biceps: "on", triceps: "on",
+      traps: "none", forearms: "untracked", lower_back: "untracked", adductors: "untracked", abductors: "none", neck: "none",
     });
+  });
+});
+
+describe("only strength work counts toward volume (SPEC-v2 §7.4, decided 2026-10-12)", () => {
+  // Face pull marked as stretching: its 3 done sets this week (40 lb × 15) and its 6 planned sets drop out.
+  const d = reportData();
+  const asStretching = { ...d, exercises: d.exercises.map((e) => (e.id === "facepull" ? { ...e, category: "stretching" as const } : e)) };
+  const row = (r: ReturnType<typeof weeklyReport>, m: string) => r.muscles.find((x) => x.muscle === m)!;
+
+  it("sets, fractional sets and targets", () => {
+    const r = weeklyReport(asStretching, "2026-09-23");
+    // Rear delts: face pull was the only direct work (3) and 6 of the 11 target; the rows' 0.5 stays: 8 − 3 = 5 of 11 − 6 = 5.
+    expect(row(r, "rear_delts")).toMatchObject({ sets: 0, fractional: 5, target: 5, status: "on" });
+    // Back: face pull's back_upper secondary was 3 × 0.5 done and 6 × 0.5 planned: 14.5 − 1.5 of 17.5 − 3.
+    expect(row(r, "back")).toMatchObject({ sets: 13, fractional: 13, target: 14.5, status: "on" });
+    expect(row(r, "chest")).toMatchObject({ sets: 13, fractional: 13, target: 13 });
+  });
+
+  it("volume (weight × reps) per muscle", () => {
+    const week = d.sessions.filter((s) => s.status === "done" && s.local_date >= "2026-09-21" && s.local_date <= "2026-09-27");
+    expect(volumePerMuscle(week, new Map(d.exercises.map((e) => [e.id, e])), "lb").rear_delts).toBe(1800);
+    expect(volumePerMuscle(week, new Map(asStretching.exercises.map((e) => [e.id, e])), "lb").rear_delts).toBe(0);
+  });
+
+  it("an exercise without a category never counts", () => {
+    const none = { ...d, exercises: d.exercises.map((e) => (e.id === "facepull" ? { ...e, category: null } : e)) };
+    expect(row(weeklyReport(none, "2026-09-23"), "rear_delts")).toMatchObject({ sets: 0, fractional: 5 });
   });
 });
 
