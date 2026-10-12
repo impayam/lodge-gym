@@ -1,8 +1,9 @@
-// «مرور هفتگی»: the latest weekly review Claude wrote into D1 (table weekly_reviews). Read-only in the app.
+// Weekly review: the latest review Claude wrote into D1 (table weekly_reviews). Read-only in the app.
+// The review text stays in Persian (SPEC-v2 M6), so its content is rendered right-to-left inside the English UI.
 
 import { useState } from "preact/hooks";
 import { addDays } from "../../../worker/lib/time";
-import { jalaliShort } from "../format";
+import { dayMonth } from "../format";
 import { useStore } from "../store";
 
 export function WeeklyReviewCard() {
@@ -13,18 +14,20 @@ export function WeeklyReviewCard() {
   return (
     <section class="card review stack" data-testid="weekly-review">
       <div class="kv">
-        <span class="eyebrow">مرور هفتگی</span>
+        <span class="eyebrow">Weekly review</span>
         <span class="muted" style={{ fontSize: "12px" }}>
-          هفته‌ی {jalaliShort(review.week_start)} تا {jalaliShort(addDays(review.week_start, 6))}
+          Week of {dayMonth(review.week_start)} – {dayMonth(addDays(review.week_start, 6))}
         </span>
       </div>
-      <p class={`summary${long && !open ? " clamp" : ""}`}>{review.summary_fa}</p>
+      <p class={`summary${long && !open ? " clamp" : ""}`} dir="rtl" lang="fa">
+        {review.summary_fa}
+      </p>
       {!long || open ? (
         <>
           {review.highlights.length ? (
             <div>
-              <b class="rv-title">نکته‌های خوب</b>
-              <ul class="rv-list">
+              <b class="rv-title">What went well</b>
+              <ul class="rv-list" dir="rtl" lang="fa">
                 {review.highlights.map((h) => (
                   <li>
                     <span aria-hidden="true">✓</span> {h}
@@ -35,8 +38,8 @@ export function WeeklyReviewCard() {
           ) : null}
           {review.suggestions.length ? (
             <div>
-              <b class="rv-title">پیشنهادها برای هفته‌ی بعد</b>
-              <ul class="rv-list">
+              <b class="rv-title">Suggestions for next week</b>
+              <ul class="rv-list" dir="rtl" lang="fa">
                 {review.suggestions.map((h) => (
                   <li>
                     <span aria-hidden="true">←</span> {h}
@@ -49,7 +52,7 @@ export function WeeklyReviewCard() {
       ) : null}
       {long ? (
         <button type="button" class="linkbtn" onClick={() => setOpen(!open)}>
-          {open ? "بستن" : "ادامه"}
+          {open ? "Show less" : "Show more"}
         </button>
       ) : null}
     </section>

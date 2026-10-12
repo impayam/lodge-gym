@@ -47,7 +47,7 @@ describe("bootstrap", () => {
     const res = await client.fetch("/api/bootstrap");
     expect(res.status).toBe(200);
     const b = (await res.json()) as Bootstrap;
-    expect(b.settings).toEqual({ unit: "lb", week_start: "mon", month_calendar: "gregorian", relock_minutes: 0, timezone: "America/Denver" });
+    expect(b.settings).toEqual({ unit: "lb", week_start: "mon", relock_minutes: 0, timezone: "America/Denver" });
     expect(b.program.days.map((d) => d.id)).toEqual(["D1", "D2", "D3", "D4"]);
     expect(b.program.days.map((d) => d.name_fa)).toEqual(["روز ۱ – سینه", "روز ۲ – پا", "روز ۳ – پشت", "روز ۴ – ددلیفت"]);
     expect(b.program.days.map((d) => d.exercises.length)).toEqual([6, 6, 6, 7]);
@@ -61,6 +61,9 @@ describe("bootstrap", () => {
     const ex = Object.fromEntries(b.exercises.map((e) => [e.id, e]));
     for (const legacy of ["row", "lunge", "dips", "rope_pushdown"]) expect(ex[legacy]).toBeTruthy();
     expect(ex.bench.cue_fa).toContain("حرکت اصلی امروز");
+    // SPEC-v2 M6: English form cues for the seeded exercises (Triceps Rope Pushdown has no cue in either language).
+    expect(ex.bench.cue_en).toBe("Main lift today. Shoulder blades squeezed and down. Lower the bar to your chest over 2–3 seconds, pause briefly, then press.");
+    expect(b.exercises.filter((e) => !e.cue_en).map((e) => e.id)).toEqual(["rope_pushdown"]);
     expect(ex.bench).toMatchObject({ equipment: "barbell", is_lower: false, muscle_primary: "chest" });
     expect(ex.squat.is_lower).toBe(true);
   });
@@ -125,11 +128,11 @@ describe("PUT /sessions/:id", () => {
     expect(by.plank).toMatchObject({ weight: null, seconds: 45 });
   });
 
-  it("validates input with Persian errors", async () => {
+  it("validates input with English errors", async () => {
     const s = makeSession();
     const bad = await client.fetch(`/api/sessions/${s.id}`, { method: "PUT", json: { ...s, status: "paused" } });
     expect(bad.status).toBe(400);
-    expect(((await bad.json()) as { error: { message_fa: string } }).error.message_fa).toMatch(/[؀-ۿ]/);
+    expect(((await bad.json()) as { error: { message_fa: string } }).error.message_fa).toMatch(/^The request data is not valid/);
     expect((await client.fetch(`/api/sessions/OTHER`, { method: "PUT", json: s })).status).toBe(400);
     expect((await put({ ...s, program_day_id: "D9" })).status).toBe(400);
     expect((await put({ ...s, sets: [{ ...s.sets[0], exercise_id: "nope" }] })).status).toBe(400);
@@ -214,9 +217,22 @@ describe("settings", () => {
   it("updates and validates settings", async () => {
     const res = await client.fetch("/api/settings", { method: "PUT", json: { unit: "kg", week_start: "sat", relock_minutes: 5 } });
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { settings: unknown }).settings).toEqual({ unit: "kg", week_start: "sat", month_calendar: "gregorian", relock_minutes: 5, timezone: "America/Denver" });
+    expect(((await res.json()) as { settings: unknown }).settings).toEqual({ unit: "kg", week_start: "sat", relock_minutes: 5, timezone: "America/Denver" });
     expect((await client.fetch("/api/settings", { method: "PUT", json: { timezone: "Mars/Base" } })).status).toBe(400);
     expect((await client.fetch("/api/settings", { method: "PUT", json: { unit: "st" } })).status).toBe(400);
     await client.fetch("/api/settings", { method: "PUT", json: { unit: "lb", week_start: "mon", relock_minutes: 0 } });
+  });
+});
+
+describe("migration 0004 (SPEC-v2 §7.2)", () => {
+  it("backfills the seeded exercises as source 'seed' with their own ids, and set entries as planned", async () => {
+    const rows = await env.DB.prepare("SELECT id, source, source_id FROM exercises").all<{ id: string; source: string; source_id: string }>();
+    expect(rows.results).toHaveLength(27);
+    expect(rows.results.every((r) => r.source === "seed" && r.source_id === r.id)).toBe(true);
+    const cols = await env.DB.prepare("SELECT name, dflt_value, \"notnull\" AS nn FROM pragma_table_info('set_entries') WHERE name IN ('is_extra', 'position') ORDER BY name").all();
+    expect(cols.results).toEqual([
+      { name: "is_extra", dflt_value: "0", nn: 1 },
+      { name: "position", dflt_value: null, nn: 0 },
+    ]);
   });
 });

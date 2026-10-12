@@ -5,7 +5,6 @@ import { z } from "zod";
 import { randomToken, sha256Hex } from "./crypto";
 import type { AppBindings, Env } from "./env";
 import { fail, nowISO, readJson } from "./http";
-import { faNum } from "./lib/digits";
 import { matchSession } from "./lib/matching";
 import { parseShortcutsPayload, type TimedValue } from "./lib/shortcuts";
 import { sessionEnd, sessionWatchStats } from "./lib/watchstats";
@@ -42,7 +41,7 @@ tokenRoutes.get("/", async (c) => {
 
 tokenRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "شناسه‌ی توکن معتبر نیست.");
+  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "The token id is not valid.");
   await c.env.DB.prepare("UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(nowISO(), id).run();
   return c.json({ ok: true });
 });
@@ -52,10 +51,10 @@ tokenRoutes.delete("/:id", async (c) => {
 export const requireHealthToken: MiddlewareHandler<AppBindings> = async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
   const m = header.trim().match(/^Bearer\s+(\S+)$/i);
-  if (!m) return fail(c, 401, "missing_token", "توکن ارسال نشده است. هدر Authorization را با Bearer و توکن تنظیم کن.");
+  if (!m) return fail(c, 401, "missing_token", "No token sent. Set the Authorization header to Bearer and the token.");
   const hash = await sha256Hex(m[1]);
   const row = await c.env.DB.prepare("SELECT id, scope FROM api_tokens WHERE token_hash = ? AND revoked_at IS NULL").bind(hash).first<{ id: string; scope: string }>();
-  if (!row || !row.scope.split(/[ ,]/).includes(HEALTH_SCOPE)) return fail(c, 401, "bad_token", "توکن معتبر نیست یا باطل شده است.");
+  if (!row || !row.scope.split(/[ ,]/).includes(HEALTH_SCOPE)) return fail(c, 401, "bad_token", "The token is not valid or has been revoked.");
   await c.env.DB.prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?").bind(nowISO(), row.id).run();
   await next();
 };
@@ -133,12 +132,12 @@ healthRoutes.get("/status", async (c) => {
 
 healthRoutes.put("/workouts/:id/match", async (c) => {
   const id = c.req.param("id");
-  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "شناسه معتبر نیست.");
+  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "The id is not valid.");
   const body = await readJson(c, z.object({ session_id: z.string().regex(ID_RE) }));
   const session = await c.env.DB.prepare("SELECT id FROM workout_sessions WHERE id = ?").bind(body.session_id).first();
-  if (!session) return fail(c, 404, "session_not_found", "جلسه پیدا نشد. اگر جلسه را آفلاین ساخته‌ای، اول بگذار همگام شود.");
+  if (!session) return fail(c, 404, "session_not_found", "Session not found. If you created it offline, let it sync first.");
   const res = await c.env.DB.prepare("UPDATE health_workouts SET matched_session_id = ? WHERE id = ?").bind(body.session_id, id).run();
-  if (!res.meta.changes) return fail(c, 404, "not_found", "تمرین ساعت پیدا نشد.");
+  if (!res.meta.changes) return fail(c, 404, "not_found", "Watch workout not found.");
   const row = await c.env.DB.prepare(`SELECT ${HEALTH_COLUMNS} FROM health_workouts hw WHERE hw.id = ?`).bind(id).first<HealthRow>();
   return c.json({ ok: true, workout: row });
 });
@@ -237,7 +236,7 @@ export async function ingestRaw(c: import("hono").Context<AppBindings>) {
   try {
     payload = await readRawBody(c.req.raw);
   } catch {
-    return fail(c, 413, "too_large", "داده‌ی ارسالی خیلی بزرگ است.");
+    return fail(c, 413, "too_large", "The payload is too large.");
   }
   const settings = await readSettings(c.env);
   const parsed = parseShortcutsPayload(payload, settings.timezone);
@@ -308,12 +307,13 @@ export async function ingestRaw(c: import("hono").Context<AppBindings>) {
   ]);
 
   const parts: string[] = [];
-  if (sessionsUpdated) parts.push(`داده‌ی ساعت برای ${faNum(sessionsUpdated)} جلسه ثبت شد`);
-  if (parsed.workouts.length) parts.push(`${faNum(parsed.workouts.length)} تمرین دریافت شد، ${faNum(matched)} مورد به جلسه وصل شد`);
+  const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
+  if (sessionsUpdated) parts.push(`watch data saved for ${n(sessionsUpdated, "session")}`);
+  if (parsed.workouts.length) parts.push(`${n(parsed.workouts.length, "workout")} received, ${matched} matched to a session`);
   const message = parts.length
-    ? `Lodge Gym: ${parts.join("؛ ")}.`
+    ? `Lodge Gym: ${parts.join("; ")}.`
     : parsed.hr_samples || parsed.energy_samples
-      ? "Lodge Gym: داده رسید ولی در این بازه جلسه‌ای در برنامه ثبت نشده است."
-      : "Lodge Gym: داده رسید ولی نمونه‌ای در آن پیدا نشد.";
+      ? "Lodge Gym: data received, but no session is logged in this time window."
+      : "Lodge Gym: data received, but it contained no samples.";
   return c.json({ ok: true, ...summary, message });
 }

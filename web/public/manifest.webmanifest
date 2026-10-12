@@ -1,9 +1,9 @@
 {
   "name": "Lodge Gym",
   "short_name": "Lodge Gym",
-  "description": "دفترچه‌ی باشگاه",
-  "lang": "fa",
-  "dir": "rtl",
+  "description": "Personal workout log",
+  "lang": "en",
+  "dir": "ltr",
   "id": "/",
   "start_url": "/",
   "scope": "/",

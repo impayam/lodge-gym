@@ -1,11 +1,11 @@
-// Settings → «Apple Watch»: shortcut token, step-by-step Shortcuts instructions, last received data, manual attach.
+// Settings → Apple Watch: shortcut token, step-by-step Shortcuts instructions, last received data, manual attach.
 
 import { useEffect, useState } from "preact/hooks";
-import { faNum, toPersianDigits } from "../../../worker/lib/digits";
+import { fmtNum } from "../../../worker/lib/digits";
 import { addDays, localDate } from "../../../worker/lib/time";
 import type { HealthWorkout, WorkoutSession } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
-import { faHM, greg, jalali } from "../format";
+import { dateLong, dateShort, hm } from "../format";
 import { dayInfo, sortedSessions } from "../model";
 import { navigate, upsertWatch, useStore } from "../store";
 
@@ -21,38 +21,26 @@ interface Status {
   workouts: HealthWorkout[];
 }
 
-const TYPE_FA: Record<string, string> = {
-  "Traditional Strength Training": "تمرین قدرتی",
-  "Functional Strength Training": "تمرین قدرتی عملکردی",
-  "High Intensity Interval Training": "HIIT",
-  "Core Training": "تمرین مرکز بدن",
-  Walking: "پیاده‌روی",
-  Running: "دویدن",
-  Cycling: "دوچرخه‌سواری",
-  Hiking: "کوه‌پیمایی",
-  Cooldown: "سردکردن",
-  Yoga: "یوگا",
-};
-export const workoutTypeFa = (t: string | null) => (t ? (TYPE_FA[t] ?? t) : "تمرین");
+export const workoutTypeName = (t: string | null) => t || "Workout";
 
-const WARNING_FA: Record<string, string> = {
-  hr_time_count_mismatch: "تعداد مقدارهای ضربان با تعداد زمان‌هایشان یکی نبود.",
-  hr_without_time_assigned_to_single_workout: "زمان نمونه‌های ضربان نرسید؛ همه به تنها تمرین نسبت داده شد.",
-  hr_without_time_ignored: "زمان نمونه‌های ضربان نرسید، پس ضربان حساب نشد. فیلد hr_time را بررسی کن.",
-  energy_time_count_mismatch: "تعداد مقدارهای انرژی با تعداد زمان‌هایشان یکی نبود.",
-  energy_without_time_ignored: "زمان نمونه‌های انرژی نرسید، پس کالری حساب نشد. فیلد energy_time را بررسی کن.",
+const WARNING_TEXT: Record<string, string> = {
+  hr_time_count_mismatch: "The number of heart-rate values did not match the number of their times.",
+  hr_without_time_assigned_to_single_workout: "Heart-rate sample times were missing; all samples were assigned to the only workout.",
+  hr_without_time_ignored: "Heart-rate sample times were missing, so heart rate was not counted. Check the hr_time field.",
+  energy_time_count_mismatch: "The number of energy values did not match the number of their times.",
+  energy_without_time_ignored: "Energy sample times were missing, so calories were not counted. Check the energy_time field.",
 };
-const warningFa = (w: string) => WARNING_FA[w] ?? (/^workout_\d+_no_start$/.test(w) ? "تاریخ شروع یکی از تمرین‌ها خوانده نشد." : w);
+const warningText = (w: string) => WARNING_TEXT[w] ?? (/^workout_\d+_no_start$/.test(w) ? "The start date of one of the workouts could not be read." : w);
 
 /** Duration (from the session when the data belongs to one), active kcal and HR. */
 export function WatchStats({ w, session }: { w: HealthWorkout; session?: WorkoutSession | null }) {
   const parts: string[] = [];
   let dur = w.duration_sec;
   if (w.kind === "session" && session) dur = session.ended_at ? Math.round((Date.parse(session.ended_at) - Date.parse(session.started_at)) / 1000) : null;
-  if (dur != null) parts.push(`${faNum(Math.round(dur / 60))} دقیقه`);
-  if (w.active_kcal != null) parts.push(`${faNum(Math.round(w.active_kcal))} کیلوکالری فعال`);
-  if (w.hr_avg != null) parts.push(`ضربان میانگین ${faNum(Math.round(w.hr_avg))}${w.hr_max != null ? ` · بیشینه ${faNum(Math.round(w.hr_max))}` : ""}`);
-  return <span class="num">{parts.length ? parts.join(" · ") : "بدون داده"}</span>;
+  if (dur != null) parts.push(`${fmtNum(Math.round(dur / 60))} min`);
+  if (w.active_kcal != null) parts.push(`${fmtNum(Math.round(w.active_kcal))} active kcal`);
+  if (w.hr_avg != null) parts.push(`avg HR ${fmtNum(Math.round(w.hr_avg))}${w.hr_max != null ? ` · max ${fmtNum(Math.round(w.hr_max))}` : ""}`);
+  return <span class="num">{parts.length ? parts.join(" · ") : "No data"}</span>;
 }
 
 async function copy(text: string): Promise<boolean> {
@@ -70,13 +58,13 @@ function CopyField({ value, label, testId }: { value: string; label: string; tes
     <div class="field">
       <span class="lbl">{label}</span>
       <div class="copyrow">
-        <input class="ltr" readOnly value={value} data-testid={testId} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
+        <input readOnly value={value} data-testid={testId} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
         <button
           type="button"
           class="btn btn-ghost btn-small"
-          onClick={async () => setDone((await copy(value)) ? "کپی شد" : "انتخاب کن و کپی کن")}
+          onClick={async () => setDone((await copy(value)) ? "Copied" : "Select and copy")}
         >
-          {done || "کپی"}
+          {done || "Copy"}
         </button>
       </div>
     </div>
@@ -157,11 +145,11 @@ export function Watch() {
   return (
     <>
       <button type="button" class="linkbtn" onClick={() => navigate("settings")}>
-        → بازگشت به تنظیمات
+        ← Back to Settings
       </button>
       <h2>Apple Watch</h2>
       <p class="why" style={{ marginTop: 0 }}>
-        برنامه‌ی وب نمی‌تواند مستقیم از Apple Health بخواند. یک میان‌بر (Shortcut) با سه کار، بعد از هر تمرین ساعت، نمونه‌های ضربان و کالری فعال را برای این برنامه می‌فرستد و محاسبه‌ها روی سرور انجام می‌شود.
+        A web app can't read Apple Health directly. A shortcut with three actions sends the heart-rate and active-energy samples to this app after each watch workout, and the server does the math.
       </p>
       {err ? (
         <div class="banner" role="alert">
@@ -169,12 +157,12 @@ export function Watch() {
         </div>
       ) : null}
 
-      <h2>۱. توکن میان‌بر</h2>
+      <h2>1. Shortcut token</h2>
       <div class="card stack">
         {fresh ? (
           <>
-            <CopyField value={fresh} label="توکن تازه (فقط همین یک بار نمایش داده می‌شود)" testId="fresh-token" />
-            <CopyField value={`Bearer ${fresh}`} label="مقدار کامل هدر Authorization" />
+            <CopyField value={fresh} label="New token (shown only this once)" testId="fresh-token" />
+            <CopyField value={`Bearer ${fresh}`} label="Full Authorization header value" />
           </>
         ) : null}
         {tokens?.length ? (
@@ -184,169 +172,164 @@ export function Watch() {
                 {t.label}
                 <br />
                 <small class="muted">
-                  ساخته‌شده {jalali(localDate(tz, t.created_at))} · آخرین استفاده {t.last_used_at ? `${jalali(localDate(tz, t.last_used_at))} ${faHM(t.last_used_at, tz)}` : "هنوز نه"}
+                  Created {dateShort(localDate(tz, t.created_at))} · last used {t.last_used_at ? `${dateShort(localDate(tz, t.last_used_at))} ${hm(t.last_used_at, tz)}` : "never"}
                 </small>
               </span>
               <button type="button" class="btn btn-danger btn-small" onClick={() => void revoke(t.id)}>
-                {armed === t.id ? "مطمئنی؟ باطل کن" : "باطل کردن"}
+                {armed === t.id ? "Sure? Revoke" : "Revoke"}
               </button>
             </div>
           ))
         ) : tokens ? (
-          <div class="why">هنوز توکنی نساخته‌ای.</div>
+          <div class="why">You haven't created a token yet.</div>
         ) : null}
         <button type="button" class="btn btn-primary btn-block" disabled={busy} onClick={() => void create()}>
-          ساختن توکن تازه
+          Create new token
         </button>
-        <CopyField value={url} label="آدرس (URL) برای Get Contents of URL" testId="health-url" />
+        <CopyField value={url} label="URL for Get Contents of URL" testId="health-url" />
       </div>
 
-      <h2>۲. ساختن میان‌بر «ثبت تمرین ساعت»</h2>
+      <h2>2. Build the “Log Watch Workout” shortcut</h2>
       <div class="card">
         <ol class="rules steps">
           <li>
-            اپ <b class="ltr">Shortcuts</b> را باز کن، در زبانه‌ی <b class="ltr">Shortcuts</b> دکمه‌ی <b>+</b> را بزن و نام میان‌بر را «ثبت تمرین ساعت» بگذار.
+            Open the <b>Shortcuts</b> app, tap <b>+</b> in the <b>Shortcuts</b> tab and name the shortcut “Log Watch Workout”.
           </li>
           <li>
-            <b class="ltr">Add Action</b> را بزن، <b class="ltr">Find Health Samples</b> را جستجو و اضافه کن. روی <b class="ltr">Type</b> بزن و <b class="ltr">Heart Rate</b> را انتخاب کن. بعد <b class="ltr">Add Filter</b>: <b class="ltr">Start Date</b>، <b class="ltr">is in the last</b>، <b class="ltr">6</b>، <b class="ltr">hours</b>.
+            Tap <b>Add Action</b>, search for <b>Find Health Samples</b> and add it. Tap <b>Type</b> and pick <b>Heart Rate</b>. Then <b>Add Filter</b>: <b>Start Date</b>, <b>is in the last</b>, <b>6</b>, <b>hours</b>.
           </li>
           <li>
-            دوباره <b class="ltr">Find Health Samples</b> اضافه کن: <b class="ltr">Type</b> = <b class="ltr">Active Energy</b> و همان فیلتر <b class="ltr">Start Date is in the last 6 hours</b>.
+            Add <b>Find Health Samples</b> again: <b>Type</b> = <b>Active Energy</b> and the same filter, <b>Start Date is in the last 6 hours</b>.
           </li>
           <li>
-            <b class="ltr">Get Contents of URL</b> را اضافه کن و آدرس بالا را در آن بگذار. روی فلش کنارش (<b class="ltr">Show More</b>) بزن:
+            Add <b>Get Contents of URL</b> and put the URL above in it. Tap the arrow next to it (<b>Show More</b>):
             <ul>
               <li>
-                <b class="ltr">Method</b>: <b class="ltr">POST</b>
+                <b>Method</b>: <b>POST</b>
               </li>
               <li>
-                <b class="ltr">Headers</b>، <b class="ltr">Add new header</b>: کلید <b class="ltr">Authorization</b>، مقدار «مقدار کامل هدر Authorization» که بالا کپی کردی (<span class="ltr">Bearer lgt_…</span>).
+                <b>Headers</b>, <b>Add new header</b>: key <b>Authorization</b>, value the “Full Authorization header value” you copied above (Bearer lgt_…).
               </li>
               <li>
-                <b class="ltr">Request Body</b>: <b class="ltr">JSON</b>. با <b class="ltr">Add new field</b> و نوع <b class="ltr">Text</b> این چهار فیلد را بساز. کلیدها دقیقاً همین‌ها باشند؛ برای مقدار، <b class="ltr">Select Variable</b> را بزن:
+                <b>Request Body</b>: <b>JSON</b>. With <b>Add new field</b> and type <b>Text</b>, create these four fields. The keys must be exactly these; for each value tap <b>Select Variable</b>:
                 <table class="fields">
                   <tbody>
                     <tr>
-                      <td class="ltr">hr</td>
+                      <td>hr</td>
                       <td>
-                        خروجی کار اول (ضربان). روی متغیر بزن و <b class="ltr">Value</b> را انتخاب کن.
+                        Output of the first action (heart rate). Tap the variable and pick <b>Value</b>.
                       </td>
                     </tr>
                     <tr>
-                      <td class="ltr">hr_time</td>
+                      <td>hr_time</td>
                       <td>
-                        خروجی کار اول، این بار <b class="ltr">Start Date</b>.
+                        Output of the first action, this time <b>Start Date</b>.
                       </td>
                     </tr>
                     <tr>
-                      <td class="ltr">energy</td>
+                      <td>energy</td>
                       <td>
-                        خروجی کار دوم (<span class="ltr">Active Energy</span>)، <b class="ltr">Value</b>.
+                        Output of the second action (Active Energy), <b>Value</b>.
                       </td>
                     </tr>
                     <tr>
-                      <td class="ltr">energy_time</td>
+                      <td>energy_time</td>
                       <td>
-                        خروجی کار دوم، <b class="ltr">Start Date</b>.
+                        Output of the second action, <b>Start Date</b>.
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </li>
               <li>
-                برای دو فیلد تاریخ (<span class="ltr">hr_time</span> و <span class="ltr">energy_time</span>) روی متغیر بزن، <b class="ltr">Date Format</b> را <b class="ltr">ISO 8601</b> بگذار و <b class="ltr">Include ISO 8601 Time</b> را روشن کن. اگر این گزینه نبود، مشکلی نیست؛ سرور قالب‌های دیگر (حتی تاریخ شمسی) را هم می‌خواند.
+                For the two date fields (hr_time and energy_time) tap the variable, set <b>Date Format</b> to <b>ISO 8601</b> and turn on <b>Include ISO 8601 Time</b>. If that option is missing, that's fine: the server reads other formats too.
               </li>
             </ul>
           </li>
           <li>
-            در انتخاب متغیر، هر دو خروجی ممکن است با نام <span class="ltr">Health Samples</span> دیده شوند؛ اولی ضربان است و دومی انرژی. اگر نام یک گزینه با این‌جا کمی فرق دارد، نزدیک‌ترین را انتخاب کن.
+            When picking variables, both outputs may show up as “Health Samples”: the first is heart rate, the second is energy. If an option's name differs a little from this page, pick the closest one.
           </li>
           <li>
-            <b class="ltr">Done</b> را بزن و یک بار میان‌بر را با ▶︎ اجرا کن. دسترسی به <b class="ltr">Health</b> را <b class="ltr">Allow</b> کن. بعد پایین همین صفحه «بررسی دوباره» را بزن؛ «آخرین دریافت» باید به‌روز شده باشد.
+            Tap <b>Done</b> and run the shortcut once with ▶︎. <b>Allow</b> access to <b>Health</b>. Then tap “Check again” at the bottom of this page; “Last received” should be updated.
           </li>
         </ol>
         <p class="why">
-          سرور برای هر جلسه‌ای که در این برنامه ثبت کرده‌ای، نمونه‌های بین شروع و پایان جلسه را جدا می‌کند و میانگین و بیشینه‌ی ضربان و جمع کالری فعال را حساب می‌کند. مدت تمرین همان مدت جلسه است. پس جلسه را در برنامه شروع و تمام کن.
+          For each session you logged in this app, the server takes the samples between its start and end and computes the average and maximum heart rate and the total active energy. The workout duration is the session's duration, so start and finish the session in the app.
         </p>
       </div>
 
-      <h2>۳. اجرای خودکار بعد از هر تمرین ساعت</h2>
+      <h2>3. Run it automatically after each watch workout</h2>
       <div class="card">
         <ol class="rules steps">
           <li>
-            در اپ <b class="ltr">Shortcuts</b> به زبانه‌ی <b class="ltr">Automation</b> برو و <b>+</b> (یا <b class="ltr">New Automation</b>) را بزن. در iOS قدیمی‌تر: <b class="ltr">Create Personal Automation</b>.
+            In the <b>Shortcuts</b> app go to the <b>Automation</b> tab and tap <b>+</b> (or <b>New Automation</b>). On older iOS: <b>Create Personal Automation</b>.
           </li>
           <li>
-            <b class="ltr">Apple Watch Workout</b> را انتخاب کن، <b class="ltr">Ends</b> را تیک بزن و در <b class="ltr">Workout</b> گزینه‌های <b class="ltr">Traditional Strength Training</b> و <b class="ltr">Functional Strength Training</b> (یا <b class="ltr">Any</b>) را انتخاب کن.
+            Pick <b>Apple Watch Workout</b>, check <b>Ends</b>, and under <b>Workout</b> pick <b>Traditional Strength Training</b> and <b>Functional Strength Training</b> (or <b>Any</b>).
           </li>
           <li>
-            <b class="ltr">Run Immediately</b> را انتخاب کن (در iOS ۱۶ و قدیمی‌تر: <b class="ltr">Ask Before Running</b> را خاموش کن). <b class="ltr">Notify When Run</b> اختیاری است.
+            Pick <b>Run Immediately</b> (on iOS 16 and older: turn off <b>Ask Before Running</b>). <b>Notify When Run</b> is optional.
           </li>
           <li>
-            <b class="ltr">Next</b> را بزن و میان‌بر «ثبت تمرین ساعت» را انتخاب کن، بعد <b class="ltr">Done</b>.
+            Tap <b>Next</b>, pick the “Log Watch Workout” shortcut, then <b>Done</b>.
           </li>
         </ol>
         <p class="why">
-          محدودیت iOS: داده‌ی Health فقط وقتی آیفون قفل نیست خوانده می‌شود، پس ممکن است اجرا تا باز کردن قفل گوشی عقب بیفتد. اگر اجرا نشد، بعداً میان‌بر را دستی اجرا کن؛ تا ۶ ساعت عقب را می‌فرستد و تکراری ذخیره نمی‌شود. اگر جلسه را دیرتر از اجرای میان‌بر در برنامه ثبت کردی، میان‌بر را یک بار دیگر اجرا کن.
+          iOS limit: Health data can only be read while the iPhone is unlocked, so the run may wait until you unlock the phone. If it didn't run, run the shortcut by hand later: it sends the last 6 hours and nothing is stored twice. If you logged the session in the app after the shortcut ran, run the shortcut once more.
         </p>
       </div>
 
-      <h2>۴. همگام‌سازی ۷ روز اخیر (دستی)</h2>
+      <h2>4. Sync the last 7 days (manual)</h2>
       <div class="card">
         <ol class="rules steps">
           <li>
-            در زبانه‌ی <b class="ltr">Shortcuts</b> روی «ثبت تمرین ساعت» نگه دار و <b class="ltr">Duplicate</b> را بزن. نام نسخه‌ی تازه را «همگام‌سازی ۷ روز اخیر» بگذار.
+            In the <b>Shortcuts</b> tab, press and hold “Log Watch Workout” and tap <b>Duplicate</b>. Name the copy “Sync Last 7 Days”.
           </li>
           <li>
-            در هر دو <b class="ltr">Find Health Samples</b>، <b class="ltr">6 hours</b> را به <b class="ltr">7 days</b> تغییر بده.
+            In both <b>Find Health Samples</b> actions, change <b>6 hours</b> to <b>7 days</b>.
           </li>
-          <li>هر وقت لازم شد دستی اجرایش کن. داده‌ی تکراری دوباره ذخیره نمی‌شود.</li>
+          <li>Run it by hand whenever you need to. Duplicate data is not stored again.</li>
         </ol>
       </div>
 
-      <h2>۵. وضعیت</h2>
+      <h2>5. Status</h2>
       <div class="card stack" data-testid="watch-status">
         <div class="kv">
-          <span>آخرین دریافت</span>
+          <span>Last received</span>
           <span data-testid="last-received">
-            {status?.last_received_at ? (
-              <>
-                {jalali(localDate(tz, status.last_received_at))} · <span class="ltr">{greg(localDate(tz, status.last_received_at))}</span> · {faHM(status.last_received_at, tz)}
-              </>
-            ) : (
-              "هنوز چیزی نرسیده"
-            )}
+            {status?.last_received_at ? `${dateLong(localDate(tz, status.last_received_at))} · ${hm(status.last_received_at, tz)}` : "Nothing yet"}
           </span>
         </div>
         {status?.last_result ? (
           <div class="why">
-            آخرین ارسال: {faNum(status.last_result.hr_samples)} نمونه‌ی ضربان، {faNum(status.last_result.energy_samples ?? 0)} نمونه‌ی انرژی، داده برای {faNum(status.last_result.sessions ?? 0)} جلسه.
-            {status.last_result.stored ? ` ${faNum(status.last_result.stored)} تمرین ساعت (قالب قدیمی)، ${faNum(status.last_result.matched)} وصل به جلسه.` : ""}
+            Last send: {fmtNum(status.last_result.hr_samples)} heart-rate samples, {fmtNum(status.last_result.energy_samples ?? 0)} energy samples, data for {fmtNum(status.last_result.sessions ?? 0)}{" "}
+            {status.last_result.sessions === 1 ? "session" : "sessions"}.
+            {status.last_result.stored ? ` ${fmtNum(status.last_result.stored)} watch workouts (old format), ${fmtNum(status.last_result.matched)} matched to a session.` : ""}
             {status.last_result.warnings.map((w) => (
               <div class="ss-note" style={{ marginTop: "6px" }}>
-                {warningFa(w)}
+                {warningText(w)}
               </div>
             ))}
           </div>
         ) : null}
         <button type="button" class="btn btn-ghost btn-block" onClick={() => void load()}>
-          بررسی دوباره
+          Check again
         </button>
       </div>
 
-      <h2>۱۰ داده‌ی آخر ساعت</h2>
+      <h2>Last 10 watch records</h2>
       <div class="stack" data-testid="watch-list">
-        {status && !status.workouts.length ? <div class="empty">هنوز داده‌ای از ساعت برای جلسه‌ها نرسیده.</div> : null}
+        {status && !status.workouts.length ? <div class="empty">No watch data has arrived for your sessions yet.</div> : null}
         {status?.workouts.map((w) => {
           const s = w.matched_session_id ? sessions[w.matched_session_id] : null;
           const d = localDate(tz, w.started_at);
           return (
             <div class="card stack" data-testid="watch-row">
               <div class="kv">
-                <b>{w.kind === "session" ? (s ? dayInfo(boot, s.program_day_id).name_fa : "جلسه") : workoutTypeFa(w.activity_type)}</b>
+                <b>{w.kind === "session" ? (s ? dayInfo(boot, s.program_day_id).name_en : "Session") : workoutTypeName(w.activity_type)}</b>
                 <span>
-                  {jalali(d)} · {faHM(w.started_at, tz)}
-                  {w.ended_at ? `–${faHM(w.ended_at, tz)}` : ""}
+                  {dateShort(d)} · {hm(w.started_at, tz)}
+                  {w.ended_at ? `–${hm(w.ended_at, tz)}` : ""}
                 </span>
               </div>
               <div class="why">
@@ -354,29 +337,29 @@ export function Watch() {
               </div>
               {w.matched_session_id ? (
                 <div class="kv">
-                  <span class="pill done">وصل به جلسه</span>
+                  <span class="pill done">Matched to a session</span>
                   {s ? (
                     <button type="button" class="linkbtn" onClick={() => navigate("session", s.id)}>
-                      {dayInfo(boot, s.program_day_id).name_fa} · {jalali(s.local_date)}
+                      {dayInfo(boot, s.program_day_id).name_en} · {dateShort(s.local_date)}
                     </button>
                   ) : (
-                    <span class="muted">جلسه در این دستگاه نیست</span>
+                    <span class="muted">Session not on this device</span>
                   )}
                 </div>
               ) : (
                 <>
-                  <span class="pill">تمرین ساعت بدون جلسه</span>
+                  <span class="pill">Watch workout without a session</span>
                   <div class="copyrow">
-                    <select aria-label="جلسه برای وصل کردن" value={pick[w.id] ?? ""} onChange={(e) => setPick({ ...pick, [w.id]: (e.currentTarget as HTMLSelectElement).value })}>
-                      <option value="">انتخاب جلسه…</option>
+                    <select aria-label="Session to attach to" value={pick[w.id] ?? ""} onChange={(e) => setPick({ ...pick, [w.id]: (e.currentTarget as HTMLSelectElement).value })}>
+                      <option value="">Pick a session…</option>
                       {candidates(w).map((c) => (
                         <option value={c.id}>
-                          {dayInfo(boot, c.program_day_id).name_fa} · {jalali(c.local_date)} · {toPersianDigits(faHM(c.started_at, tz))}
+                          {dayInfo(boot, c.program_day_id).name_en} · {dateShort(c.local_date)} · {hm(c.started_at, tz)}
                         </option>
                       ))}
                     </select>
                     <button type="button" class="btn btn-primary btn-small" disabled={!pick[w.id]} onClick={() => void attach(w)}>
-                      وصل کن
+                      Attach
                     </button>
                   </div>
                 </>

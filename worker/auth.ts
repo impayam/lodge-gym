@@ -85,8 +85,8 @@ async function currentSession(c: Context<AppBindings>): Promise<SessionRow | nul
 /** Requires a full (non-recovery) session. */
 export const requireSession: MiddlewareHandler<AppBindings> = async (c, next) => {
   const s = await currentSession(c);
-  if (!s) return fail(c, 401, "unauthenticated", "برای ادامه با Face ID وارد شو.");
-  if (s.scope !== "full") return fail(c, 403, "recovery_only", "با کد بازیابی فقط می‌توانی یک passkey تازه ثبت کنی.");
+  if (!s) return fail(c, 401, "unauthenticated", "Sign in with Face ID to continue.");
+  if (s.scope !== "full") return fail(c, 403, "recovery_only", "A recovery code only lets you register a new passkey.");
   c.set("scope", s.scope);
   c.set("tokenHash", s.token_hash);
   await next();
@@ -108,7 +108,7 @@ export const rateLimitAuth: MiddlewareHandler<AppBindings> = async (c, next) => 
     .first<{ count: number }>();
   if (row && row.count > RATE_LIMIT) {
     c.header("Retry-After", "60");
-    return fail(c, 429, "rate_limited", "تعداد تلاش‌ها زیاد بود. یک دقیقه صبر کن و دوباره امتحان کن.");
+    return fail(c, 429, "rate_limited", "Too many attempts. Wait a minute and try again.");
   }
   await next();
 };
@@ -152,13 +152,13 @@ type RegMode = { mode: "setup" } | { mode: "recovery"; tokenHash: string } | { m
 /** Who may register a passkey: the setup token (no credential yet), a recovery session, or a full session. */
 async function authorizeRegistration(c: Context<AppBindings>, setupToken: string | undefined): Promise<RegMode> {
   if ((await credentialCount(c.env)) === 0) {
-    if (!c.env.SETUP_TOKEN) throw new ApiError(503, "setup_unavailable", "SETUP_TOKEN روی سرور تنظیم نشده است.");
+    if (!c.env.SETUP_TOKEN) throw new ApiError(503, "setup_unavailable", "SETUP_TOKEN is not set on the server.");
     if (!setupToken || !(await safeEqual(setupToken, c.env.SETUP_TOKEN)))
-      throw new ApiError(401, "bad_setup_token", "کد راه‌اندازی درست نیست.");
+      throw new ApiError(401, "bad_setup_token", "The setup code is wrong.");
     return { mode: "setup" };
   }
   const s = await currentSession(c);
-  if (!s) throw new ApiError(401, "unauthenticated", "برای افزودن دستگاه اول وارد شو.");
+  if (!s) throw new ApiError(401, "unauthenticated", "Sign in first to add a device.");
   return s.scope === "recovery" ? { mode: "recovery", tokenHash: s.token_hash } : { mode: "add", tokenHash: s.token_hash };
 }
 
@@ -218,12 +218,12 @@ authRoutes.post("/register/verify", async (c) => {
       requireUserVerification: true,
     });
   } catch {
-    return fail(c, 400, "registration_failed", "ثبت passkey انجام نشد. دوباره امتحان کن.");
+    return fail(c, 400, "registration_failed", "Passkey registration failed. Try again.");
   }
-  if (!verification.verified) return fail(c, 400, "registration_failed", "ثبت passkey انجام نشد. دوباره امتحان کن.");
+  if (!verification.verified) return fail(c, 400, "registration_failed", "Passkey registration failed. Try again.");
   const cred = verification.registrationInfo.credential;
   const now = nowISO();
-  const label = body.label || (auth.mode === "setup" ? "دستگاه اصلی" : "دستگاه تازه");
+  const label = body.label || (auth.mode === "setup" ? "Main device" : "New device");
   const values = [cred.id, cred.publicKey.slice().buffer, cred.counter, JSON.stringify(cred.transports ?? []), now, label] as const;
 
   if (auth.mode === "setup") {
@@ -234,7 +234,7 @@ authRoutes.post("/register/verify", async (c) => {
     )
       .bind(...values)
       .run();
-    if (!ins.meta.changes) return fail(c, 409, "already_setup", "راه‌اندازی قبلاً انجام شده است.");
+    if (!ins.meta.changes) return fail(c, 409, "already_setup", "Setup has already been done.");
     const codes = Array.from({ length: RECOVERY_CODE_COUNT }, recoveryCode);
     const hashes = await Promise.all(codes.map((code) => sha256Hex(normalizeRecoveryCode(code))));
     await c.env.DB.batch([
@@ -257,7 +257,7 @@ authRoutes.post("/register/verify", async (c) => {
 });
 
 authRoutes.post("/login/options", async (c) => {
-  if ((await credentialCount(c.env)) === 0) return fail(c, 409, "not_setup", "هنوز هیچ دستگاهی ثبت نشده است.");
+  if ((await credentialCount(c.env)) === 0) return fail(c, 409, "not_setup", "No device has been registered yet.");
   const { rpID } = rp(c);
   const options = await generateAuthenticationOptions({ rpID, userVerification: "required" });
   await storeChallenge(c.env, options.challenge, "login");
@@ -269,7 +269,7 @@ authRoutes.post("/login/verify", async (c) => {
   const row = await c.env.DB.prepare("SELECT id, public_key, counter, transports FROM credentials WHERE id = ?")
     .bind(body.response.id)
     .first<{ id: string; public_key: ArrayBuffer | number[]; counter: number; transports: string | null }>();
-  if (!row) return fail(c, 401, "unknown_credential", "این passkey برای این برنامه ثبت نشده است.");
+  if (!row) return fail(c, 401, "unknown_credential", "This passkey is not registered for this app.");
   const { rpID, origin } = rp(c);
   let verification;
   try {
@@ -287,9 +287,9 @@ authRoutes.post("/login/verify", async (c) => {
       },
     });
   } catch {
-    return fail(c, 401, "login_failed", "ورود انجام نشد. دوباره امتحان کن.");
+    return fail(c, 401, "login_failed", "Sign-in failed. Try again.");
   }
-  if (!verification.verified) return fail(c, 401, "login_failed", "ورود انجام نشد. دوباره امتحان کن.");
+  if (!verification.verified) return fail(c, 401, "login_failed", "Sign-in failed. Try again.");
   const now = nowISO();
   const stmts = [
     c.env.DB.prepare("UPDATE credentials SET counter = ?, last_used_at = ? WHERE id = ?").bind(verification.authenticationInfo.newCounter, now, row.id),
@@ -308,7 +308,7 @@ authRoutes.post("/recover", async (c) => {
   const used = await c.env.DB.prepare("UPDATE recovery_codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL RETURNING code_hash")
     .bind(nowISO(), hash)
     .first();
-  if (!used) return fail(c, 401, "bad_recovery_code", "کد بازیابی درست نیست یا قبلاً استفاده شده است.");
+  if (!used) return fail(c, 401, "bad_recovery_code", "The recovery code is wrong or has already been used.");
   await createSession(c, "recovery");
   return c.json({ ok: true, scope: "recovery" });
 });

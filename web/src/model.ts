@@ -9,10 +9,10 @@ import type { BootData } from "./localdb";
 
 export const exerciseMap = (boot: BootData) => new Map(boot.exercises.map((e) => [e.id, e]));
 
-export function dayInfo(boot: BootData, dayId: string): { id: string; name_fa: string; name_en: string; focus_fa: string; legacy: boolean; position: number } {
+export function dayInfo(boot: BootData, dayId: string): { id: string; name_en: string; legacy: boolean; position: number } {
   const d = boot.program.days.find((x) => x.id === dayId) ?? boot.other_days.find((x) => x.id === dayId);
-  if (!d) return { id: dayId, name_fa: dayId, name_en: "", focus_fa: "", legacy: true, position: 0 };
-  return { id: d.id, name_fa: d.name_fa, name_en: d.name_en, focus_fa: d.focus_fa, legacy: d.program_id !== boot.program.id, position: d.position };
+  if (!d) return { id: dayId, name_en: dayId, legacy: true, position: 0 };
+  return { id: d.id, name_en: d.name_en, legacy: d.program_id !== boot.program.id, position: d.position };
 }
 
 export const sortedSessions = (sessions: Record<string, WorkoutSession>) =>

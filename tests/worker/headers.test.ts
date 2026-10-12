@@ -14,12 +14,12 @@ describe("security headers", () => {
       expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
     });
   }
-  it("returns JSON errors with a Persian message and no-store", async () => {
+  it("returns JSON errors with an English message and no-store", async () => {
     const res = await new Client().fetch("/api/bootstrap");
     expect(res.status).toBe(401);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     const body = (await res.json()) as { error: { code: string; message_fa: string } };
     expect(body.error.code).toBe("unauthenticated");
-    expect(body.error.message_fa).toMatch(/[؀-ۿ]/);
+    expect(body.error.message_fa).toBe("Sign in with Face ID to continue.");
   });
 });

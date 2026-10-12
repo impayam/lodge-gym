@@ -3,8 +3,10 @@
 //                                                  HTTP is one, a self-signed HTTPS origin is not)
 //   https://localhost:8789 (.wrangler/e2e-https)  for WebKit (it does not send Secure / __Host- cookies over
 //                                                  http://localhost; wrangler's self-signed certificate + ignoreHTTPSErrors)
+//   http://localhost:8790  forward proxy WebKit uses, so tests can cut its network (see scripts/e2e-proxy.mjs)
 import { execFileSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
+import { startProxy } from "./e2e-proxy.mjs";
 
 export const SERVERS = [
   { protocol: "http", port: process.env.E2E_HTTP_PORT ?? "8788", persist: ".wrangler/e2e" },
@@ -28,6 +30,9 @@ async function waitFor(url) {
   }
   throw new Error(`server did not start: ${url}`);
 }
+
+const proxy = await startProxy(process.env.E2E_PROXY_PORT ?? "8790");
+process.on("exit", () => proxy.close());
 
 for (const s of SERVERS) {
   rmSync(s.persist, { recursive: true, force: true });

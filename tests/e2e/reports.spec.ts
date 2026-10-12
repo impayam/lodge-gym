@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { resetWorkouts, signIn, sql } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
@@ -31,20 +31,21 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await put("01R2", days(0), "D1", [["bench", 4, 135, 5], ["incline_db", 3, 40, 10], ["rdl", 3, 155, 8], ["cable_row", 3, 100, 10], ["lateral", 3, 15, 12], ["facepull", 3, 40, 15]]);
   await page.request.put(`${baseURL}/api/body-mass/${denver(days(0))}`, { headers: { Origin: baseURL! }, data: { value: 180, unit: "lb" } });
 
-  await page.getByRole("button", { name: "گزارش" }).click();
-  await expect(page.getByTestId("week-stats")).toContainText("۱ از ۴");
-  await expect(page.getByTestId("week-stats")).toContainText("۶۰");
+  await page.getByRole("button", { name: "Reports" }).click();
+  await expect(page.getByTestId("week-stats")).toContainText("1 of 4");
+  await expect(page.getByTestId("week-stats")).toContainText("60");
   const lifts = page.getByTestId("week-lifts");
-  await expect(lifts).toContainText("۱۳۵×۵ · 1RM ۱۵۷٫۵");
-  await expect(lifts).toContainText("+۳٫۸٪");
-  await expect(page.getByTestId("week-prs")).toContainText("پرس سینه هالتر");
-  await page.getByText("جدول").first().click();
-  await expect(page.locator(".tableview table").first()).toContainText("سینه");
+  await expect(lifts).toContainText("135×5 · 1RM 157.5");
+  await expect(lifts).toContainText("+3.8%");
+  await expect(page.getByTestId("week-prs")).toContainText("Barbell Bench Press");
+  await page.getByText("Table", { exact: true }).first().click();
+  await expect(page.locator(".tableview table").first()).toContainText("Chest");
+  // A stored note stays as written.
   await expect(page.getByText("عالی")).toBeVisible();
 
   // Readout on tap.
   await page.locator(".chart .row").first().click();
-  await expect(page.locator(".chart .readout").first()).toContainText("سینه: ۷ ست از هدف ۱۳");
+  await expect(page.locator(".chart .readout").first()).toContainText("Chest: 7 sets of target 13");
 
   // CSV and PNG downloads (headless Chromium has no share sheet, so both download).
   const csvDownload = page.waitForEvent("download");
@@ -58,26 +59,27 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   expect((await pngDownload).suggestedFilename()).toBe("lodge-gym-report.png");
 
   // Previous week.
-  await page.getByRole("button", { name: "→ هفته‌ی قبل" }).click();
-  await expect(page.getByTestId("week-lifts")).toContainText("۱۳۰×۵");
+  await page.getByRole("button", { name: "← Previous week" }).click();
+  await expect(page.getByTestId("week-lifts")).toContainText("130×5");
 
-  // Monthly.
-  await page.getByRole("tab", { name: "ماهانه" }).click();
-  await expect(page.getByTestId("month-stats")).toContainText("پایبندی");
-  await expect(page.getByText("روند 1RM تخمینی")).toBeVisible();
-  await expect(page.getByText("وزن بدن").first()).toBeVisible();
+  // Monthly (Gregorian month).
+  await page.getByRole("tab", { name: "Monthly" }).click();
+  await expect(page.getByTestId("month-stats")).toContainText("adherence");
+  await expect(page.locator(".navrow b")).toHaveText(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "America/Denver" }).format(now));
+  await expect(page.getByText("Estimated 1RM trend")).toBeVisible();
+  await expect(page.getByText("Body weight").first()).toBeVisible();
 
   // Progress with the muscle map.
-  await page.getByRole("tab", { name: "پیشرفت" }).click();
-  await expect(page.getByTestId("progress-lifts")).toContainText("پرس سینه هالتر");
-  await expect(page.getByTestId("progress-lifts")).toContainText("+۳٫۸٪");
+  await page.getByRole("tab", { name: "Progress" }).click();
+  await expect(page.getByTestId("progress-lifts")).toContainText("Barbell Bench Press");
+  await expect(page.getByTestId("progress-lifts")).toContainText("+3.8%");
   const map = page.getByTestId("muscle-map");
   await expect(map.locator('path[data-muscle="chest"]').first()).toHaveAttribute("data-status", "under");
   await expect(map.locator('path[data-muscle="quads"]').first()).toHaveAttribute("data-status", "none");
-  await expect(page.getByTestId("muscle-chest")).toContainText("۷ / ۱۳");
-  await expect(page.getByTestId("muscle-chest")).toContainText("کمتر از هدف");
+  await expect(page.getByTestId("muscle-chest")).toContainText("7 / 13");
+  await expect(page.getByTestId("muscle-chest")).toContainText("Under target");
   await map.locator('path[data-muscle="rear_delts"]').first().click();
-  await expect(map.locator(".readout")).toContainText("سرشانه‌ی پشتی: ۳ از ۶ ست");
-  await page.getByRole("button", { name: "۴ هفته‌ی اخیر" }).click();
-  await expect(page.getByTestId("progress-stats")).toContainText("۲");
+  await expect(map.locator(".readout")).toContainText("Rear delts: 3 of 6 sets");
+  await page.getByRole("button", { name: "Last 4 weeks" }).click();
+  await expect(page.getByTestId("progress-stats")).toContainText("2");
 });

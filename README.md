@@ -1,8 +1,8 @@
 # Lodge Gym
 
-Personal workout PWA (single user, Persian RTL UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`; working rules: `CLAUDE.md`.
+Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md` and `SPEC-v2.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card.
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2).
 
 ## Stack
 
@@ -23,7 +23,7 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 | `npm run dev` | Rebuilds the PWA on change and runs `wrangler dev` with local D1/R2 on http://localhost:8787 (first: `npm run db:migrate:local && npm run seed:local`, and copy `.dev.vars.example` to `.dev.vars`) |
 | `npm run build` | Checks `seed/seed.sql` is current, builds the PWA into `dist/` |
 | `npm test` | Vitest: pure logic + Worker API in workerd |
-| `npm run e2e` | Playwright, iPhone 15 profile: WebKit against a local HTTPS server (:8789, self-signed) and Chromium against HTTP (:8788); see `scripts/e2e-server.mjs` |
+| `npm run e2e` | Playwright, iPhone 15 profile: WebKit against a local HTTPS server (:8789, self-signed, through the airplane-mode proxy on :8790 and a persistent context) and Chromium against HTTP (:8788); see `scripts/e2e-server.mjs`, `scripts/e2e-proxy.mjs`, `tests/e2e/fixtures.ts` |
 | `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
 | `npm run seed:local` / `:remote` | Upsert the program seed (idempotent) |
 | `npm run deploy` | Build, migrate + seed remote D1, `wrangler deploy` |
@@ -51,7 +51,7 @@ Fixtures of messy payloads: `tests/fixtures/shortcuts/`.
 ## Backups
 
 A Cron Trigger (`17 10 * * 1`, Mondays 10:17 UTC) writes the full JSON export to R2 under `backups/lodge-gym-<date>.json`
-in the `lodge-gym-photos` bucket and keeps the newest 12. Settings → «پشتیبان» downloads the latest one or a fresh
+in the `lodge-gym-photos` bucket and keeps the newest 12. Settings → Backup downloads the latest one or a fresh
 export (`GET /api/export`). Emailing the backup is not wired: Cloudflare can only send email from a domain on
 Cloudflare DNS (Email Routing / Email Service), and this app runs on `workers.dev`.
 
@@ -59,14 +59,16 @@ Cloudflare DNS (Email Routing / Email Service), and this app runs on `workers.de
 
 Web Push (VAPID, RFC 8291 aes128gcm, WebCrypto only: `worker/lib/webpush.ts`). A SQLite-backed Durable Object
 (`RestPush`, Free-plan compatible) holds the VAPID key pair (generated on first use), the subscriptions and the pending
-rest end, and sends the push from an alarm. Settings → «اعلان پایان استراحت» asks for permission from a tap. On iPhone it
+rest end, and sends the push from an alarm. Settings → Rest-timer notification asks for permission from a tap. On iPhone it
 works only in the Home Screen app on iOS 16.4+.
 
 ## Weekly AI review (written by Claude into D1)
 
 The app only reads this table; Claude writes one row per week directly into D1
 (`lodge-gym-db`, id `f8ba012b-9970-423c-83f3-8c32111695e7`, migration `0003_weekly_reviews.sql`). The newest row
-(highest `week_start`, then latest `created_at`) is shown in the «مرور هفتگی» card on the home and reports pages.
+(highest `week_start`, then latest `created_at`) is shown in the Weekly review card on the home and reports pages.
+The review stays in Persian (SPEC-v2 M6): the card renders `summary_fa`, `highlights` and `suggestions` right-to-left
+(`dir="rtl" lang="fa"`) inside the English UI, with the iOS system font.
 
 | Column | Type | Content |
 |---|---|---|
@@ -95,6 +97,15 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
 - Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
 
+## English UI (SPEC-v2 M6)
+
+- All UI strings are English, LTR, Latin digits, Gregorian dates, system font (no bundled web font). Number inputs still
+  accept Persian and Arabic-Indic digits.
+- Exercises show `name_en` and the English form cue `cue_en` (migration `0004_exercise_library.sql`, approved SPEC-v2 §7.2);
+  `name_fa` and `cue_fa` stay in D1 as data.
+- API errors keep the SPEC §11 shape `{error:{code,message_fa}}`; the `message_fa` field now carries English text.
+- The Shortcuts bridge still parses Persian-locale Shortcuts output (Persian digits, Jalali dates).
+
 ## Approved additions beyond SPEC §5/§11
 
 - Tables `auth_challenges` (one-time WebAuthn challenges) and `rate_limits` (the D1 counter table SPEC §4 allows).
@@ -102,7 +113,7 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Table `weekly_reviews` (migration 0003), `review` in `/api/bootstrap`, `GET /api/reviews/latest`.
 - `/api/push/key|subscribe|unsubscribe|rest|rest/cancel|test`, Durable Object `RestPush`.
 - `GET /api/backups`, `GET /api/backups/latest`, weekly Cron Trigger.
-- `GET /api/reports/progress` («پیشرفت» page) and `?format=csv` on `/api/reports/week|month`; setting `month_calendar` (`gregorian`|`jalali`).
+- `GET /api/reports/progress` (Progress page) and `?format=csv` on `/api/reports/week|month`. Months are Gregorian only (SPEC-v2 M6 removed the `month_calendar` setting).
 - `GET /api/photos` (photo list for the gallery; SPEC §11 lists the other photo routes).
 - `PUT /api/body-mass/:date` (manual body weight, source `manual`) and `set_entries.rir` (migration 0002).
 - `POST /api/health/raw` (replaces `/health/workouts`), `GET /api/health/status`, `PUT /api/health/workouts/:id/match`.

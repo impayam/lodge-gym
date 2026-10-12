@@ -31,7 +31,7 @@ app.use("/api/*", async (c, next) => {
   if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method) && c.req.path !== "/api/health/raw") {
     const origin = c.req.header("Origin");
     if (!origin || origin !== new URL(c.req.url).origin) {
-      return c.json(errorBody("bad_origin", "درخواست از مبدأ نامعتبر رسید."), 403);
+      return c.json(errorBody("bad_origin", "The request came from an invalid origin."), 403);
     }
   }
   await next();
@@ -58,7 +58,7 @@ api.route("/", exportRoutes);
 api.route("/push", pushRoutes);
 app.route("/api", api);
 
-app.all("/api/*", (c) => c.json(errorBody("not_found", "مسیر پیدا نشد."), 404));
+app.all("/api/*", (c) => c.json(errorBody("not_found", "Route not found."), 404));
 
 // First-run setup page exists only until the first passkey is registered.
 app.get("/setup", async (c) => {
@@ -74,7 +74,7 @@ app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 app.onError((err, c) => {
   if (err instanceof ApiError) return c.json(errorBody(err.code, err.messageFa), err.status);
   console.error(err);
-  return c.json(errorBody("internal", "خطای سرور. دوباره امتحان کن."), 500);
+  return c.json(errorBody("internal", "Server error. Try again."), 500);
 });
 
 export default {

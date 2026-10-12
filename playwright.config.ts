@@ -5,6 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
 // not run service workers on an origin with certificate errors. The real app is always served over HTTPS.
 const HTTP = `http://localhost:${process.env.E2E_HTTP_PORT ?? "8788"}`;
 const HTTPS = `https://localhost:${process.env.E2E_HTTPS_PORT ?? "8789"}`;
+// WebKit goes through a local forward proxy that tests switch off to simulate airplane mode (scripts/e2e-proxy.mjs).
+export const PROXY = `http://localhost:${process.env.E2E_PROXY_PORT ?? "8790"}`;
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -13,7 +15,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   reporter: [["list"]],
-  use: { trace: "retain-on-failure", locale: "fa-IR", timezoneId: "America/Denver" },
+  use: { trace: "retain-on-failure", locale: "en-US", timezoneId: "America/Denver" },
   webServer: {
     command: "npm run build && node scripts/e2e-server.mjs",
     url: `${HTTPS}/manifest.webmanifest`,
@@ -23,7 +25,7 @@ export default defineConfig({
   },
   projects: [
     // SPEC §2: WebKit with an iPhone 15 profile.
-    { name: "webkit-iphone", use: { ...devices["iPhone 15"], baseURL: HTTPS, ignoreHTTPSErrors: true } },
+    { name: "webkit-iphone", use: { ...devices["iPhone 15"], baseURL: HTTPS, ignoreHTTPSErrors: true, proxy: { server: PROXY, bypass: "" } } },
     // Same iPhone profile on the pre-installed Chromium; also covers the passkey flow via the CDP virtual authenticator.
     {
       name: "chromium-iphone",

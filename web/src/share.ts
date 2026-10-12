@@ -1,7 +1,8 @@
 // PNG summary card (canvas) shared through the Web Share API, and CSV download (SPEC §10).
 
-import { toPersianDigits } from "../../worker/lib/digits";
 import { NetworkError } from "./api";
+
+const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
 export interface CardLine {
   label: string;
@@ -10,7 +11,6 @@ export interface CardLine {
 
 /** Draws a 1080×1350 summary card in the current theme colors. */
 export async function reportCard(title: string, subtitle: string, lines: CardLine[]): Promise<Blob> {
-  await Promise.all(["800 64px Vazirmatn", "500 40px Vazirmatn", "700 44px Vazirmatn"].map((f) => document.fonts?.load(f).catch(() => undefined)));
   const css = getComputedStyle(document.documentElement);
   const color = (v: string, fallback: string) => css.getPropertyValue(v).trim() || fallback;
   const W = 1080;
@@ -24,37 +24,38 @@ export async function reportCard(title: string, subtitle: string, lines: CardLin
   ctx.fillStyle = color("--surface", "#ffffff");
   roundRect(ctx, 60, 60, W - 120, H - 120, 48);
   ctx.fill();
-  ctx.direction = "rtl";
-  ctx.textAlign = "right";
+  ctx.direction = "ltr";
+  ctx.textAlign = "left";
+  const left = 120;
   const right = W - 120;
   ctx.fillStyle = color("--accent", "#0f6e5f");
-  ctx.font = "800 64px Vazirmatn, Tahoma, sans-serif";
-  ctx.fillText(title, right, 190);
+  ctx.font = `800 64px ${FONT}`;
+  ctx.fillText(title, left, 190);
   ctx.fillStyle = color("--muted", "#6f7d77");
-  ctx.font = "500 38px Vazirmatn, Tahoma, sans-serif";
-  ctx.fillText(subtitle, right, 250);
+  ctx.font = `500 38px ${FONT}`;
+  ctx.fillText(subtitle, left, 250);
   let y = 360;
   for (const l of lines.slice(0, 10)) {
     ctx.fillStyle = color("--ink-2", "#4a5752");
-    ctx.font = "500 38px Vazirmatn, Tahoma, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(l.label, right, y);
-    ctx.fillStyle = color("--ink", "#17211d");
-    ctx.font = "700 44px Vazirmatn, Tahoma, sans-serif";
+    ctx.font = `500 38px ${FONT}`;
     ctx.textAlign = "left";
-    ctx.fillText(toPersianDigits(l.value), 120, y);
+    ctx.fillText(l.label, left, y);
+    ctx.fillStyle = color("--ink", "#17211d");
+    ctx.font = `700 44px ${FONT}`;
+    ctx.textAlign = "right";
+    ctx.fillText(l.value, right, y);
     ctx.strokeStyle = color("--line", "#d8ded9");
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(120, y + 30);
+    ctx.moveTo(left, y + 30);
     ctx.lineTo(right, y + 30);
     ctx.stroke();
     y += 92;
   }
-  ctx.textAlign = "left";
+  ctx.textAlign = "right";
   ctx.fillStyle = color("--muted", "#6f7d77");
-  ctx.font = "500 32px Vazirmatn, Tahoma, sans-serif";
-  ctx.fillText("Lodge Gym", 120, H - 110);
+  ctx.font = `500 32px ${FONT}`;
+  ctx.fillText("Lodge Gym", right, H - 110);
   return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png"));
 }
 

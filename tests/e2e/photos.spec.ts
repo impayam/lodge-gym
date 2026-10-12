@@ -1,8 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetWorkouts, signIn, sql, waitForSynced } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -65,20 +65,20 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 15_000 }).catch(() => undefined);
   const files = { front: await makeJpeg(page, "#c00"), side: await makeJpeg(page, "#0a0"), back: await makeJpeg(page, "#00c") };
 
-  await page.getByRole("button", { name: "شروع", exact: true }).click();
-  await context.setOffline(true);
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await setOffline(context, page, true);
   await page.getByTestId("finish").click();
   const prompt = page.getByTestId("photo-prompt");
   await expect(prompt).toBeVisible();
   for (const pose of ["front", "side", "back"] as const) {
     await prompt.getByTestId(`camera-${pose}`).setInputFiles(files[pose]);
-    await expect(prompt.getByRole("status").first()).toContainText("در صف آپلود");
+    await expect(prompt.getByRole("status").first()).toContainText("queued for upload");
   }
   await expect(page.getByTestId("session-photos").locator("img")).toHaveCount(3);
-  await expect(page.getByTestId("sync-chip")).toContainText("آفلاین");
+  await expect(page.getByTestId("sync-chip")).toContainText("Offline");
   expect(sql("SELECT COUNT(*) AS n FROM photos")).toEqual([{ n: 0 }]);
 
-  await context.setOffline(false);
+  await setOffline(context, page, false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForSynced(page);
 
@@ -98,25 +98,25 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   }
 
   // Gallery, pose filter, compare with day gap and overlay slider.
-  await page.getByRole("button", { name: "عکس‌ها" }).click();
+  await page.getByRole("button", { name: "Photos" }).click();
   await expect(page.getByTestId("photo")).toHaveCount(3);
-  await page.getByRole("group", { name: "فیلتر زاویه" }).getByRole("button", { name: "بغل" }).click();
+  await page.getByRole("group", { name: "Pose filter" }).getByRole("button", { name: "Side" }).click();
   await expect(page.getByTestId("photo")).toHaveCount(1);
-  await page.getByRole("group", { name: "فیلتر زاویه" }).getByRole("button", { name: "همه" }).click();
-  await page.getByRole("button", { name: "انتخاب دو عکس برای مقایسه" }).click();
+  await page.getByRole("group", { name: "Pose filter" }).getByRole("button", { name: "All" }).click();
+  await page.getByRole("button", { name: "Pick two photos to compare" }).click();
   await page.getByTestId("photo").nth(0).click();
   await page.getByTestId("photo").nth(1).click();
   await expect(page.getByTestId("compare")).toBeVisible();
-  await expect(page.getByTestId("gap")).toHaveText("فاصله: ۰ روز");
-  await page.getByRole("button", { name: "روی هم (اسلایدر)" }).click();
-  await expect(page.getByRole("slider", { name: "جابه‌جا کردن مرز دو عکس" })).toBeVisible();
-  await page.getByRole("button", { name: "پایان مقایسه" }).click();
+  await expect(page.getByTestId("gap")).toHaveText("Gap: 0 days");
+  await page.getByRole("button", { name: "Overlay (slider)" }).click();
+  await expect(page.getByRole("slider", { name: "Move the divider between the two photos" })).toBeVisible();
+  await page.getByRole("button", { name: "Done comparing" }).click();
 
   // Two-step delete removes the row and the R2 objects.
   const victim = rows[0].id;
-  await page.getByRole("img", { name: /عکس پشت/ }).first().click();
-  await page.getByTestId("viewer").getByRole("button", { name: "حذف عکس" }).click();
-  await page.getByTestId("viewer").getByRole("button", { name: "مطمئنی؟ حذف کن" }).click();
+  await page.getByRole("img", { name: /^Back photo/ }).first().click();
+  await page.getByTestId("viewer").getByRole("button", { name: "Delete photo" }).click();
+  await page.getByTestId("viewer").getByRole("button", { name: "Sure? Delete" }).click();
   await expect(page.getByTestId("photo")).toHaveCount(2);
   await waitForSynced(page);
   await expect.poll(() => sql("SELECT COUNT(*) AS n FROM photos")).toEqual([{ n: 2 }]);
@@ -129,10 +129,10 @@ test("library picker adds several photos with the chosen pose", async ({ page, c
   await page.goto("/");
   const a = await makeJpeg(page, "#aa0");
   const b = await makeJpeg(page, "#0aa");
-  await page.getByRole("button", { name: "عکس‌ها" }).click();
-  await page.getByRole("group", { name: "زاویه‌ی عکس" }).getByRole("button", { name: "بغل" }).click();
+  await page.getByRole("button", { name: "Photos" }).click();
+  await page.getByRole("group", { name: "Photo pose" }).getByRole("button", { name: "Side" }).click();
   await page.getByTestId("library-side").setInputFiles([a, b]);
-  await expect(page.getByRole("status")).toContainText("۲ عکس ذخیره شد");
+  await expect(page.getByRole("status")).toContainText("2 photos saved");
   await waitForSynced(page);
   expect(sql("SELECT pose, session_id FROM photos")).toEqual([
     { pose: "side", session_id: null },

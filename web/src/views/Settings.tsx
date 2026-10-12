@@ -1,9 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
-import { faNum } from "../../../worker/lib/digits";
 import { isValidTimeZone } from "../../../worker/lib/time";
 import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
-import { jalali } from "../format";
+import { dateLong, fmtNum } from "../format";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
 import { deviceLabel, registerPasskey } from "../passkey";
@@ -27,7 +26,7 @@ export function Settings() {
     setMsg("");
     try {
       await registerPasskey({ label: deviceLabel() });
-      setMsg("دستگاه تازه ثبت شد.");
+      setMsg("New device registered.");
     } catch (e) {
       setMsg(errorText(e));
     } finally {
@@ -37,11 +36,11 @@ export function Settings() {
 
   return (
     <>
-      <h2>تنظیمات</h2>
+      <h2>Settings</h2>
       <div class="card settings-list">
         <div class="field">
-          <span class="lbl">واحد وزن پیش‌فرض (برای جلسه‌های تازه)</span>
-          <span class="seg" role="group" aria-label="واحد وزن">
+          <span class="lbl">Default weight unit (for new sessions)</span>
+          <span class="seg" role="group" aria-label="Weight unit">
             {(["lb", "kg"] as const).map((u) => (
               <button type="button" aria-pressed={st.unit === u} onClick={() => set({ unit: u })}>
                 {u}
@@ -50,32 +49,25 @@ export function Settings() {
           </span>
         </div>
         <div class="field">
-          <label for="s-week">شروع هفته</label>
+          <label for="s-week">Week starts on</label>
           <select id="s-week" value={st.week_start} onChange={(e) => set({ week_start: (e.currentTarget as HTMLSelectElement).value as WeekStart })}>
-            <option value="sat">شنبه</option>
-            <option value="sun">یکشنبه</option>
-            <option value="mon">دوشنبه</option>
+            <option value="sat">Saturday</option>
+            <option value="sun">Sunday</option>
+            <option value="mon">Monday</option>
           </select>
         </div>
         <div class="field">
-          <label for="s-month">ماه در گزارش ماهانه</label>
-          <select id="s-month" value={st.month_calendar} onChange={(e) => set({ month_calendar: (e.currentTarget as HTMLSelectElement).value as SettingsT["month_calendar"] })}>
-            <option value="gregorian">میلادی</option>
-            <option value="jalali">شمسی</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="s-relock">قفل دوباره با Face ID بعد از رفتن به پس‌زمینه</label>
+          <label for="s-relock">Lock again with Face ID after the app is in the background for</label>
           <select id="s-relock" value={String(st.relock_minutes)} onChange={(e) => set({ relock_minutes: Number((e.currentTarget as HTMLSelectElement).value) })}>
-            <option value="0">خاموش</option>
+            <option value="0">Off</option>
             {[1, 5, 15, 30, 60].map((m) => (
-              <option value={String(m)}>{faNum(m)} دقیقه</option>
+              <option value={String(m)}>{fmtNum(m)} min</option>
             ))}
           </select>
         </div>
         <div class="field">
-          <label for="s-tz">منطقه‌ی زمانی</label>
-          <select id="s-tz" class="ltr" value={st.timezone} onChange={(e) => set({ timezone: (e.currentTarget as HTMLSelectElement).value })}>
+          <label for="s-tz">Time zone</label>
+          <select id="s-tz" value={st.timezone} onChange={(e) => set({ timezone: (e.currentTarget as HTMLSelectElement).value })}>
             {zones.map((z) => (
               <option value={z}>{z}</option>
             ))}
@@ -83,51 +75,51 @@ export function Settings() {
         </div>
       </div>
 
-      <h2>اتصال‌ها</h2>
+      <h2>Connections</h2>
       <button type="button" class="setlink" onClick={() => navigate("watch")} data-testid="open-watch">
         <span>
           Apple Watch
           <br />
-          <small>توکن، ساختن میان‌بر، آخرین داده‌های ساعت</small>
+          <small>Token, shortcut setup, latest watch data</small>
         </span>
-        <span aria-hidden="true">←</span>
+        <span aria-hidden="true">→</span>
       </button>
 
-      <h2>دستگاه‌ها</h2>
+      <h2>Devices</h2>
       <div class="card stack">
         <p class="why" style={{ margin: 0 }}>
-          passkey معمولاً از طریق iCloud Keychain روی دستگاه‌های Apple تو همگام می‌شود. برای دستگاهی که همگام نمی‌شود، از همان دستگاه اینجا را باز کن و «افزودن دستگاه» را بزن.
+          Passkeys usually sync across your Apple devices through iCloud Keychain. For a device that doesn't sync, open this page on that device and tap “Add device”.
         </p>
         <button class="btn btn-ghost btn-block" type="button" disabled={busy} onClick={addDevice}>
-          افزودن دستگاه
+          Add device
         </button>
         <div class="why">{msg}</div>
       </div>
 
-      <h2>اعلان پایان استراحت</h2>
+      <h2>Rest-timer notification</h2>
       <PushSettings />
 
-      <h2>پشتیبان</h2>
+      <h2>Backup</h2>
       <Backups />
 
-      <h2>همگام‌سازی</h2>
+      <h2>Sync</h2>
       <div class="card stack">
         <div class="kv">
-          <span>در صف ارسال</span>
-          <span class="num">{faNum(sync.pending)}</span>
+          <span>Waiting to send</span>
+          <span class="num">{fmtNum(sync.pending)}</span>
         </div>
         <div class="kv">
-          <span>وضعیت</span>
-          <span>{sync.online ? (sync.error ? sync.error : "آنلاین") : "آفلاین"}</span>
+          <span>Status</span>
+          <span>{sync.online ? (sync.error ? sync.error : "Online") : "Offline"}</span>
         </div>
         <button class="btn btn-ghost btn-block" type="button" onClick={() => void syncNow()}>
-          همگام‌سازی الان
+          Sync now
         </button>
       </div>
 
       <div class="stack" style={{ marginTop: "22px" }}>
         <button class="btn btn-danger btn-block" type="button" onClick={() => void logout()}>
-          خروج
+          Sign out
         </button>
       </div>
     </>
@@ -146,27 +138,27 @@ function Backups() {
     setMsg("");
     try {
       const { blob, filename } = await fetchFile(path);
-      await shareOrDownload(blob, filename, "پشتیبان Lodge Gym");
+      await shareOrDownload(blob, filename, "Lodge Gym backup");
     } catch (e) {
-      setMsg(e instanceof Error && e.message === "http_404" ? "هنوز پشتیبان خودکاری ساخته نشده است." : errorText(e));
+      setMsg(e instanceof Error && e.message === "http_404" ? "No automatic backup has been made yet." : errorText(e));
     }
   };
   const latest = list?.[0];
   return (
     <div class="card stack" data-testid="backups">
       <p class="why" style={{ margin: 0 }}>
-        هر دوشنبه یک نسخه‌ی کامل (جلسه‌ها، ست‌ها، داده‌ی ساعت، وزن بدن و فهرست عکس‌ها) به‌صورت خودکار ذخیره می‌شود و ۱۲ نسخه‌ی آخر نگه داشته می‌شود.
+        Every Monday a full copy (sessions, sets, watch data, body weight and the photo list) is saved automatically, and the last 12 copies are kept.
       </p>
       <div class="kv">
-        <span>آخرین پشتیبان خودکار</span>
-        <span data-testid="last-backup">{latest ? `${jalali(latest.uploaded.slice(0, 10))} · ${faNum(Math.round(latest.bytes / 1024))} KB` : list ? "هنوز ساخته نشده" : "–"}</span>
+        <span>Latest automatic backup</span>
+        <span data-testid="last-backup">{latest ? `${dateLong(latest.uploaded.slice(0, 10))} · ${fmtNum(Math.round(latest.bytes / 1024))} KB` : list ? "None yet" : "–"}</span>
       </div>
       <div class="row">
         <button type="button" class="btn btn-ghost" disabled={!latest} onClick={() => void get("/backups/latest")}>
-          دانلود آخرین پشتیبان
+          Download latest backup
         </button>
         <button type="button" class="btn btn-ghost" data-testid="export-now" onClick={() => void get("/export")}>
-          خروجی کامل همین حالا
+          Full export now
         </button>
       </div>
       {msg ? <div class="why">{msg}</div> : null}
@@ -189,10 +181,10 @@ function PushSettings() {
       const r = await enablePush();
       if (r === "enabled") {
         setOn(true);
-        setMsg("فعال شد. وقتی استراحت تمام شود، حتی اگر برنامه در پس‌زمینه باشد، اعلان می‌آید.");
-      } else if (r === "denied") setMsg("اجازه‌ی اعلان داده نشد. از Settings ← Notifications ← Lodge Gym آن را روشن کن.");
-      else if (r === "not-standalone") setMsg("روی آیفون اعلان فقط در نسخه‌ی نصب‌شده روی Home Screen کار می‌کند. برنامه را از آیکون صفحه‌ی اصلی باز کن.");
-      else setMsg("این مرورگر اعلان وب را پشتیبانی نمی‌کند (آیفون: iOS 16.4 یا جدیدتر لازم است).");
+        setMsg("Enabled. When a rest ends you get a notification, even with the app in the background.");
+      } else if (r === "denied") setMsg("Notifications were not allowed. Turn them on in Settings → Notifications → Lodge Gym.");
+      else if (r === "not-standalone") setMsg("On iPhone, notifications work only in the app installed on the Home Screen. Open the app from its Home Screen icon.");
+      else setMsg("This browser doesn't support web notifications (iPhone needs iOS 16.4 or later).");
     } catch (e) {
       setMsg(errorText(e));
     } finally {
@@ -202,11 +194,11 @@ function PushSettings() {
   return (
     <div class="card stack" data-testid="push-settings">
       <p class="why" style={{ margin: 0 }}>
-        با شروع استراحت، سرور زمان پایانش را نگه می‌دارد و سر وقت یک اعلان می‌فرستد؛ پس گوشی می‌تواند قفل باشد یا برنامه بسته. {isStandalone() ? "" : "روی آیفون فقط از نسخه‌ی Home Screen کار می‌کند."}
+        When a rest starts, the server keeps its end time and sends a notification right on time, so the phone can be locked or the app closed. {isStandalone() ? "" : "On iPhone this works only from the Home Screen app."}
       </p>
       <div class="kv">
-        <span>وضعیت</span>
-        <span data-testid="push-status">{on === null ? "–" : on ? "فعال" : "خاموش"}</span>
+        <span>Status</span>
+        <span data-testid="push-status">{on === null ? "–" : on ? "On" : "Off"}</span>
       </div>
       <div class="row">
         {on ? (
@@ -219,13 +211,13 @@ function PushSettings() {
                 setMsg("");
                 try {
                   const r = await testPush();
-                  setMsg(r.sent ? "اعلان آزمایشی فرستاده شد." : "ارسال نشد؛ یک بار اعلان را خاموش و دوباره روشن کن.");
+                  setMsg(r.sent ? "Test notification sent." : "Not sent; turn notifications off and on again.");
                 } catch (e) {
                   setMsg(errorText(e));
                 }
               }}
             >
-              اعلان آزمایشی
+              Test notification
             </button>
             <button
               type="button"
@@ -237,12 +229,12 @@ function PushSettings() {
                 setMsg("");
               }}
             >
-              خاموش کردن
+              Turn off
             </button>
           </>
         ) : (
           <button type="button" class="btn btn-primary" disabled={busy} data-testid="enable-push" onClick={() => void enable()}>
-            فعال کردن اعلان
+            Turn on notifications
           </button>
         )}
       </div>

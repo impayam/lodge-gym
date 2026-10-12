@@ -1,8 +1,7 @@
-// Weekly / monthly reports (SPEC §10) and the «پیشرفت» page. Pure functions over the full data set.
+// Weekly / monthly reports (SPEC §10) and the Progress page. Pure functions over the full data set.
 // Weights are stored in the unit they were entered in (session unit) and converted only here, to the
 // settings unit.
 
-import { gregorianToJalali, jalaliToGregorian, ymd } from "./jalali";
 import { addDays, daysBetween } from "./time";
 import { weekRange } from "./cycle";
 import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, Settings, Unit, WorkoutSession } from "./types";
@@ -59,7 +58,7 @@ function ctx(d: ReportData): Ctx {
 
 const inRange = (date: string, r: { start: string; end: string }) => date >= r.start && date <= r.end;
 
-/** Main lifts (the day's «اصلی» exercise of each program day) plus the overhead press. */
+/** Main lifts (the day's main exercise of each program day) plus the overhead press. */
 export function mainLifts(d: ReportData): string[] {
   const ids = d.program.days.flatMap((day) => day.exercises.filter((e) => e.is_main).map((e) => e.exercise_id));
   if (!ids.includes("ohp")) ids.push("ohp");
@@ -159,7 +158,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
   const before = c.done.filter((s) => s.local_date < range.start);
   const targets = muscleTargets(d);
   const sets = setsPerMuscle(week, c.ex);
-  const dayName = new Map([...d.program.days].map((x) => [x.id, x.name_fa]));
+  const dayName = new Map([...d.program.days].map((x) => [x.id, x.name_en]));
 
   const lifts = mainLifts(d).map((id) => {
     const best = bestIn(week, id, c.unit);
@@ -191,7 +190,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
     sessions: {
       done: week.length,
       target: 4,
-      days: week.map((s) => ({ date: s.local_date, day_id: s.program_day_id, name_fa: dayName.get(s.program_day_id) ?? s.program_day_id })),
+      days: week.map((s) => ({ date: s.local_date, day_id: s.program_day_id, name_en: dayName.get(s.program_day_id) ?? s.program_day_id })),
       total_minutes: mins.reduce((a, b) => a + b, 0),
     },
     muscles: MUSCLES.map((m) => ({ muscle: m, sets: sets[m] ?? 0, target: targets[m] ?? 0 })),
@@ -203,7 +202,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
       prev_avg: bodyPrev != null ? round1(bodyPrev) : null,
       change: bodyAvg != null && bodyPrev != null ? round1(bodyAvg - bodyPrev) : null,
     },
-    notes: week.filter((s) => s.note.trim()).map((s) => ({ date: s.local_date, name_fa: dayName.get(s.program_day_id) ?? s.program_day_id, note: s.note.trim() })),
+    notes: week.filter((s) => s.note.trim()).map((s) => ({ date: s.local_date, name_en: dayName.get(s.program_day_id) ?? s.program_day_id, note: s.note.trim() })),
   };
 }
 
@@ -211,30 +210,21 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
 
 export interface MonthRange {
   key: string;
-  calendar: "gregorian" | "jalali";
   start: string;
   end: string;
 }
 
-/** Month range for "YYYY-MM" in the given calendar (Jalali keys look like 1405-07). */
-export function monthRange(key: string, calendar: "gregorian" | "jalali"): MonthRange {
+const ymd = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/** Gregorian calendar month range for "YYYY-MM". */
+export function monthRange(key: string): MonthRange {
   const [y, m] = key.split("-").map(Number);
-  if (calendar === "jalali") {
-    const start = ymd(...jalaliToGregorian(y, m, 1));
-    const next = m === 12 ? ymd(...jalaliToGregorian(y + 1, 1, 1)) : ymd(...jalaliToGregorian(y, m + 1, 1));
-    return { key, calendar, start, end: addDays(next, -1) };
-  }
   const start = ymd(y, m, 1);
   const next = m === 12 ? ymd(y + 1, 1, 1) : ymd(y, m + 1, 1);
-  return { key, calendar, start, end: addDays(next, -1) };
+  return { key, start, end: addDays(next, -1) };
 }
 
-export function monthKeyOf(date: string, calendar: "gregorian" | "jalali"): string {
-  const [y, m, d] = date.split("-").map(Number);
-  if (calendar === "jalali") {
-    const [jy, jm] = gregorianToJalali(y, m, d);
-    return `${jy}-${String(jm).padStart(2, "0")}`;
-  }
+export function monthKeyOf(date: string): string {
   return date.slice(0, 7);
 }
 
@@ -246,9 +236,8 @@ export function shiftMonth(key: string, delta: number): string {
 
 export function monthlyReport(d: ReportData, key: string) {
   const c = ctx(d);
-  const cal = d.settings.month_calendar;
-  const range = monthRange(key, cal);
-  const prevRange = monthRange(shiftMonth(key, -1), cal);
+  const range = monthRange(key);
+  const prevRange = monthRange(shiftMonth(key, -1));
   const month = c.done.filter((s) => inRange(s.local_date, range));
   const prevMonth = c.done.filter((s) => inRange(s.local_date, prevRange));
   const days = daysBetween(range.start, range.end) + 1;

@@ -34,7 +34,7 @@ export function program(): Program {
   };
 }
 
-export const exercises = (): Exercise[] => seed.exercises.map((e) => ({ ...e, is_lower: e.is_lower === 1, equipment: e.equipment as Exercise["equipment"] }));
+export const exercises = (): Exercise[] => seed.exercises.map((e) => ({ ...e, cue_en: (e as { cue_en?: string }).cue_en ?? null, is_lower: e.is_lower === 1, equipment: e.equipment as Exercise["equipment"] }));
 
 let n = 0;
 /** sets: [exercise, count, weight, reps, seconds?] */
@@ -83,7 +83,7 @@ export function reportData(settings: Partial<Settings> = {}): ReportData {
   ];
   const photo = (id: string, date: string, pose: Photo["pose"]): Photo => ({ id, session_id: null, local_date: date, pose, width: 1200, height: 1600, bytes: 1, created_at: `${date}T12:00:00.000Z` });
   return {
-    settings: { unit: "lb", week_start: "mon", month_calendar: "gregorian", relock_minutes: 0, timezone: "America/Denver", ...settings },
+    settings: { unit: "lb", week_start: "mon", relock_minutes: 0, timezone: "America/Denver", ...settings },
     program: program(),
     exercises: exercises(),
     sessions,

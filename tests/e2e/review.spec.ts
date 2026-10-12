@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { resetWorkouts, signIn, sql } from "./helpers";
 
-test("«مرور هفتگی» card on home and reports shows the latest review", async ({ page, context, baseURL }) => {
+test("weekly review card on home and reports shows the latest review, in Persian, right-to-left", async ({ page, context, baseURL }) => {
   resetWorkouts();
   sql("DELETE FROM weekly_reviews");
   await signIn(context, baseURL!);
@@ -17,14 +17,17 @@ test("«مرور هفتگی» card on home and reports shows the latest review",
   );
   await page.reload();
   const card = page.getByTestId("weekly-review");
-  await expect(card).toContainText("مرور هفتگی");
-  await expect(card).toContainText("هفته‌ی ۳۰ شهریور تا ۵ مهر");
+  await expect(card).toContainText("Weekly review");
+  await expect(card).toContainText("Week of Sep 21 – Sep 27");
   await expect(card).toContainText("هفته‌ی خوبی بود");
+  await expect(card.locator("p.summary")).toHaveAttribute("dir", "rtl");
+  await expect(card.locator("p.summary")).toHaveAttribute("lang", "fa");
   await expect(card).not.toContainText("رکورد تازه در اسکوات");
-  await card.getByRole("button", { name: "ادامه" }).click();
+  await card.getByRole("button", { name: "Show more" }).click();
+  await expect(card.locator("ul.rv-list").first()).toHaveAttribute("dir", "rtl");
   await expect(card).toContainText("رکورد تازه در اسکوات");
   await expect(card).toContainText("خواب را به ۷ ساعت برسان");
 
-  await page.getByRole("button", { name: "گزارش" }).click();
+  await page.getByRole("button", { name: "Reports" }).click();
   await expect(page.getByTestId("weekly-review")).toContainText("هفته‌ی خوبی بود");
 });

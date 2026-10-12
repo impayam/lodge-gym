@@ -3,7 +3,7 @@
 // listed with its numbers and a text status.
 
 import { useState } from "preact/hooks";
-import { faNum } from "../../../worker/lib/digits";
+import { fmtNum } from "../../../worker/lib/digits";
 
 export type Status = "none" | "under" | "on" | "over";
 export interface MuscleRow {
@@ -13,20 +13,20 @@ export interface MuscleRow {
   status: Status;
 }
 
-export const MUSCLE_FA: Record<string, string> = {
-  chest: "سینه",
-  back: "پشت",
-  quads: "جلو ران",
-  hamstrings_glutes: "پشت ران و باسن",
-  shoulders: "سرشانه",
-  rear_delts: "سرشانه‌ی پشتی",
-  calves: "ساق",
-  core: "شکم و مرکز بدن",
-  biceps: "جلو بازو",
-  triceps: "پشت بازو",
+export const MUSCLE_NAME: Record<string, string> = {
+  chest: "Chest",
+  back: "Back",
+  quads: "Quads",
+  hamstrings_glutes: "Hamstrings & glutes",
+  shoulders: "Shoulders",
+  rear_delts: "Rear delts",
+  calves: "Calves",
+  core: "Core",
+  biceps: "Biceps",
+  triceps: "Triceps",
 };
 
-export const STATUS_FA: Record<Status, string> = { none: "بدون ست", under: "کمتر از هدف", on: "در هدف", over: "بیشتر از هدف" };
+export const STATUS_NAME: Record<Status, string> = { none: "No sets", under: "Under target", on: "On target", over: "Over target" };
 const STATUS_ICON: Record<Status, string> = { none: "–", under: "▼", on: "✓", over: "▲" };
 
 type Shape = { m: string; d: string };
@@ -64,7 +64,7 @@ function Figure({ shapes, rows, title, active, onPick }: { shapes: Shape[]; rows
           return s.d.split(/ (?=M)/).map((d) => (
             <path d={d} class={`muscle m-${st}${active === s.m ? " active" : ""}`} onClick={() => onPick(s.m)} data-muscle={s.m} data-status={st}>
               <title>
-                {MUSCLE_FA[s.m]}: {faNum(r?.sets ?? 0)} از {faNum(r?.target ?? 0)} ست · {STATUS_FA[st]}
+                {MUSCLE_NAME[s.m]}: {fmtNum(r?.sets ?? 0)} of {fmtNum(r?.target ?? 0)} sets · {STATUS_NAME[st]}
               </title>
             </path>
           ));
@@ -94,28 +94,28 @@ export function MuscleMap({ muscles }: { muscles: MuscleRow[] }) {
         </defs>
       </svg>
       <div class="readout" aria-live="polite">
-        {a ? `${MUSCLE_FA[a.muscle]}: ${faNum(a.sets)} از ${faNum(a.target)} ست · ${STATUS_FA[a.status]}` : "روی یک عضله بزن."}
+        {a ? `${MUSCLE_NAME[a.muscle]}: ${fmtNum(a.sets)} of ${fmtNum(a.target)} sets · ${STATUS_NAME[a.status]}` : "Tap a muscle."}
       </div>
       <div class="figures">
-        <Figure shapes={FRONT} rows={rows} title="جلو" active={active} onPick={setActive} />
-        <Figure shapes={BACK} rows={rows} title="پشت" active={active} onPick={setActive} />
+        <Figure shapes={FRONT} rows={rows} title="Front" active={active} onPick={setActive} />
+        <Figure shapes={BACK} rows={rows} title="Back" active={active} onPick={setActive} />
       </div>
       <div class="legend">
         {(["under", "on", "over", "none"] as Status[]).map((s) => (
           <span>
-            <i class={`sw m-${s}`} /> {STATUS_ICON[s]} {STATUS_FA[s]}
+            <i class={`sw m-${s}`} /> {STATUS_ICON[s]} {STATUS_NAME[s]}
           </span>
         ))}
       </div>
       <ul class="musclelist">
         {muscles.map((m) => (
           <li data-testid={`muscle-${m.muscle}`}>
-            <span>{MUSCLE_FA[m.muscle]}</span>
+            <span>{MUSCLE_NAME[m.muscle]}</span>
             <span class="num">
-              {faNum(m.sets)} / {faNum(m.target)}
+              {fmtNum(m.sets)} / {fmtNum(m.target)}
             </span>
             <span class={`st st-${m.status}`}>
-              {STATUS_ICON[m.status]} {STATUS_FA[m.status]}
+              {STATUS_ICON[m.status]} {STATUS_NAME[m.status]}
             </span>
           </li>
         ))}

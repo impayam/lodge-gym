@@ -26,12 +26,12 @@ export async function readJson<T>(c: Context, schema: ZodType<T>): Promise<T> {
   try {
     raw = await c.req.json();
   } catch {
-    throw new ApiError(400, "invalid_json", "داده‌ی ارسالی قابل خواندن نیست.");
+    throw new ApiError(400, "invalid_json", "The request body could not be read.");
   }
   const r = schema.safeParse(raw);
   if (!r.success) {
     const where = r.error.issues[0]?.path.join(".") || "body";
-    throw new ApiError(400, "invalid_input", `داده‌ی ارسالی معتبر نیست (${where}).`);
+    throw new ApiError(400, "invalid_input", `The request data is not valid (${where}).`);
   }
   return r.data;
 }

@@ -32,8 +32,8 @@ export function Setup() {
     return (
       <div class="gate wrap">
         <Logo />
-        <h1>Face ID فعال شد</h1>
-        <p>این ۱۰ کد بازیابی فقط همین یک بار نشان داده می‌شوند. آن‌ها را جای امنی (مثلاً Notes قفل‌دار یا مدیر رمز) نگه دار. هر کد یک بار کار می‌کند.</p>
+        <h1>Face ID is set up</h1>
+        <p>These 10 recovery codes are shown only this once. Keep them somewhere safe (a locked note or a password manager). Each code works once.</p>
         <div class="codes" data-testid="recovery-codes">
           {codes.map((c) => (
             <span>{c}</span>
@@ -47,7 +47,7 @@ export function Setup() {
             await onLoggedIn();
           }}
         >
-          کدها را ذخیره کردم، ادامه
+          I saved the codes, continue
         </button>
       </div>
     );
@@ -55,11 +55,11 @@ export function Setup() {
   return (
     <div class="gate wrap">
       <Logo />
-      <h1>راه‌اندازی Lodge Gym</h1>
-      <p>کد راه‌اندازی (SETUP_TOKEN) را وارد کن تا Face ID این دستگاه ثبت شود.</p>
-      <input type="password" autoComplete="off" placeholder="کد راه‌اندازی" value={token} onInput={(e) => setToken((e.currentTarget as HTMLInputElement).value)} />
+      <h1>Set up Lodge Gym</h1>
+      <p>Enter the setup code (SETUP_TOKEN) to register Face ID on this device.</p>
+      <input type="password" autoComplete="off" placeholder="Setup code" value={token} onInput={(e) => setToken((e.currentTarget as HTMLInputElement).value)} />
       <button class="btn btn-primary btn-block" type="button" disabled={busy || !token.trim()} onClick={submit}>
-        ثبت Face ID
+        Register Face ID
       </button>
       <div class="err" role="alert">
         {err}
@@ -106,21 +106,21 @@ export function Login() {
       {mode === "login" ? (
         <>
           <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={login} data-testid="login">
-            ورود با Face ID
+            Sign in with Face ID
           </button>
           <button class="linkbtn" type="button" onClick={() => setMode("code")}>
-            به passkey دسترسی ندارم (کد بازیابی)
+            I can't use my passkey (recovery code)
           </button>
         </>
       ) : (
         <>
-          <p>یکی از کدهای بازیابی را وارد کن. بعد از آن باید یک passkey تازه ثبت کنی.</p>
-          <input autoComplete="off" autoCapitalize="characters" placeholder="XXXX-XXXX-XXXX" class="ltr" value={code} onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value)} />
+          <p>Enter one of your recovery codes. After that you need to register a new passkey.</p>
+          <input autoComplete="off" autoCapitalize="characters" placeholder="XXXX-XXXX-XXXX" value={code} onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value)} />
           <button class="btn btn-primary btn-block" type="button" disabled={busy || !code.trim()} onClick={useCode}>
-            ادامه
+            Continue
           </button>
           <button class="linkbtn" type="button" onClick={() => setMode("login")}>
-            بازگشت به ورود با Face ID
+            Back to Face ID sign-in
           </button>
         </>
       )}
@@ -149,10 +149,10 @@ export function Recovery() {
   return (
     <div class="gate wrap">
       <Logo />
-      <h1>ثبت passkey تازه</h1>
-      <p>کد بازیابی پذیرفته شد. حالا Face ID این دستگاه را ثبت کن (۱۵ دقیقه فرصت داری).</p>
+      <h1>Register a new passkey</h1>
+      <p>Recovery code accepted. Now register Face ID on this device (you have 15 minutes).</p>
       <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={register}>
-        ثبت Face ID
+        Register Face ID
       </button>
       <div class="err" role="alert">
         {err}
@@ -189,10 +189,10 @@ export function Locked() {
   return (
     <div class="gate wrap">
       <Logo />
-      <h1>قفل است</h1>
-      <p>برای ادامه با Face ID باز کن.</p>
+      <h1>Locked</h1>
+      <p>Unlock with Face ID to continue.</p>
       <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={unlock}>
-        باز کردن با Face ID
+        Unlock with Face ID
       </button>
       <div class="err" role="alert">
         {err}
@@ -206,9 +206,9 @@ export function FirstOffline() {
     <div class="gate wrap">
       <Logo />
       <h1>Lodge Gym</h1>
-      <p>برای اولین ورود روی این دستگاه به اینترنت نیاز است. بعد از آن برنامه بدون اینترنت هم کار می‌کند.</p>
+      <p>The first sign-in on this device needs an internet connection. After that the app also works offline.</p>
       <button class="btn btn-primary btn-block" type="button" onClick={() => void refresh()}>
-        دوباره امتحان کن
+        Try again
       </button>
     </div>
   );

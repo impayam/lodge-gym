@@ -2,7 +2,7 @@ import { useEffect, useRef } from "preact/hooks";
 import { IconHistory, IconPhotos, IconProgram, IconReports, IconSettings, IconTrain } from "./components/Icons";
 import { RestTimer } from "./components/RestTimer";
 import { StatusChip } from "./components/StatusChip";
-import { greg, jalali } from "./format";
+import { dateLong } from "./format";
 import { getState, navigate, setState, today, useStore, type ViewName } from "./store";
 import { FirstOffline, Locked, Login, Recovery, Setup } from "./views/Auth";
 import { History } from "./views/History";
@@ -34,12 +34,12 @@ function useRelock() {
 }
 
 const TABS: { name: ViewName; label: string; Icon: () => preact.JSX.Element }[] = [
-  { name: "home", label: "تمرین", Icon: IconTrain },
-  { name: "history", label: "سابقه", Icon: IconHistory },
-  { name: "photos", label: "عکس‌ها", Icon: IconPhotos },
-  { name: "reports", label: "گزارش", Icon: IconReports },
-  { name: "program", label: "برنامه", Icon: IconProgram },
-  { name: "settings", label: "تنظیمات", Icon: IconSettings },
+  { name: "home", label: "Train", Icon: IconTrain },
+  { name: "history", label: "History", Icon: IconHistory },
+  { name: "photos", label: "Photos", Icon: IconPhotos },
+  { name: "reports", label: "Reports", Icon: IconReports },
+  { name: "program", label: "Program", Icon: IconProgram },
+  { name: "settings", label: "Settings", Icon: IconSettings },
 ];
 
 export function App() {
@@ -64,9 +64,7 @@ export function App() {
         <header class="top">
           <div class="brand">
             <b>Lodge Gym</b>
-            <small>
-              {jalali(t)} · <span class="ltr">{greg(t)}</span>
-            </small>
+            <small>{dateLong(t)}</small>
           </div>
           <StatusChip />
         </header>
@@ -96,7 +94,7 @@ export function App() {
         </main>
       </div>
       <RestTimer />
-      <nav class="tabbar" aria-label="بخش‌ها">
+      <nav class="tabbar" aria-label="Sections">
         <div class="in">
           {TABS.map(({ name, label, Icon }) => (
             <button type="button" aria-current={current === name ? "page" : "false"} onClick={() => navigate(name)}>

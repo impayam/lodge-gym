@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
-import { resetWorkouts, signIn, sql, waitForSynced } from "./helpers";
+import { expect, test } from "./fixtures";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -11,54 +11,56 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 test("logs a full session in airplane mode; after reconnecting it is in D1 exactly once", async ({ page, context }) => {
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("جلسه‌ی بعدی: روز ۱ – سینه");
-  await expect(page.getByText("اولین جلسه‌ات؛ از روز ۱ شروع کن.")).toBeVisible();
+  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByText("Your first session: start with Day 1.")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
   // Let the service worker take control so the shell also loads offline.
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
 
-  await page.getByRole("button", { name: "شروع", exact: true }).click();
-  await expect(page.getByText("پرس سینه هالتر").first()).toBeVisible();
-  await expect(page.getByText("Barbell Bench Press")).toBeVisible();
-  await expect(page.getByRole("link", { name: "ویدیوی فرم ↗" }).first()).toHaveAttribute("href", /search_query=Barbell%20Bench%20Press%20proper%20form/);
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.locator('[data-ex="bench"]').getByText("Barbell Bench Press")).toBeVisible();
+  await expect(page.getByText("پرس سینه هالتر")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Form video ↗" }).first()).toHaveAttribute("href", /search_query=Barbell%20Bench%20Press%20proper%20form/);
 
-  // Persian digits in the weight field, then one tap per set.
+  // Persian digits are still accepted in the weight field; then one tap per set.
   await page.getByTestId("w-bench-0").locator("input").fill("۱۳۵");
   await page.getByTestId("check-bench-0").click();
   await expect(page.getByTestId("rest-timer")).toBeVisible();
-  await expect(page.getByTestId("rest-timer")).toContainText("استراحت بعد از پرس سینه هالتر");
-  await expect(page.getByTestId("r-bench-0").locator("input")).toHaveValue("۵");
+  await expect(page.getByTestId("rest-timer")).toContainText("Rest after Barbell Bench Press");
+  await expect(page.getByTestId("r-bench-0").locator("input")).toHaveValue("5");
 
-  await context.setOffline(true);
-  await expect(page.getByTestId("sync-chip")).toContainText("آفلاین");
+  await setOffline(context, page, true);
+  await expect(page.getByTestId("sync-chip")).toContainText("Offline");
 
   for (let i = 1; i < 4; i++) {
     await page.getByTestId(`w-bench-${i}`).locator("input").fill("135");
     await page.getByTestId(`check-bench-${i}`).click();
   }
   // Stepper: + on an empty weight starts from 0 for a first-time exercise, by the dumbbell increment (5 lb).
-  await page.getByTestId("w-incline_db-0").getByRole("button", { name: /زیاد کردن/ }).click();
-  await expect(page.getByTestId("w-incline_db-0").locator("input")).toHaveValue("۵");
+  await page.getByTestId("w-incline_db-0").getByRole("button", { name: /Increase/ }).click();
+  await expect(page.getByTestId("w-incline_db-0").locator("input")).toHaveValue("5");
   for (const ex of ["incline_db", "rdl", "cable_row", "lateral", "facepull"]) {
     for (let i = 0; i < 3; i++) await page.getByTestId(`check-${ex}-${i}`).click();
   }
-  await page.locator("#f-note").fill("جلسه‌ی آفلاین");
+  await page.locator("#f-note").fill("Offline session");
   await page.locator("#f-note").blur();
   await page.getByTestId("finish").click();
-  await expect(page.getByText("جلسه ثبت شد.")).toBeVisible();
-  await expect(page.getByTestId("sync-chip")).toContainText("در صف");
+  await expect(page.getByText("Session saved.")).toBeVisible();
+  await expect(page.getByTestId("sync-chip")).toContainText("pending");
 
   // Still offline: reload works from the service worker and data survives in IndexedDB.
   await page.reload();
-  await expect(page.getByTestId("next-card")).toContainText("جلسه‌ی بعدی: روز ۲ – پا");
+  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 2 · Legs");
   expect(sql("SELECT COUNT(*) AS n FROM workout_sessions")).toEqual([{ n: 0 }]);
 
-  await context.setOffline(false);
+  await setOffline(context, page, false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForSynced(page);
 
   const sessions = sql("SELECT id, program_day_id, status, unit, note, ended_at IS NOT NULL AS ended FROM workout_sessions") as Record<string, unknown>[];
   expect(sessions).toHaveLength(1);
-  expect(sessions[0]).toMatchObject({ program_day_id: "D1", status: "done", unit: "lb", note: "جلسه‌ی آفلاین", ended: 1 });
+  expect(sessions[0]).toMatchObject({ program_day_id: "D1", status: "done", unit: "lb", note: "Offline session", ended: 1 });
   expect(sql("SELECT COUNT(*) AS n FROM set_entries")).toEqual([{ n: 19 }]);
   expect(sql("SELECT COUNT(*) AS n FROM set_entries WHERE done = 1")).toEqual([{ n: 19 }]);
   expect(sql("SELECT weight, reps FROM set_entries WHERE exercise_id = 'bench' ORDER BY set_index")).toEqual([
@@ -90,46 +92,46 @@ test("suggestion and last performance follow SPEC §7", async ({ page }) => {
   sql(`INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, updated_at) VALUES ${rows.join(", ")}`);
 
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("جلسه‌ی بعدی: روز ۲ – پا");
-  await page.locator(".dayopt", { hasText: "روز ۱ – سینه" }).click();
+  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 2 · Legs");
+  await page.locator(".dayopt", { hasText: "Day 1 · Chest" }).click();
 
   const bench = page.locator('[data-ex="bench"]');
-  await expect(bench.getByTestId("last-perf")).toContainText("۱۳۵×۵");
-  await expect(bench.getByTestId("suggestion")).toHaveText("پیشنهاد: ۱۴۰ lb");
-  await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "۱۴۰");
-  await expect(bench.getByTestId("r-bench-0").locator("input")).toHaveAttribute("placeholder", "۵");
+  await expect(bench.getByTestId("last-perf")).toContainText("135×5");
+  await expect(bench.getByTestId("suggestion")).toHaveText("Suggested: 140 lb");
+  await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "140");
+  await expect(bench.getByTestId("r-bench-0").locator("input")).toHaveAttribute("placeholder", "5");
 
   const incline = page.locator('[data-ex="incline_db"]');
-  await expect(incline.getByTestId("suggestion")).toHaveText("همان ۴۰ lb تا همه‌ی ست‌ها کامل شود");
+  await expect(incline.getByTestId("suggestion")).toHaveText("Stay at 40 lb until every set is complete");
 
   // One tap: commits the prefilled weight and the target reps.
   await page.getByTestId("check-bench-0").click();
-  await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveValue("۱۴۰");
-  await expect(bench.getByTestId("r-bench-0").locator("input")).toHaveValue("۵");
+  await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveValue("140");
+  await expect(bench.getByTestId("r-bench-0").locator("input")).toHaveValue("5");
 
-  // «مثل دفعه‌ی قبل» copies last session's sets.
-  await incline.getByRole("button", { name: "مثل دفعه‌ی قبل" }).click();
-  await expect(incline.getByTestId("r-incline_db-2").locator("input")).toHaveValue("۸");
-  await expect(incline.getByTestId("w-incline_db-2").locator("input")).toHaveValue("۴۰");
+  // "Same as last time" copies last session's sets.
+  await incline.getByRole("button", { name: "Same as last time" }).click();
+  await expect(incline.getByTestId("r-incline_db-2").locator("input")).toHaveValue("8");
+  await expect(incline.getByTestId("w-incline_db-2").locator("input")).toHaveValue("40");
 
   // RIR chip (tap again clears) and the manual body weight.
-  await page.getByTestId("rir-bench-0").getByRole("button", { name: "۳+" }).click();
-  await expect(page.getByTestId("rir-bench-0").getByRole("button", { name: "۳+" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByTestId("rir-bench-1").getByRole("button", { name: "۱" }).click();
-  await page.getByTestId("rir-bench-1").getByRole("button", { name: "۱" }).click();
-  await expect(page.getByTestId("rir-bench-1").getByRole("button", { name: "۱" })).toHaveAttribute("aria-pressed", "false");
-  await page.getByTestId("body-weight").locator("input").fill("۱۸۰٫۴");
+  await page.getByTestId("rir-bench-0").getByRole("button", { name: "3+" }).click();
+  await expect(page.getByTestId("rir-bench-0").getByRole("button", { name: "3+" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("rir-bench-1").getByRole("button", { name: "1", exact: true }).click();
+  await page.getByTestId("rir-bench-1").getByRole("button", { name: "1", exact: true }).click();
+  await expect(page.getByTestId("rir-bench-1").getByRole("button", { name: "1", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("body-weight").locator("input").fill("180.4");
   await page.getByTestId("body-weight").locator("input").blur();
 
   // Add / remove set.
-  await incline.getByRole("button", { name: "+ افزودن ست" }).click();
+  await incline.getByRole("button", { name: "+ Add set" }).click();
   await expect(incline.getByTestId("w-incline_db-3")).toBeVisible();
-  await incline.getByRole("button", { name: "− حذف ست" }).click();
+  await incline.getByRole("button", { name: "− Remove set" }).click();
   await expect(incline.getByTestId("w-incline_db-3")).toHaveCount(0);
 
   // Timed rest bar: +30 s and dismiss.
-  await page.getByRole("button", { name: "+۳۰ ث" }).click();
-  await page.getByRole("button", { name: "بستن" }).click();
+  await page.getByRole("button", { name: "+30 s" }).click();
+  await page.getByTestId("rest-timer").getByRole("button", { name: "Close" }).click();
   await expect(page.getByTestId("rest-timer")).toHaveCount(0);
   await waitForSynced(page);
   expect(sql("SELECT rir FROM set_entries se JOIN workout_sessions ws ON ws.id = se.session_id WHERE ws.id <> '01PREV' AND exercise_id = 'bench' ORDER BY set_index LIMIT 2")).toEqual([{ rir: 3 }, { rir: null }]);
@@ -148,9 +150,9 @@ test("RIR 3+ on every set doubles the next increment", async ({ page }) => {
       .join(", ")}`
   );
   await page.goto("/");
-  await page.locator(".dayopt", { hasText: "روز ۱ – سینه" }).click();
-  await expect(page.locator('[data-ex="bench"]').getByTestId("suggestion")).toHaveText("پیشنهاد: ۱۴۵ lb (دو پله، همه‌ی ست‌ها با ۳+ تکرار ذخیره)");
-  await expect(page.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "۱۴۵");
+  await page.locator(".dayopt", { hasText: "Day 1 · Chest" }).click();
+  await expect(page.locator('[data-ex="bench"]').getByTestId("suggestion")).toHaveText("Suggested: 145 lb (two steps: every set had 3+ reps in reserve)");
+  await expect(page.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "145");
 });
 
 test("home shows the rest advice after two training days in a row", async ({ page }) => {
@@ -166,14 +168,14 @@ test("home shows the rest advice after two training days in a row", async ({ pag
        VALUES ('${id}', '${day}', '${date}', '${date}T18:00:00.000Z', '${date}T19:00:00.000Z', 'done', 'lb', '', '${date}T18:00:00.000Z', '${date}T19:00:00.000Z', 'app')`
     );
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("جلسه‌ی بعدی: روز ۳ – پشت");
-  await expect(page.getByText("امروز استراحت بهتر است", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "شروع", exact: true })).toBeEnabled();
+  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 3 · Back");
+  await expect(page.getByText("Rest is better today", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
 });
 
 test("security headers are present on the app shell", async ({ page, baseURL }) => {
   const res = await page.request.get(`${baseURL}/`);
   expect(res.headers()["content-security-policy"]).toBe("default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'");
   const manifest = await (await page.request.get(`${baseURL}/manifest.webmanifest`)).json();
-  expect(manifest).toMatchObject({ lang: "fa", dir: "rtl", display: "standalone", start_url: "/", scope: "/" });
+  expect(manifest).toMatchObject({ lang: "en", dir: "ltr", display: "standalone", start_url: "/", scope: "/" });
 });
