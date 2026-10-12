@@ -36,7 +36,7 @@ import {
 
 export * from "./model";
 export * from "./check";
-export { candidatePool, isHeavyHinge, pick, type Candidate } from "./pick";
+export { candidatePool, isHeavyHinge, isOlympicLift, pick, type Candidate } from "./pick";
 
 export interface GeneratorContext {
   /** The library: seed, imported, manual and custom exercises. */
@@ -154,13 +154,18 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
   };
 
   const days: PlanDay[] = layout.map((l) => ({ name_en: l.name, kind: l.kind, offset: l.offset, exercises: [] }));
+  /** One exercise keeps one role in the week (decided 2026-10-12): one rep range, one progression. */
+  const roleOf = (id: string): Slot | undefined => {
+    for (const d of days) for (const x of d.exercises) if (x.exercise_id === id) return x.slot;
+    return undefined;
+  };
   // 1. Main lifts on every day first, then the secondaries.
   for (const role of ["main", "secondary"] as const) {
     layout.forEach((l, i) => {
       for (const spec of l.slots.filter((x) => x.slot === role)) {
         const dayIds = new Set(days[i].exercises.map((x) => x.exercise_id));
         const noHeavyHinge = spec.pattern === "hinge" && role === "secondary" && heavyHingeNear(days, i, byId);
-        const c = pick(pool, { pattern: spec.pattern, group: spec.group, slot: role, lift: spec.lift, dayIds, noHeavyHinge, seed: input.seed });
+        const c = pick(pool, { pattern: spec.pattern, group: spec.group, slot: role, lift: spec.lift, dayIds, noHeavyHinge, roleOf, seed: input.seed });
         if (c) days[i].exercises.push(entry(c, role));
         else unfilled.push(`${l.name}: ${role} ${spec.pattern.replace("_", " ")} (${spec.group.replace("_", " ")})`);
       }
@@ -222,7 +227,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
         const sc = scheme(t.slot, strength);
         const sets = sc.range[0];
         const accept = (c: Candidate) => capOk(i, c, sets) && pushOk(c, sets) && fits(i, (sc.rest + SET_WORK_SEC) * sets);
-        const c = pick(pool, { patterns: t.patterns, group: g, slot: t.slot, dayIds, noHeavyHinge: true, accept, seed: input.seed });
+        const c = pick(pool, { patterns: t.patterns, group: g, slot: t.slot, dayIds, noHeavyHinge: true, roleOf, accept, seed: input.seed });
         if (!c) continue;
         if (!best || compareKeys(preference(c), preference(best.c)) < 0) best = { c, slot: t.slot, sets };
       }
@@ -249,7 +254,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
       const dayIds = new Set(d.exercises.map((x) => x.exercise_id));
       const sc = scheme("accessory", strength);
       const accept = (c: Candidate) => capOk(i, c, sc.range[0]) && fits(i, (sc.rest + SET_WORK_SEC) * sc.range[0]);
-      const c = pick(pool, { patterns: ["h_pull", "v_pull"], group: "back", slot: "accessory", dayIds, accept, seed: input.seed });
+      const c = pick(pool, { patterns: ["h_pull", "v_pull"], group: "back", slot: "accessory", dayIds, roleOf, accept, seed: input.seed });
       if (c)
         options.push({ key: [1, i], act: () => days[i].exercises.push(entry(c, "accessory", sc.range[0])) });
     });
@@ -275,36 +280,61 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
 
   /** One set (or one exercise at its minimum) less on day i: isolation and core first, then accessories, then
    *  secondaries; never a main lift. Prefers work that keeps the hard rules and floors, from the group most over target. */
-  const trim = (i: number): boolean => {
-    const d = days[i];
+  /** What removing one set of x (or all of x at its minimum) does: hard rules, floors, and the groups it takes. */
+  const removal = (x: PlanExercise) => {
     const p = planned();
     const { push, pull } = pushPullSets(days, exMap);
+    const c = byId.get(x.exercise_id);
+    const removeAll = x.sets <= x.set_range[0];
+    const n = removeAll ? x.sets : 1;
+    const after = (g: TargetGroup) => p[g] - (c?.contrib.get(g) ?? 0) * n;
+    const pat = exMap.get(x.exercise_id)?.pattern ?? "";
+    const pullAfter = pull - (PULL.includes(pat) ? n : 0);
+    const pushAfter = push - (PUSH.includes(pat) ? n : 0);
+    const lastOfPattern = removeAll && (pat === "hinge" || pat === "squat") && !days.some((o) => o.exercises.some((y) => y !== x && exMap.get(y.exercise_id)?.pattern === pat));
+    const breaksHard = ((c?.contrib.get("rear_delts") ?? 0) > 0 && after("rear_delts") < REAR_DELT_MIN) || pullAfter < pushAfter || lastOfPattern;
+    const breaksFloor = TARGET_GROUPS.some((g) => FLOORS[g] !== undefined && (c?.contrib.get(g) ?? 0) > 0 && after(g) < FLOORS[g]!);
+    /** Groups this removal takes below their target (other than by rounding). */
+    const underAfter = TARGET_GROUPS.some((g) => (c?.contrib.get(g) ?? 0) > 0 && after(g) < targets[g] - 0.5);
+    const over = c ? p[c.group] - targets[c.group] : 0;
+    const apply = () => {
+      const d = days.find((y) => y.exercises.includes(x))!;
+      if (removeAll) d.exercises.splice(d.exercises.indexOf(x), 1);
+      else x.sets -= 1;
+    };
+    return { x, group: c?.group, breaksHard, breaksFloor, underAfter, over, apply };
+  };
+
+  /** One set (or one exercise at its minimum) less on day i: isolation and core first, then accessories, then
+   *  secondaries; never a main lift. Prefers work that keeps the hard rules and floors, from the group most over target. */
+  const trim = (i: number): boolean => {
     for (const tier of [["isolation", "core"], ["accessory"], ["secondary"]] as Slot[][]) {
-      const options = d.exercises
+      const o = days[i].exercises
         .filter((x) => tier.includes(x.slot))
-        .map((x) => {
-          const c = byId.get(x.exercise_id);
-          const removeAll = x.sets <= x.set_range[0];
-          const n = removeAll ? x.sets : 1;
-          const after = (g: TargetGroup) => p[g] - (c?.contrib.get(g) ?? 0) * n;
-          const pat = exMap.get(x.exercise_id)?.pattern ?? "";
-          const pullAfter = pull - (PULL.includes(pat) ? n : 0);
-          const pushAfter = push - (PUSH.includes(pat) ? n : 0);
-          const lastOfPattern = removeAll && (pat === "hinge" || pat === "squat") && !days.some((o) => o.exercises.some((y) => y !== x && exMap.get(y.exercise_id)?.pattern === pat));
-          const breaksHard = ((c?.contrib.get("rear_delts") ?? 0) > 0 && after("rear_delts") < REAR_DELT_MIN) || pullAfter < pushAfter || lastOfPattern;
-          const breaksFloor = TARGET_GROUPS.some((g) => FLOORS[g] !== undefined && (c?.contrib.get(g) ?? 0) > 0 && after(g) < FLOORS[g]!);
-          const over = c ? p[c.group] - targets[c.group] : 0;
-          return { x, removeAll, breaksHard, breaksFloor, over };
-        })
-        .filter((o) => !o.breaksHard)
-        .sort((a, b) => Number(a.breaksFloor) - Number(b.breaksFloor) || b.over - a.over);
-      const o = options[0];
+        .map(removal)
+        .filter((r) => !r.breaksHard)
+        .sort((a, b) => Number(a.breaksFloor) - Number(b.breaksFloor) || b.over - a.over)[0];
       if (!o) continue;
-      if (o.removeAll) d.exercises.splice(d.exercises.indexOf(o.x), 1);
-      else o.x.sets -= 1;
+      o.apply();
       return true;
     }
     return false;
+  };
+
+  /** Work added for one group lands secondary sets on others: takes groups more than one set over target back down,
+   *  from their own accessory and isolation work, without taking any group below target, a floor or a hard rule. */
+  const trimExcess = () => {
+    for (let guard = 0; guard < 80; guard++) {
+      const p = planned();
+      const o = days
+        .flatMap((d) => d.exercises)
+        .filter((x) => x.slot !== "main" && x.slot !== "secondary")
+        .map(removal)
+        .filter((r) => r.group && p[r.group] - targets[r.group] > 1 && !r.breaksHard && !r.breaksFloor && !r.underAfter)
+        .sort((a, b) => b.over - a.over)[0];
+      if (!o) return;
+      o.apply();
+    }
   };
 
   /** Fills the groups toward a goal (the floors or the targets), the biggest deficit first. */
@@ -340,6 +370,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
   }
   strictPush = true;
   fill(TARGET_GROUPS);
+  trimExcess();
 
   // 5. Fit every day into the session length.
   days.forEach((d, i) => {
@@ -356,7 +387,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
       const i = days.indexOf(d);
       const dayIds = new Set(d.exercises.map((y) => y.exercise_id));
       const accept = (o: Candidate) => (o.contrib.get("rear_delts") ?? 0) > 0 && capOkWithout(i, x, o);
-      const r = pick(pool, { pattern: c.ex.pattern!, group: c.group, slot: x.slot, dayIds, accept, seed: input.seed });
+      const r = pick(pool, { pattern: c.ex.pattern!, group: c.group, slot: x.slot, dayIds, roleOf, accept, seed: input.seed });
       if (r) Object.assign(x, { exercise_id: r.ex.id, per_leg: r.perLeg, is_time: r.timed });
     }
   }

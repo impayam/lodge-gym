@@ -140,6 +140,17 @@ export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets
     }
   });
 
+  // One exercise keeps one role in the week (decided 2026-10-12), so its rep range and progression stay one.
+  const roles = new Map<string, { slot: Slot; day: number }>();
+  days.forEach((d, i) => {
+    for (const x of d.exercises) {
+      const r = roles.get(x.exercise_id);
+      if (!r) roles.set(x.exercise_id, { slot: x.slot, day: i });
+      else if (r.slot !== x.slot)
+        violations.push({ code: "two_roles", message: `${ex.get(x.exercise_id)?.name_en ?? "An exercise"} is a ${r.slot} on ${days[r.day].name_en} and a ${x.slot} on ${d.name_en}; one exercise keeps one role a week.`, day: i });
+    }
+  });
+
   // Recovery constraints (hard rules).
   const order = days.map((d, i) => ({ d, i })).sort((a, b) => a.d.offset - b.d.offset);
   const mains = days.map((d) => d.exercises.filter((x) => x.slot === "main"));

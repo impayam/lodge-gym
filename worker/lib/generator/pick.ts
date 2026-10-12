@@ -24,8 +24,11 @@ export interface Candidate {
 const EQUIPMENT_OK: Readonly<Record<EquipmentChoice, ReadonlySet<string>>> = {
   full_gym: new Set(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
   dumbbells: new Set(["dumbbell", "bodyweight"]),
-  bodyweight: new Set(["bodyweight"]),
 };
+
+/** Explosive Olympic-style lifts are never picked automatically (decided 2026-10-12); they stay in the library, can be
+ *  swapped in by hand and still count toward volume. */
+export const isOlympicLift = (ex: Pick<Exercise, "name_en" | "category">) => ex.category === "olympic_weightlifting" || /\b(clean|snatch|jerk)\b|\bpush press\b/i.test(ex.name_en);
 
 /** Deadlift, Romanian deadlift, stiff-legged deadlift and good morning: at most once per 72 h (§8.4). */
 export const isHeavyHinge = (ex: Pick<Exercise, "pattern" | "name_en">) => ex.pattern === "hinge" && /deadlift|romanian|\brdl\b|good morning|stiff[- ]?leg/i.test(ex.name_en);
@@ -47,7 +50,7 @@ export function candidatePool(ctx: PoolContext, equipment: EquipmentChoice, avoi
   const avoided = new Set(avoid);
   const out: Candidate[] = [];
   for (const ex of ctx.exercises) {
-    if (ex.archived_at || avoided.has(ex.id) || !countsVolume(ex.category) || !ex.pattern || !okEquipment.has(ex.equipment)) continue;
+    if (ex.archived_at || avoided.has(ex.id) || !countsVolume(ex.category) || isOlympicLift(ex) || !ex.pattern || !okEquipment.has(ex.equipment)) continue;
     const group = groupOf(ex.muscle_primary);
     if (!group || !isTargetGroup(group)) continue;
     const main = ctx.programIds.get(ex.id);
@@ -87,6 +90,8 @@ export interface PickQuery {
   dayIds: ReadonlySet<string>;
   /** Leave heavy hinges out (accessory hinge slots, or a day too close to another heavy hinge). */
   noHeavyHinge?: boolean;
+  /** The role an exercise already has this week: one exercise keeps one role (one rep range, one progression). */
+  roleOf?: (id: string) => Slot | undefined;
   /** Extra condition (session cap, time, the push/pull balance): the best candidate that meets it. */
   accept?: (c: Candidate) => boolean;
   seed: number;
@@ -115,6 +120,8 @@ export function pick(pool: readonly Candidate[], q: PickQuery): Candidate | null
   const wantCompound = q.slot === "main" || q.slot === "secondary" || q.slot === "accessory";
   const list = pool.filter((c) => {
     if (c.group !== q.group || q.dayIds.has(c.ex.id)) return false;
+    const role = q.roleOf?.(c.ex.id);
+    if (role && role !== q.slot) return false;
     if (lift) return c.ex.pattern === lift.pattern && c.ex.equipment === "barbell" && lift.name.test(c.ex.name_en) && !(lift.not && lift.not.test(c.ex.name_en)) && (!q.accept || q.accept(c));
     if (patterns.length && !patterns.includes(c.ex.pattern!)) return false;
     if (q.noHeavyHinge && c.heavyHinge) return false;

@@ -15,7 +15,9 @@ export const STYLES = ["auto", "full_body", "upper_lower", "ppl", "ppl_ul", "bro
 export type Style = (typeof STYLES)[number];
 export type ResolvedStyle = Exclude<Style, "auto">;
 export const SESSION_MINUTES = [45, 60, 75, 90] as const;
-export const EQUIPMENT_CHOICES = ["full_gym", "dumbbells", "bodyweight"] as const;
+/** Equipment the generator plans for (decided 2026-10-12: no bodyweight-only option; the library has no bodyweight rear-delt
+ *  exercise or compound hinge, so such a week could never meet the hard rules). */
+export const EQUIPMENT_CHOICES = ["full_gym", "dumbbells"] as const;
 export type EquipmentChoice = (typeof EQUIPMENT_CHOICES)[number];
 export const SLOTS = ["main", "secondary", "accessory", "isolation", "core"] as const;
 export type Slot = (typeof SLOTS)[number];
@@ -214,5 +216,7 @@ export const FLOORS: Readonly<Partial<Record<TargetGroup, number>>> = { chest: 1
 export const REAR_DELT_MIN = 6;
 /** Priority muscles get this many extra weekly sets. */
 export const PRIORITY_BONUS = 3;
+/** Priority muscles of the seed program (§8.2: the default comes from the current program). */
+export const SEED_PRIORITY: readonly TargetGroup[] = ["chest"];
 /** Groups whose direct training frequency the 2×/week guideline is about. */
 export const MAJOR_GROUPS: readonly TargetGroup[] = ["chest", "back", "quads", "hamstrings_glutes", "shoulders"];
