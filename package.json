@@ -44,7 +44,7 @@
     "e2e": "playwright test",
     "icons": "node scripts/icons.mjs",
     "deploy": "npm run build && npm run deploy:ci",
-    "deploy:ci": "wrangler d1 migrations apply DB --remote && wrangler d1 execute DB --remote --file seed/seed.sql && npm run library:import -- --remote --only d1 && wrangler deploy && npm run library:import -- --remote --only media --time-budget 720",
+    "deploy:ci": "wrangler d1 time-travel info lodge-gym-db && wrangler d1 migrations apply DB --remote && wrangler d1 execute DB --remote --file seed/seed.sql && npm run library:import -- --remote --only d1 && wrangler deploy && npm run library:import -- --remote --only media --time-budget 720",
     "library:import": "tsx seed/import-exercises.ts",
     "library:report": "tsx seed/import-exercises.ts --report",
     "library:local": "tsx seed/import-exercises.ts --local"

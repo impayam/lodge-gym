@@ -31,7 +31,11 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 ## Deploy (Cloudflare Workers Builds)
 
 - Build command: `npm run build`
-- Deploy command: `npm run deploy:ci` (applies remote migrations and the seed, then `wrangler deploy`)
+- Deploy command: `npm run deploy:ci` (prints the D1 Time Travel bookmark, applies remote migrations and the seed,
+  imports the exercise library, then `wrangler deploy` and the library image copy)
+- Restore point: every production deploy first runs `wrangler d1 time-travel info lodge-gym-db`, so the Workers Builds
+  log holds the bookmark from before that deploy's migrations. Restore with
+  `npx wrangler d1 time-travel restore lodge-gym-db --bookmark=<bookmark>` or `--timestamp=<RFC3339 time>`.
 - Secret: `SETUP_TOKEN` (a long random string; used once on the phone at `/setup`)
 
 Bindings are in `wrangler.toml`: D1 `DB` → `lodge-gym-db`, R2 `PHOTOS` → `lodge-gym-photos`, static assets `ASSETS` → `dist/`.
