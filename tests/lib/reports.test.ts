@@ -8,6 +8,7 @@ import {
   monthRange,
   monthlyReport,
   muscleTargets,
+  programOn,
   volumePerMuscle,
   progressReport,
   setsCsv,
@@ -65,6 +66,7 @@ describe("weekly report", () => {
         { date: "2026-09-26", day_id: "D3", name_en: "Day 3 · Back" },
       ],
       total_minutes: 180,
+      program: { id: "fullbody4", name: expect.any(String) },
     });
   });
 
@@ -250,5 +252,50 @@ describe("CSV export", () => {
     expect(lines).toContain("2026-09-21,Day 1 · Chest,Barbell Bench Press,پرس سینه هالتر,1,135,lb,5,,2,1");
     expect(lines).toContain("2026-09-26,Day 3 · Back,Pull-Up / Assisted Pull-Up,بارفیکس,2,-10,kg,8,,,1");
     expect(csv).not.toContain("500");
+  });
+});
+
+describe("past weeks stay scored against the program active then (SPEC-v2 §8.6)", () => {
+  const base = reportData();
+  const three = {
+    ...base.program,
+    id: "gen3",
+    name: "Full body · 3 days",
+    days: base.program.days.slice(0, 3).map((d) => ({ ...d, id: `gen3-${d.id}`, program_id: "gen3", name_en: `New ${d.name_en}` })),
+  };
+  const info = (id: string, dpw: number, acts: [string, string | null][]) => ({
+    id, name: id, style: null, days_per_week: dpw, params: null, generated_by: null, created_at: "2026-09-01T00:00:00.000Z", approved_at: null, archived_at: null,
+    status: "archived" as const, activations: acts.map(([started_at, ended_at], i) => ({ id: `${id}-${i}`, program_id: id, started_at, ended_at })),
+  });
+  // Switched on Thursday 2026-09-24 at noon in Denver (18:00 UTC).
+  const d = {
+    ...base,
+    program: three,
+    programs: [
+      { ...info("fullbody4", 4, [["2026-08-01T06:00:00.000Z", "2026-09-24T18:00:00.000Z"]]), days: base.program.days },
+      { ...info("gen3", 3, [["2026-09-24T18:00:00.000Z", null]]), days: three.days },
+    ],
+  };
+  it("the program active on a local date; dates before any activation use the first program", () => {
+    expect(programOn(d, "2026-09-23").program.id).toBe("fullbody4");
+    expect(programOn(d, "2026-09-24")).toMatchObject({ program: { id: "gen3" }, days_per_week: 3 });
+    expect(programOn(d, "2026-07-01").program.id).toBe("fullbody4");
+    expect(programOn(base, "2026-09-23")).toMatchObject({ program: { id: "fullbody4" }, days_per_week: 4 });
+  });
+  it("weekly: targets and planned sessions of the program active at the week's end; old day names stay", () => {
+    const before = weeklyReport(d, "2026-09-16");
+    expect(before.sessions).toMatchObject({ target: 4, program: { id: "fullbody4" } });
+    expect(before.muscles.find((m) => m.muscle === "chest")!.target).toBe(13);
+    const after = weeklyReport(d, "2026-09-23");
+    expect(after.sessions).toMatchObject({ target: 3, program: { id: "gen3" } });
+    // The week's sessions ran on the old program's days and keep their names.
+    expect(after.sessions.days.map((x) => x.name_en)).toEqual(["Day 1 · Chest", "Day 2 · Legs", "Day 3 · Back"]);
+    expect(after.muscles.find((m) => m.muscle === "chest")!.target).toBe(muscleTargets({ program: three, exercises: base.exercises }).chest);
+    expect(after.lifts.map((l) => l.exercise_id)).toEqual(["bench", "squat", "cs_row", "ohp"]);
+  });
+  it("monthly and progress adherence follow each day's program", () => {
+    // September: 23 days at 4 a week, 7 days at 3 a week.
+    expect(monthlyReport(d, "2026-09").target).toBe(Math.round(((23 * 4 + 7 * 3) / 7) * 10) / 10);
+    expect(monthlyReport(base, "2026-09").target).toBe(Math.round(((30 * 4) / 7) * 10) / 10);
   });
 });

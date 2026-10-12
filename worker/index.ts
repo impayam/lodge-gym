@@ -11,6 +11,7 @@ import { reportRoutes } from "./reports";
 import { exportRoutes, runBackup } from "./backup";
 import { pushRoutes } from "./push";
 import { exerciseRoutes, mediaRoutes } from "./exercises";
+import { programRoutes } from "./programs";
 
 export { RestPush } from "./push";
 import { ApiError, errorBody } from "./http";
@@ -59,6 +60,7 @@ api.route("/", exportRoutes);
 api.route("/push", pushRoutes);
 api.route("/exercises", exerciseRoutes);
 api.route("/library/media", mediaRoutes);
+api.route("/programs", programRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "Route not found."), 404));

@@ -1,6 +1,7 @@
 // Domain types shared by the Worker and the PWA.
 
 import type { Category } from "./category";
+import type { GeneratorInput } from "./generator/model";
 
 export type Unit = "lb" | "kg";
 export type WeekStart = "sat" | "sun" | "mon";
@@ -83,6 +84,36 @@ export interface Program {
   name: string;
   days: ProgramDay[];
 }
+
+/** One period a program was the active program (SPEC-v2 §8.7). */
+export interface ProgramActivation {
+  id: string;
+  program_id: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export type ProgramStatus = "active" | "draft" | "archived";
+
+/** Program metadata (SPEC-v2 §8.7): the history timeline, drafts and the program each past week is scored against. */
+export interface ProgramInfo {
+  id: string;
+  name: string;
+  /** 'seed_full_body' | 'seed_upper_lower' for the seed programs, otherwise a generator style. */
+  style: string | null;
+  days_per_week: number | null;
+  /** Generator inputs and seed (generated programs). */
+  params: GeneratorInput | null;
+  generated_by: "seed" | "generator" | null;
+  created_at: string;
+  approved_at: string | null;
+  archived_at: string | null;
+  status: ProgramStatus;
+  activations: ProgramActivation[];
+}
+
+/** A program with its days and exercises. */
+export type ProgramVersion = ProgramInfo & { days: ProgramDay[] };
 
 export interface SetEntry {
   id: string;
@@ -170,6 +201,8 @@ export interface Bootstrap {
   settings: Settings;
   program: Program;
   other_days: Omit<ProgramDay, "exercises">[];
+  /** Every program with its activations (SPEC-v2 §8.6 history timeline). */
+  programs: ProgramInfo[];
   exercises: Exercise[];
   sessions: WorkoutSession[];
   /** Watch workouts matched to the sessions above. */

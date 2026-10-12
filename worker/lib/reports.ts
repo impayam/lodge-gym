@@ -2,11 +2,11 @@
 // Weights are stored in the unit they were entered in (session unit) and converted only here, to the
 // settings unit.
 
-import { addDays, daysBetween } from "./time";
+import { addDays, localDate } from "./time";
 import { countsVolume } from "./category";
 import { groupOf, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "./muscles";
 import { weekRange } from "./cycle";
-import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, Settings, Unit, WorkoutSession } from "./types";
+import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, ProgramVersion, Settings, Unit, WorkoutSession } from "./types";
 
 export const LB_PER_KG = 2.20462262;
 
@@ -37,6 +37,39 @@ export interface ReportData {
   watch: HealthWorkout[];
   body: BodyMetric[];
   photos: Photo[];
+  /** Every program with its days and activations (SPEC-v2 §8.6). Without it, every week is scored against `program`. */
+  programs?: ProgramVersion[];
+}
+
+/** A program and the sessions per week it plans. */
+export interface ScoredProgram {
+  program: Program;
+  days_per_week: number;
+}
+
+/**
+ * The program active on local `date` (SPEC-v2 §8.6): past weeks stay scored against the program that was active then.
+ * An activation counts from the local date it started; dates before the first activation belong to the first program.
+ */
+export function programOn(d: ReportData, date: string): ScoredProgram {
+  const acts = (d.programs ?? [])
+    .flatMap((p) => p.activations.map((a) => ({ p, started_at: a.started_at, from: localDate(d.settings.timezone, a.started_at) })))
+    .sort((a, b) => a.started_at.localeCompare(b.started_at));
+  const hit = [...acts].reverse().find((a) => a.from <= date) ?? acts[0];
+  if (!hit) return { program: d.program, days_per_week: d.program.days.length };
+  return { program: hit.p, days_per_week: hit.p.days_per_week ?? hit.p.days.length };
+}
+
+/** Day names of every program, so sessions of archived programs keep their day name. */
+function dayNames(d: ReportData): Map<string, string> {
+  return new Map([...(d.programs ?? []).flatMap((p) => p.days), ...d.program.days].map((x) => [x.id, x.name_en]));
+}
+
+/** Planned sessions over [from, to]: each day adds the weekly days of the program active then, divided by 7. */
+function plannedSessions(d: ReportData, from: string, to: string): number {
+  let n = 0;
+  for (let day = from; day <= to; day = addDays(day, 1)) n += programOn(d, day).days_per_week / 7;
+  return n;
 }
 
 export interface SetResult {
@@ -61,8 +94,8 @@ function ctx(d: ReportData): Ctx {
 const inRange = (date: string, r: { start: string; end: string }) => date >= r.start && date <= r.end;
 
 /** Main lifts (the day's main exercise of each program day) plus the overhead press. */
-export function mainLifts(d: ReportData): string[] {
-  const ids = d.program.days.flatMap((day) => day.exercises.filter((e) => e.is_main).map((e) => e.exercise_id));
+export function mainLifts(d: Pick<ReportData, "program">): string[] {
+  const ids = [...new Set(d.program.days.flatMap((day) => day.exercises.filter((e) => e.is_main).map((e) => e.exercise_id)))];
   if (!ids.includes("ohp")) ids.push("ohp");
   return ids;
 }
@@ -72,7 +105,7 @@ export function mainLifts(d: ReportData): string[] {
  * set counts 1 for its primary group and 0.5 for each secondary group, the same way done sets are counted, so following
  * the program exactly is on target for every group. Only strength work counts (SPEC-v2 §7.4, `countsVolume`).
  */
-export function muscleTargets(d: ReportData): Record<string, number> {
+export function muscleTargets(d: Pick<ReportData, "program" | "exercises">): Record<string, number> {
   const exMap = new Map(d.exercises.map((e) => [e.id, e]));
   const t: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
   for (const day of d.program.days) for (const de of day.exercises) {
@@ -180,11 +213,13 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
   const week = c.done.filter((s) => inRange(s.local_date, range));
   const prev = c.done.filter((s) => inRange(s.local_date, prevRange));
   const before = c.done.filter((s) => s.local_date < range.start);
-  const targets = muscleTargets(d);
+  // The week is scored against the program active at its end (the current program for the current week).
+  const scored = programOn(d, range.end);
+  const targets = muscleTargets({ program: scored.program, exercises: d.exercises });
   const sets = setsPerMuscle(week, c.ex);
-  const dayName = new Map([...d.program.days].map((x) => [x.id, x.name_en]));
+  const dayName = dayNames(d);
 
-  const lifts = mainLifts(d).map((id) => {
+  const lifts = mainLifts(scored).map((id) => {
     const best = bestIn(week, id, c.unit);
     const prevBest = bestIn(prev, id, c.unit);
     return { ...nameOf(c, id), best, prev_e1rm: prevBest?.e1rm ?? null, change_pct: pctChange(prevBest?.e1rm ?? null, best?.e1rm ?? null) };
@@ -213,7 +248,8 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
     unit: c.unit,
     sessions: {
       done: week.length,
-      target: 4,
+      target: scored.days_per_week,
+      program: { id: scored.program.id, name: scored.program.name },
       days: week.map((s) => ({ date: s.local_date, day_id: s.program_day_id, name_en: dayName.get(s.program_day_id) ?? s.program_day_id })),
       total_minutes: mins.reduce((a, b) => a + b, 0),
     },
@@ -264,15 +300,14 @@ export function monthlyReport(d: ReportData, key: string) {
   const prevRange = monthRange(shiftMonth(key, -1));
   const month = c.done.filter((s) => inRange(s.local_date, range));
   const prevMonth = c.done.filter((s) => inRange(s.local_date, prevRange));
-  const days = daysBetween(range.start, range.end) + 1;
 
   const weeks: { start: string; end: string; sessions: number }[] = [];
   for (let w = weekRange(range.start, d.settings.week_start); w.start <= range.end; w = weekRange(addDays(w.start, 7), d.settings.week_start)) {
     weeks.push({ ...w, sessions: month.filter((s) => inRange(s.local_date, w)).length });
   }
-  const target = round1((4 * days) / 7);
+  const target = round1(plannedSessions(d, range.start, range.end));
 
-  const e1rm = mainLifts(d).map((id) => ({
+  const e1rm = mainLifts(programOn(d, range.end)).map((id) => ({
     ...nameOf(c, id),
     points: month
       .map((s) => ({ date: s.local_date, best: bestSet(s, id, c.unit) }))
@@ -366,8 +401,7 @@ function period(d: ReportData, c: Ctx, from: string, to: string) {
   const daily = [...bodyDaily(d, c.unit)].filter(([k]) => k >= from && k <= to);
   const bFirst = daily[0] ?? null;
   const bLast = daily[daily.length - 1] ?? null;
-  const days = daysBetween(from, to) + 1;
-  const target = (4 * days) / 7;
+  const target = plannedSessions(d, from, to);
   return {
     from,
     to,
@@ -386,7 +420,7 @@ function period(d: ReportData, c: Ctx, from: string, to: string) {
 export function progressReport(d: ReportData, today: string) {
   const c = ctx(d);
   const first = c.done[0]?.local_date ?? today;
-  const targets = muscleTargets(d);
+  const targets = muscleTargets({ program: programOn(d, today).program, exercises: d.exercises });
   const week = weekRange(today, d.settings.week_start);
   const sets = setsPerMuscle(c.done.filter((s) => inRange(s.local_date, week)), c.ex);
   return {
@@ -410,7 +444,7 @@ const csvCell = (v: unknown) => {
 /** Raw sets of done sessions in [from, to] (weights as entered, with the session unit). */
 export function setsCsv(d: ReportData, from: string, to: string): string {
   const c = ctx(d);
-  const dayName = new Map(d.program.days.map((x) => [x.id, x.name_en]));
+  const dayName = dayNames(d);
   const rows = [["date", "day", "exercise", "exercise_fa", "set", "weight", "unit", "reps", "seconds", "rir", "done"]];
   for (const s of c.done.filter((x) => x.local_date >= from && x.local_date <= to)) {
     for (const x of [...s.sets].sort((a, b) => a.exercise_id.localeCompare(b.exercise_id) || a.set_index - b.set_index)) {

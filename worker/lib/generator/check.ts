@@ -92,6 +92,9 @@ const GROUP_NAME: Readonly<Record<TargetGroup, string>> = {
 };
 export const groupName = (g: TargetGroup) => GROUP_NAME[g];
 
+const SLOT_NAME: Readonly<Record<Slot, string>> = { main: "a main lift", secondary: "a secondary lift", accessory: "an accessory", isolation: "isolation work", core: "core work" };
+const slotName = (s: Slot) => SLOT_NAME[s];
+
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const fmt = (n: number) => String(round1(n));
 
@@ -147,7 +150,7 @@ export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets
       const r = roles.get(x.exercise_id);
       if (!r) roles.set(x.exercise_id, { slot: x.slot, day: i });
       else if (r.slot !== x.slot)
-        violations.push({ code: "two_roles", message: `${ex.get(x.exercise_id)?.name_en ?? "An exercise"} is a ${r.slot} on ${days[r.day].name_en} and a ${x.slot} on ${d.name_en}; one exercise keeps one role a week.`, day: i });
+        violations.push({ code: "two_roles", message: `${ex.get(x.exercise_id)?.name_en ?? "An exercise"} is ${slotName(r.slot)} on ${days[r.day].name_en} and ${slotName(x.slot)} on ${d.name_en}; one exercise keeps one role a week.`, day: i });
     }
   });
 
