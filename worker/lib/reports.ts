@@ -3,6 +3,7 @@
 // settings unit.
 
 import { addDays, daysBetween } from "./time";
+import { groupOf, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "./muscles";
 import { weekRange } from "./cycle";
 import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, Settings, Unit, WorkoutSession } from "./types";
 
@@ -24,8 +25,8 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 const pctChange = (from: number | null, to: number | null) => (from && to != null ? round1(((to - from) / from) * 100) : null);
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
-/** SPEC §10 order of muscle groups. */
-export const MUSCLES = ["chest", "back", "quads", "hamstrings_glutes", "shoulders", "rear_delts", "calves", "core", "biceps", "triceps"] as const;
+/** SPEC §10 muscle groups with a weekly program target, in order. */
+export const MUSCLES = TARGET_GROUPS;
 
 export interface ReportData {
   settings: Settings;
@@ -65,13 +66,13 @@ export function mainLifts(d: ReportData): string[] {
   return ids;
 }
 
-/** Program sets per muscle group per week (the SPEC §10 targets come out of the program). */
+/** Program sets per muscle group per week, primary muscle only: the SPEC §10 targets come out of the program. */
 export function muscleTargets(d: ReportData): Record<string, number> {
   const exMap = new Map(d.exercises.map((e) => [e.id, e]));
   const t: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
   for (const day of d.program.days) for (const de of day.exercises) {
-    const m = exMap.get(de.exercise_id)?.muscle_primary;
-    if (m) t[m] = (t[m] ?? 0) + de.sets;
+    const g = groupOf(exMap.get(de.exercise_id)?.muscle_primary);
+    if (g && g in t) t[g] += de.sets;
   }
   return t;
 }
@@ -97,13 +98,25 @@ function bestIn(sessions: WorkoutSession[], exerciseId: string, unit: Unit): Set
   return best;
 }
 
-/** Done sets per primary muscle (primary muscle only). */
-export function setsPerMuscle(sessions: WorkoutSession[], ex: Map<string, Exercise>): Record<string, number> {
-  const out: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
+export interface GroupSets {
+  /** Done sets whose primary muscle is in the group. */
+  direct: number;
+  /** SPEC-v2 §7.4 fractional count: 1 per set for the primary muscle's group, 0.5 for each secondary muscle's group. */
+  fractional: number;
+}
+
+/** Done sets per report group, direct and fractional. Planned and extra exercises count alike. */
+export function setsPerMuscle(sessions: WorkoutSession[], ex: Map<string, Exercise>): Record<string, GroupSets> {
+  const out: Record<string, GroupSets> = Object.fromEntries(REPORT_GROUPS.map((m) => [m, { direct: 0, fractional: 0 }]));
   for (const s of sessions) for (const x of s.sets) {
     if (!x.done) continue;
-    const m = ex.get(x.exercise_id)?.muscle_primary;
-    if (m) out[m] = (out[m] ?? 0) + 1;
+    const e = ex.get(x.exercise_id);
+    if (!e) continue;
+    const primary = groupOf(e.muscle_primary);
+    for (const [g, w] of setContribution(e.muscle_primary, e.muscles_secondary)) {
+      out[g].fractional += w;
+      if (g === primary) out[g].direct += 1;
+    }
   }
   return out;
 }
@@ -113,8 +126,8 @@ export function volumePerMuscle(sessions: WorkoutSession[], ex: Map<string, Exer
   const out: Record<string, number> = Object.fromEntries(MUSCLES.map((m) => [m, 0]));
   for (const s of sessions) for (const x of s.sets) {
     if (!x.done || x.weight == null || x.reps == null || x.weight <= 0 || x.reps <= 0) continue;
-    const m = ex.get(x.exercise_id)?.muscle_primary;
-    if (m) out[m] = (out[m] ?? 0) + convertWeight(x.weight, s.unit, unit) * x.reps;
+    const g = groupOf(ex.get(x.exercise_id)?.muscle_primary);
+    if (g && g in out) out[g] += convertWeight(x.weight, s.unit, unit) * x.reps;
   }
   for (const k of Object.keys(out)) out[k] = Math.round(out[k]);
   return out;
@@ -193,7 +206,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
       days: week.map((s) => ({ date: s.local_date, day_id: s.program_day_id, name_en: dayName.get(s.program_day_id) ?? s.program_day_id })),
       total_minutes: mins.reduce((a, b) => a + b, 0),
     },
-    muscles: MUSCLES.map((m) => ({ muscle: m, sets: sets[m] ?? 0, target: targets[m] ?? 0 })),
+    muscles: muscleRows(sets, targets),
     lifts,
     prs,
     watch: { active_kcal: kcal.length ? round1(kcal.reduce((a, b) => a + b, 0)) : null, hr_avg: hrs.length ? round1(mean(hrs)!) : null, matched, unmatched: week.length - matched },
@@ -294,9 +307,29 @@ export function monthlyReport(d: ReportData, key: string) {
 
 /* ---------------- progress page ---------------- */
 
-export type BalanceStatus = "none" | "under" | "on" | "over";
+export type BalanceStatus = "none" | "under" | "on" | "over" | "untracked";
 
 /** Under below 80 % of the weekly target, over above 120 %, on target in between. */
+export interface MuscleRow {
+  muscle: string;
+  /** Direct sets (primary muscle). */
+  sets: number;
+  /** Fractional sets (SPEC-v2 §7.4); the balance thresholds apply to this number. */
+  fractional: number;
+  /** Weekly program target; null for muscles the program sets no target for. */
+  target: number | null;
+  status: BalanceStatus;
+}
+
+/** Every report group: the targeted ones in SPEC §10 order, then the ones without a target. */
+export function muscleRows(sets: Record<string, GroupSets>, targets: Record<string, number>): MuscleRow[] {
+  return REPORT_GROUPS.map((m) => {
+    const t = m in targets ? targets[m] : null;
+    const v = sets[m] ?? { direct: 0, fractional: 0 };
+    return { muscle: m, sets: v.direct, fractional: v.fractional, target: t, status: t === null ? (v.fractional ? "untracked" : "none") : balanceStatus(v.fractional, t) };
+  });
+}
+
 export function balanceStatus(sets: number, target: number): BalanceStatus {
   if (!target) return sets ? "over" : "none";
   if (sets === 0) return "none";
@@ -351,7 +384,7 @@ export function progressReport(d: ReportData, today: string) {
     last4: period(d, c, addDays(today, -27), today),
     balance: {
       week,
-      muscles: MUSCLES.map((m) => ({ muscle: m, sets: sets[m] ?? 0, target: targets[m] ?? 0, status: balanceStatus(sets[m] ?? 0, targets[m] ?? 0) })),
+      muscles: muscleRows(sets, targets),
     },
   };
 }

@@ -8,7 +8,8 @@ import { IconCheck } from "../components/Icons";
 import { Stepper } from "../components/Stepper";
 import { clock, dateLong, fmtNum, hm, ytLink } from "../format";
 import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
-import { flash, getState, navigate, photoSrc, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
+import { addExtraExercise, allExercises, flash, getState, navigate, photoSrc, removeExtraExercise, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
+import { ExercisePicker, ExerciseThumb } from "./Library";
 import { targetText } from "./Program";
 import { WatchStats, workoutTypeName } from "./Watch";
 import { PhotoPicker, poseLabel } from "./Photos";
@@ -59,6 +60,8 @@ export function Session({ id }: { id: string }) {
   const s = sessions[id];
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
+  const [picking, setPicking] = useState(false);
+  useStore((st) => st.library);
   const photos = useStore((st) => st.photos);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [note, setNote] = useState(s?.note ?? "");
@@ -72,7 +75,7 @@ export function Session({ id }: { id: string }) {
   const tz = boot.settings.timezone;
   const day = dayInfo(boot, s.program_day_id);
   const watch = (boot.watch ?? []).filter((w) => w.matched_session_id === s.id).sort((a, b) => a.started_at.localeCompare(b.started_at));
-  const blocks = sessionBlocks(boot, s);
+  const blocks = sessionBlocks(boot, s, allExercises());
   const hasSuperset = blocks.some((b) => b.plan.superset_tag);
   const sessionPhotos = photos.filter((p) => p.session_id === s.id);
   const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
@@ -107,6 +110,19 @@ export function Session({ id }: { id: string }) {
     setJustFinished(true);
     window.scrollTo(0, 0);
   };
+
+  if (picking)
+    return (
+      <ExercisePicker
+        onCancel={() => setPicking(false)}
+        onPick={(ex) => {
+          setPicking(false);
+          void addExtraExercise(s.id, ex).then(() => {
+            requestAnimationFrame(() => document.querySelector(`[data-ex="${CSS.escape(ex.id)}"]`)?.scrollIntoView({ block: "center" }));
+          });
+        }}
+      />
+    );
 
   return (
     <>
@@ -227,6 +243,9 @@ export function Session({ id }: { id: string }) {
         {blocks.map((b) => (
           <ExerciseCard key={b.ex.id} block={b} session={s} g={guidance(b, s, sessions)} updateSets={(fn) => updateSets(b.ex.id, fn)} />
         ))}
+        <button type="button" class="btn btn-ghost btn-block" data-testid="add-exercise" onClick={() => setPicking(true)}>
+          + Add exercise
+        </button>
       </div>
 
       <h2>Note</h2>
@@ -328,7 +347,7 @@ const RIR_CHOICES: [number, string][] = [
 ];
 
 function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock; session: WorkoutSession; g: Guidance; updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void }) {
-  const { ex, plan, sets } = block;
+  const { ex, plan, sets, extra } = block;
   const unit = session.unit;
   const isTime = plan.is_time;
   const isBw = ex.equipment === "bodyweight";
@@ -348,7 +367,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       if (isTime) {
         if (cur.seconds == null) patch.seconds = g.prefillSeconds ?? plan.reps_max;
       } else {
-        if (cur.reps == null) patch.reps = plan.reps_max;
+        if (cur.reps == null && !extra) patch.reps = plan.reps_max;
         if (cur.weight == null && g.prefillWeight != null) patch.weight = g.prefillWeight;
       }
     }
@@ -361,7 +380,18 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       const prev = list[list.length - 1];
       return [
         ...list,
-        { id: ulid(), exercise_id: ex.id, set_index: list.length, weight: prev ? prev.weight : null, reps: null, seconds: null, done: false, rir: null, updated_at: new Date().toISOString() },
+        {
+          id: ulid(),
+          exercise_id: ex.id,
+          set_index: list.length,
+          weight: prev ? prev.weight : null,
+          reps: null,
+          seconds: null,
+          done: false,
+          rir: null,
+          ...(extra ? { is_extra: true, position: prev?.position ?? null } : {}),
+          updated_at: new Date().toISOString(),
+        },
       ];
     });
   const removeSet = () => updateSets((list) => list.slice(0, -1));
@@ -379,27 +409,30 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
         seconds: x.seconds,
         done: false,
         rir: null,
+        ...(extra ? { is_extra: true, position: list[0]?.position ?? null } : {}),
         updated_at: new Date().toISOString(),
       }))
     );
   };
 
   return (
-    <article class={`ex${allDone ? " done" : ""}`} data-ex={ex.id}>
+    <article class={`ex${allDone ? " done" : ""}${extra ? " extra" : ""}`} data-ex={ex.id}>
       <div class="ex-top">
+        {extra ? <ExerciseThumb ex={ex} /> : null}
         <div class="ex-name">
           <b>
             {plan.is_main ? <span class="mainb">Main</span> : null}
+            {extra ? <span class="extrab">Extra</span> : null}
             {ex.name_en}
             {plan.superset_tag ? <span class="tag">{plan.superset_tag}</span> : null}
           </b>
         </div>
-        <div class="target num">{targetText(plan)}</div>
+        {extra ? null : <div class="target num">{targetText(plan)}</div>}
       </div>
       {ex.cue_en ? <div class="cue">{ex.cue_en}</div> : null}
       <div class="ex-links">
         <a href={ytLink(ex.name_en)} target="_blank" rel="noopener noreferrer">
-          Form video ↗
+          Watch form video ↗
         </a>
         {g.last ? (
           <>
@@ -412,6 +445,8 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
               </span>
             ) : null}
           </>
+        ) : extra ? (
+          <span class="last">Added to this session only; no target.</span>
         ) : (
           <span class="last">First time: start light.</span>
         )}
@@ -454,8 +489,8 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
             ) : (
               <Stepper
                 value={x.reps}
-                placeholder={fmtNum(plan.reps_max)}
-                base={plan.reps_max}
+                placeholder={extra ? "–" : fmtNum(plan.reps_max)}
+                base={extra ? 0 : plan.reps_max}
                 step={1}
                 min={0}
                 decimals={false}
@@ -492,6 +527,11 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
             </button>
           ) : null}
         </span>
+        {extra && !sets.some((x) => x.done) ? (
+          <button type="button" data-testid={`remove-${ex.id}`} onClick={() => void removeExtraExercise(session.id, ex.id)}>
+            Remove exercise
+          </button>
+        ) : null}
         {g.last ? (
           <button type="button" class="copy" onClick={copyLast}>
             Same as last time

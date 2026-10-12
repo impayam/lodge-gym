@@ -45,7 +45,7 @@ describe("report endpoints", () => {
     const p = (await (await client.fetch("/api/reports/progress")).json()) as { since: { sessions: number; lifts: { exercise_id: string; change_pct: number }[] }; balance: { muscles: unknown[] } };
     expect(p.since.sessions).toBe(2);
     expect(p.since.lifts.find((l) => l.exercise_id === "bench")!.change_pct).toBe(3.8);
-    expect(p.balance.muscles).toHaveLength(10);
+    expect(p.balance.muscles).toHaveLength(16);
   });
   it("validates parameters and needs a session", async () => {
     expect((await client.fetch("/api/reports/week?start=bad")).status).toBe(400);

@@ -130,8 +130,13 @@ function WeekView() {
       ) : null}
 
       <h2>Sets vs program target</h2>
+      <p class="why" style={{ marginTop: 0 }}>Fractional sets: the primary muscle counts 1 set, each secondary muscle 0.5.</p>
       <div class="card">
-        <TargetBars rows={r.muscles.map((m) => ({ label: MUSCLE_NAME[m.muscle], value: m.sets, target: m.target }))} unitLabel="sets" />
+        <TargetBars
+          rows={r.muscles.filter((m) => m.target !== null).map((m) => ({ label: MUSCLE_NAME[m.muscle], value: m.fractional, direct: m.sets, target: m.target! }))}
+          unitLabel="fractional sets"
+          fmt={(n) => fmtNum(n, 1)}
+        />
       </div>
 
       <h2>Main lifts</h2>
@@ -356,7 +361,7 @@ function ProgressView() {
       <h2>Muscle balance this week</h2>
       <div class="card">
         <p class="why" style={{ marginTop: 0 }}>
-          Done sets per group (primary muscle only) vs the program target, {dayMonth(r.balance.week.start)} – {dayMonth(r.balance.week.end)}. Below 80% of the target counts as under, above 120% as over.
+          Done sets per group vs the program target, {dayMonth(r.balance.week.start)} – {dayMonth(r.balance.week.end)}. Direct counts the primary muscle only; fractional adds 0.5 for each secondary muscle. Below 80% of the target (fractional) counts as under, above 120% as over.
         </p>
         <MuscleMap muscles={r.balance.muscles} />
       </div>

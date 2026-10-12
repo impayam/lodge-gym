@@ -66,9 +66,25 @@ describe("weekly report", () => {
     });
   });
 
-  it("sets per muscle group vs targets (primary muscle only)", () => {
-    expect(Object.fromEntries(r.muscles.map((m) => [m.muscle, [m.sets, m.target]]))).toEqual({
-      chest: [13, 13], back: [13, 13], quads: [10, 10], hamstrings_glutes: [3, 9], shoulders: [3, 9], rear_delts: [3, 6], calves: [3, 6], core: [3, 6], biceps: [3, 3], triceps: [3, 3],
+  it("sets per muscle group vs targets: direct (primary) and fractional (secondary 0.5), SPEC-v2 §7.4", () => {
+    // Hand-computed from the week's sets and seed/library/seed-matches.json: [direct, fractional, target, status].
+    expect(Object.fromEntries(r.muscles.map((m) => [m.muscle, [m.sets, m.fractional, m.target, m.status]]))).toEqual({
+      chest: [13, 13, 13, "on"],
+      back: [13, 14.5, 13, "on"],
+      quads: [10, 10, 10, "on"],
+      hamstrings_glutes: [3, 8, 9, "on"],
+      shoulders: [3, 9.5, 9, "on"],
+      rear_delts: [3, 8, 6, "over"],
+      calves: [3, 8, 6, "over"],
+      core: [3, 3, 6, "under"],
+      biceps: [3, 9.5, 3, "over"],
+      triceps: [3, 8, 3, "over"],
+      traps: [0, 0, null, "none"],
+      forearms: [0, 3.5, null, "untracked"],
+      lower_back: [0, 3.5, null, "untracked"],
+      adductors: [0, 1.5, null, "untracked"],
+      abductors: [0, 0, null, "none"],
+      neck: [0, 0, null, "none"],
     });
   });
 
@@ -188,8 +204,10 @@ describe("progress page", () => {
 
   it("muscle balance for this week", () => {
     expect(p.balance.week).toEqual({ start: "2026-09-21", end: "2026-09-27" });
+    // The 80 % / 120 % thresholds apply to the fractional number (SPEC-v2 §7.4).
     expect(Object.fromEntries(p.balance.muscles.map((m) => [m.muscle, m.status]))).toEqual({
-      chest: "on", back: "on", quads: "on", hamstrings_glutes: "under", shoulders: "under", rear_delts: "under", calves: "under", core: "under", biceps: "on", triceps: "on",
+      chest: "on", back: "on", quads: "on", hamstrings_glutes: "on", shoulders: "on", rear_delts: "over", calves: "over", core: "under", biceps: "over", triceps: "over",
+      traps: "none", forearms: "untracked", lower_back: "untracked", adductors: "untracked", abductors: "none", neck: "none",
     });
   });
 });

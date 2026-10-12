@@ -1,7 +1,7 @@
 // App state, offline-first persistence and the outbox sync loop.
 
 import { useEffect, useState } from "preact/hooks";
-import type { BodyMetric, Bootstrap, HealthWorkout, Photo, Pose, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
 import { cancelPush, schedulePush } from "./push";
@@ -11,7 +11,7 @@ import * as ldb from "./localdb";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library";
 
 export interface SyncState {
   pending: number;
@@ -33,6 +33,8 @@ export interface State {
   photos: Photo[];
   /** Object URLs for photos not uploaded yet (id → { thumb, full }). */
   pendingPhotos: Record<string, { thumb: string; full: string }>;
+  /** The exercise library (GET /api/exercises), cached for offline use; null until first loaded. */
+  library: Exercise[] | null;
 }
 
 let state: State = {
@@ -45,6 +47,7 @@ let state: State = {
   flash: null,
   photos: [],
   pendingPhotos: {},
+  library: null,
 };
 
 const listeners = new Set<() => void>();
@@ -104,13 +107,14 @@ export async function init() {
     if (state.sync.pending > 0) void syncNow();
   }, 30_000);
 
-  const [boot, loggedIn, sessions, outbox] = await Promise.all([
+  const [boot, loggedIn, sessions, outbox, library] = await Promise.all([
     ldb.kvGet<BootData>("boot"),
     ldb.kvGet<boolean>("logged_in"),
     ldb.allSessions(),
     ldb.outboxAll(),
+    ldb.kvGet<Exercise[]>("library"),
   ]);
-  setState({ boot: boot ?? null, sessions: Object.fromEntries(sessions.map((s) => [s.id, s])) });
+  setState({ boot: boot ?? null, sessions: Object.fromEntries(sessions.map((s) => [s.id, s])), library: library ?? null });
   await restorePendingPhotos();
   setSync({ pending: outbox.length });
 
@@ -320,6 +324,106 @@ export async function deletePhoto(id: string) {
 }
 
 export const photoSrc = (p: Photo, size: "thumb" | "full") => state.pendingPhotos[p.id]?.[size] ?? `/api/photos/${encodeURIComponent(p.id)}?size=${size}`;
+
+/* ---------------- exercise library (SPEC-v2 §7) ---------------- */
+
+/** Loads the library list; the cached copy serves offline. */
+export async function loadLibrary() {
+  try {
+    const r = await api<{ exercises: Exercise[] }>("GET", "/exercises");
+    await ldb.kvSet("library", r.exercises);
+    setState({ library: r.exercises });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
+  }
+}
+
+/** Every exercise the app knows: the cached library plus the bootstrap set (program, history, custom). */
+export function allExercises(): Map<string, Exercise> {
+  const map = new Map((state.library ?? []).map((e) => [e.id, e]));
+  for (const e of state.boot?.exercises ?? []) if (!map.has(e.id)) map.set(e.id, e);
+  return map;
+}
+
+/** Keeps an exercise in the cached bootstrap so a session that uses it renders offline. */
+async function rememberExercise(ex: Exercise) {
+  if (!state.boot) return;
+  const exercises = [...state.boot.exercises.filter((e) => e.id !== ex.id), ex];
+  const boot = { ...state.boot, exercises };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
+}
+
+function replaceInLibrary(ex: Exercise) {
+  const library = state.library ? [...state.library.filter((e) => e.id !== ex.id), ex].sort((a, b) => a.name_en.localeCompare(b.name_en)) : [ex];
+  setState({ library });
+  void ldb.kvSet("library", library);
+}
+
+/**
+ * Adds an exercise to this session only (SPEC-v2 §7.3): three empty sets flagged is_extra, placed after the other
+ * extra exercises. The program is never changed. Works offline through the session outbox.
+ */
+export async function addExtraExercise(sessionId: string, ex: Exercise) {
+  const s = state.sessions[sessionId];
+  if (!s) return;
+  await rememberExercise(ex);
+  const position = Math.max(-1, ...s.sets.filter((x) => x.is_extra).map((x) => x.position ?? 0)) + 1;
+  const existing = s.sets.filter((x) => x.exercise_id === ex.id).length;
+  const now = new Date().toISOString();
+  const sets = Array.from({ length: 3 }, (_, i) => ({
+    id: ulid(),
+    exercise_id: ex.id,
+    set_index: existing + i,
+    weight: null,
+    reps: null,
+    seconds: null,
+    done: false,
+    rir: null,
+    is_extra: true,
+    position,
+    updated_at: now,
+  }));
+  await saveSession({ ...s, sets: [...s.sets, ...sets] });
+}
+
+/** Removes an extra exercise from the session; only allowed while none of its sets is done. */
+export async function removeExtraExercise(sessionId: string, exerciseId: string) {
+  const s = state.sessions[sessionId];
+  if (!s) return;
+  const mine = s.sets.filter((x) => x.exercise_id === exerciseId);
+  if (!mine.length || mine.some((x) => x.done || !x.is_extra)) return;
+  await saveSession({ ...s, sets: s.sets.filter((x) => x.exercise_id !== exerciseId) });
+}
+
+export interface CustomExerciseInput {
+  name_en: string;
+  muscle_primary: string;
+  muscles_secondary: string[];
+  equipment: Exercise["equipment"];
+  pattern: Exercise["pattern"];
+  archived: boolean;
+}
+
+/** Creates or edits a custom exercise (online). Archiving hides it from the picker; it is never deleted. */
+export async function saveCustomExercise(id: string, input: CustomExerciseInput): Promise<Exercise> {
+  const r = await api<{ exercise: Exercise }>("PUT", `/exercises/${encodeURIComponent(id)}`, input);
+  replaceInLibrary(r.exercise);
+  if (state.boot) await rememberExercise(r.exercise);
+  return r.exercise;
+}
+
+/** Photo of a custom exercise: resized and stripped of EXIF on the phone, then uploaded (online). */
+export async function uploadCustomPhoto(ex: Exercise, file: Blob): Promise<Exercise> {
+  const processed = await processPhoto(file);
+  const r = await apiUpload<{ media: ExerciseMedia[] }>(`/exercises/${encodeURIComponent(ex.id)}/photo`, processed.full);
+  const next = { ...ex, media: r.media };
+  replaceInLibrary(next);
+  if (state.boot) await rememberExercise(next);
+  return next;
+}
+
+export const mediaSrc = (m: ExerciseMedia) => (m.r2_key ? `/api/library/media/${m.r2_key.split("/").map(encodeURIComponent).join("/")}` : (m.url ?? ""));
 
 /* ---------------- sync ---------------- */
 

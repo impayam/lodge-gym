@@ -39,3 +39,8 @@ export const IconReports = () => (
     <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
   </svg>
 );
+export const IconLibrary = () => (
+  <svg {...base}>
+    <path d="M4 5h4v14H4zM10 5h4v14h-4zM16.5 5.5l3.8 1-3.6 13.4-3.8-1" />
+  </svg>
+);

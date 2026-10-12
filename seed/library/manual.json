@@ -1,0 +1,17 @@
+[
+  { "id": "manual-dumbbell-front-raise", "name_en": "Dumbbell Front Raise", "equipment": "dumbbell", "muscle_primary": "shoulders_front", "muscles_secondary": ["shoulders_side", "chest"], "pattern": "isolation", "mechanic": "isolation" },
+  { "id": "manual-single-arm-cable-lateral-raise", "name_en": "Single-Arm Cable Lateral Raise", "equipment": "cable", "muscle_primary": "shoulders_side", "muscles_secondary": ["traps"], "pattern": "isolation", "mechanic": "isolation" },
+  { "id": "manual-machine-lateral-raise", "name_en": "Machine Lateral Raise", "equipment": "machine", "muscle_primary": "shoulders_side", "muscles_secondary": ["traps"], "pattern": "isolation", "mechanic": "isolation" },
+  { "id": "manual-cable-y-raise", "name_en": "Cable Y-Raise", "equipment": "cable", "muscle_primary": "shoulders_side", "muscles_secondary": ["rear_delts", "traps"], "pattern": "isolation", "mechanic": "isolation" },
+  { "id": "manual-landmine-press", "name_en": "Landmine Press", "equipment": "barbell", "muscle_primary": "shoulders_front", "muscles_secondary": ["chest", "triceps", "core"], "pattern": "v_push", "mechanic": "compound" },
+  { "id": "manual-pendlay-row", "name_en": "Pendlay Row", "equipment": "barbell", "muscle_primary": "back_upper", "muscles_secondary": ["back_lats", "rear_delts", "biceps", "lower_back"], "pattern": "h_pull", "mechanic": "compound" },
+  { "id": "manual-seal-row", "name_en": "Seal Row", "equipment": "barbell", "muscle_primary": "back_upper", "muscles_secondary": ["back_lats", "rear_delts", "biceps"], "pattern": "h_pull", "mechanic": "compound" },
+  { "id": "manual-meadows-row", "name_en": "Meadows Row", "equipment": "barbell", "muscle_primary": "back_lats", "muscles_secondary": ["back_upper", "rear_delts", "biceps"], "pattern": "h_pull", "mechanic": "compound" },
+  { "id": "manual-bayesian-cable-curl", "name_en": "Bayesian Cable Curl", "equipment": "cable", "muscle_primary": "biceps", "muscles_secondary": ["forearms"], "pattern": "isolation", "mechanic": "isolation" },
+  { "id": "manual-dumbbell-single-leg-rdl", "name_en": "Dumbbell Single-Leg Romanian Deadlift", "equipment": "dumbbell", "muscle_primary": "hamstrings", "muscles_secondary": ["glutes", "lower_back", "core"], "pattern": "hinge", "mechanic": "compound" },
+  { "id": "manual-suitcase-carry", "name_en": "Suitcase Carry", "equipment": "dumbbell", "muscle_primary": "core", "muscles_secondary": ["forearms", "traps"], "pattern": "carry", "mechanic": "compound" },
+  { "id": "manual-side-plank", "name_en": "Side Plank", "equipment": "bodyweight", "muscle_primary": "core", "muscles_secondary": ["abductors"], "pattern": "core", "mechanic": "isolation" },
+  { "id": "manual-hollow-body-hold", "name_en": "Hollow Body Hold", "equipment": "bodyweight", "muscle_primary": "core", "muscles_secondary": [], "pattern": "core", "mechanic": "isolation" },
+  { "id": "manual-bird-dog", "name_en": "Bird Dog", "equipment": "bodyweight", "muscle_primary": "core", "muscles_secondary": ["glutes", "lower_back"], "pattern": "core", "mechanic": "isolation" },
+  { "id": "manual-copenhagen-plank", "name_en": "Copenhagen Plank", "equipment": "bodyweight", "muscle_primary": "adductors", "muscles_secondary": ["core"], "pattern": "core", "mechanic": "isolation" }
+]

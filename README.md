@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md` and `SPEC-v2.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2).
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library).
 
 ## Stack
 
@@ -93,7 +93,12 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 
 ## Approved report rules
 
-- Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 % (primary muscle only).
+- Sets per muscle are counted two ways (SPEC-v2 §7.4, decided 2026-10-12): **direct** (the primary muscle's group gets
+  1 per done set) and **fractional** (primary 1 set, each secondary muscle's group 0.5; a group counts once per set).
+  Planned and extra exercises count alike. The muscle map shows both numbers.
+- Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 %, applied to the
+  **fractional** number. The weekly targets are the program's sets per primary muscle group (SPEC §10). Traps,
+  forearms, lower back, adductors, abductors and neck have no target and show their sets only.
 - A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
 - Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
 
@@ -105,6 +110,24 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `name_fa` and `cue_fa` stay in D1 as data.
 - API errors keep the SPEC §11 shape `{error:{code,message_fa}}`; the `message_fa` field now carries English text.
 - The Shortcuts bridge still parses Persian-locale Shortcuts output (Persian digits, Jalali dates).
+
+## Exercise library (SPEC-v2 M7)
+
+- Source: [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense), pinned to commit
+  `FEDB_SHA` in `worker/lib/library.ts`. ExerciseDB is not used (its terms forbid storing data or media).
+- `seed/import-exercises.ts` (`npm run library:import -- --remote|--local …`) upserts the rows into D1 and copies the
+  images into the private R2 bucket under `library/free-exercise-db/images/`, with the dataset snapshot at
+  `library/free-exercise-db/<date>.json` and a manifest of copied images (resume). Re-running changes nothing.
+  `deploy:ci` runs the D1 part before `wrangler deploy` and the image copy after it, with a 12-minute budget (Workers
+  Builds stops a build at 20 minutes); a later deploy finishes any images left.
+- Reviewed mapping files in `seed/library/`: `fedb-equipment.json` (every "other" and missing-equipment entry mapped
+  to one of the five equipment values; kettlebell, bands, medicine ball, exercise ball and foam roll are excluded),
+  `fedb-patterns.json` (movement pattern per entry, drafted by `derive-patterns.ts`, unplaced ones left null),
+  `seed-matches.json` (the seeded exercises' library match, pattern, mechanic and secondary muscles; they keep their
+  ids) and `manual.json` (hand-written gap fill, source `manual`, no media).
+- `npm run library:report` writes `seed/library/IMPORT-REPORT.md` for review.
+- Muscle names map to the canonical keys in one table, `worker/lib/muscles.ts`.
+- Every exercise shows a "Watch form video" link: a YouTube search for `name_en + " form"`, built at render time.
 
 ## Approved additions beyond SPEC §5/§11
 
