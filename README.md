@@ -105,6 +105,10 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   2026-10-12): each planned set counts 1 for its primary group and 0.5 for each secondary group, so following the
   program exactly is on target everywhere. Traps, forearms, lower back, adductors, abductors and neck have no target
   and show their sets only.
+- Muscle map (Reports → Progress): anatomical front and back figures with one region per canonical muscle key
+  (chest, lats, upper back, traps, lower back, front/side/rear delts, biceps, triceps, forearms, core, quads,
+  hamstrings, glutes, adductors, calves), each coloured by its report group. Tapping a region selects its group: every
+  region of that group gets a filled highlight and a thick outline. Abductors and neck appear in the list only.
 - Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
   secondary muscle (decided 2026-10-12).
 - Only strength work counts (decided 2026-10-12): exercises whose `category` (migration `0005_exercise_category.sql`)
@@ -141,6 +145,13 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - `npm run library:report` writes `seed/library/IMPORT-REPORT.md` for review.
 - Muscle names map to the canonical keys in one table, `worker/lib/muscles.ts`.
 - Every exercise shows a "Watch form video" link: a YouTube search for `name_en + " form"`, built at render time.
+
+## Artwork and credits
+
+- Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
+  drawn and mirrored in code, so the figures are symmetric by construction. No third-party artwork or icon set is
+  used, so no external licence applies.
+- Exercise images: free-exercise-db (Unlicense), copied into the private R2 bucket (see "Exercise library").
 
 ## Approved additions beyond SPEC §5/§11
 

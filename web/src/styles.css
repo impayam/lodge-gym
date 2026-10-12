@@ -317,13 +317,14 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .mtitle { font-size: 13px; }
 
 /* muscle map */
-.figures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.figure { margin: 0; text-align: center; }
-.figure svg { width: 100%; max-height: 260px; }
-.figure figcaption { font-size: 12px; color: var(--muted); }
-.body { fill: var(--surface-2); stroke: var(--line); stroke-width: 1; }
-.muscle { stroke: var(--surface); stroke-width: 2; cursor: pointer; }
-.muscle.active { stroke: var(--ink); }
+.figures { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 460px; margin: 0 auto; }
+.figure { margin: 0; text-align: center; min-width: 0; }
+.figure svg { display: block; width: 100%; height: auto; }
+.figure figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.figure .body { fill: var(--surface-2); stroke: var(--muted); stroke-width: 1; stroke-linejoin: round; }
+.muscle { stroke: var(--surface); stroke-width: 1.2; stroke-linejoin: round; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.figure .detail { fill: none; stroke: var(--surface); stroke-width: 1; pointer-events: none; }
+.figure .sel { fill: var(--ink); fill-opacity: 0.3; stroke: var(--ink); stroke-width: 2.6; stroke-linejoin: round; pointer-events: none; }
 .m-none { fill: var(--line); background: var(--line); }
 .m-on { fill: var(--good); background: var(--good); }
 .m-untracked { fill: var(--accent-soft); background: var(--accent-soft); }
