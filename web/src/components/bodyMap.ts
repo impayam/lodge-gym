@@ -150,8 +150,8 @@ export const BACK: HalfRegion[] = [
   { key: "rear_delts", d: "M62,87.8 C55.5,89.8 51,97 50.6,107 C50.2,118 51.6,127 54,136 C58.5,126 62.5,116 66,107.5 C66,99 64.5,92 62,87.8 Z" },
   // Lateral deltoid (the cap, seen from behind).
   { key: "shoulders_side", d: "M57,86.6 C49.5,88 45.5,95 45,105 C44.5,118 46.5,130 49.5,141 L52,136 C50,121 50.5,107 52.5,98 C53.5,92 55,88.5 57,86.6 Z" },
-  // Latissimus dorsi, from under the armpit to the lower back.
-  { key: "back_lats", d: "M67,114 C66.2,130 67.2,150 69.6,168 C71,180 74.5,192 80,201 C83,195 85.5,187 87,178 C88,166 91.5,156 95.5,150 C94.5,140 93,133 91,128 C83,126 74,121 67,114 Z" },
+  // Latissimus dorsi, from under the scapula (its top edge follows the upper back's lower edge) to the lower back.
+  { key: "back_lats", d: "M67.2,131 C73,139.8 81.5,145.8 90.5,149 C92.5,150.5 94,151.5 95.5,152.5 C91.5,158 88,167 87,178 C85.5,187 83,195 80,201 C74.5,192 71,180 69.6,168 C67.4,152 66.5,139 67.2,131 Z" },
   // Erector spinae, lumbar, down to the sacrum.
   { key: "lower_back", d: "M98.5,166 C93.5,170 89.5,179 89,191 C88.5,201 90.5,210 94,216 C95.5,217.5 97,218 98.5,218 Z" },
   // Triceps brachii.
