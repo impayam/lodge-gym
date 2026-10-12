@@ -29,7 +29,6 @@ export async function readSettings(env: Env): Promise<Settings> {
   return {
     unit: map.unit === "kg" ? "kg" : map.unit === "lb" ? "lb" : DEFAULT_SETTINGS.unit,
     week_start: map.week_start === "sat" || map.week_start === "sun" || map.week_start === "mon" ? map.week_start : DEFAULT_SETTINGS.week_start,
-    month_calendar: map.month_calendar === "jalali" ? "jalali" : DEFAULT_SETTINGS.month_calendar,
     relock_minutes: Number.isFinite(Number(map.relock_minutes)) ? Number(map.relock_minutes) : DEFAULT_SETTINGS.relock_minutes,
     timezone: map.timezone && isValidTimeZone(map.timezone) ? map.timezone : DEFAULT_SETTINGS.timezone,
   };
@@ -101,6 +100,7 @@ export async function readExercises(env: Env): Promise<Exercise[]> {
     is_lower: r.is_lower === 1,
     equipment: r.equipment as Exercise["equipment"],
     cue_fa: (r.cue_fa as string | null) ?? "",
+    cue_en: (r.cue_en as string | null | undefined) ?? null,
   }));
 }
 
@@ -171,7 +171,6 @@ const settingsSchema = z
   .object({
     unit: z.enum(["lb", "kg"]),
     week_start: z.enum(["sat", "sun", "mon"]),
-    month_calendar: z.enum(["gregorian", "jalali"]),
     relock_minutes: z.number().int().min(0).max(1440),
     timezone: z.string().max(64).refine(isValidTimeZone, "timezone"),
   })
@@ -210,25 +209,25 @@ dataRoutes.put("/settings", async (c) => {
 dataRoutes.get("/sessions", async (c) => {
   const from = c.req.query("from");
   const to = c.req.query("to");
-  if (from !== undefined && !DATE_RE.test(from)) return fail(c, 400, "invalid_input", "تاریخ شروع معتبر نیست.");
-  if (to !== undefined && !DATE_RE.test(to)) return fail(c, 400, "invalid_input", "تاریخ پایان معتبر نیست.");
+  if (from !== undefined && !DATE_RE.test(from)) return fail(c, 400, "invalid_input", "The start date is not valid.");
+  if (to !== undefined && !DATE_RE.test(to)) return fail(c, 400, "invalid_input", "The end date is not valid.");
   return c.json({ sessions: await readSessions(c.env, from ?? "0000-01-01", to ?? "9999-12-31") });
 });
 
 dataRoutes.put("/sessions/:id", async (c) => {
   const doc = await readJson(c, sessionSchema);
-  if (doc.id !== c.req.param("id")) return fail(c, 400, "id_mismatch", "شناسه‌ی جلسه با آدرس یکی نیست.");
+  if (doc.id !== c.req.param("id")) return fail(c, 400, "id_mismatch", "The session id does not match the URL.");
   const setIds = new Set(doc.sets.map((s) => s.id));
-  if (setIds.size !== doc.sets.length) return fail(c, 400, "invalid_input", "شناسه‌ی ست‌ها تکراری است.");
+  if (setIds.size !== doc.sets.length) return fail(c, 400, "invalid_input", "Duplicate set ids.");
 
   const day = await c.env.DB.prepare("SELECT id FROM program_days WHERE id = ?").bind(doc.program_day_id).first();
-  if (!day) return fail(c, 400, "unknown_day", "روز برنامه پیدا نشد.");
+  if (!day) return fail(c, 400, "unknown_day", "Program day not found.");
   const exIds = [...new Set(doc.sets.map((s) => s.exercise_id))];
   if (exIds.length) {
     const found = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM exercises WHERE id IN (SELECT value FROM json_each(?))")
       .bind(JSON.stringify(exIds))
       .first<{ n: number }>();
-    if ((found?.n ?? 0) !== exIds.length) return fail(c, 400, "unknown_exercise", "حرکت ناشناخته در ست‌ها.");
+    if ((found?.n ?? 0) !== exIds.length) return fail(c, 400, "unknown_exercise", "Unknown exercise in the sets.");
   }
 
   // Set ids must not belong to another session.
@@ -236,7 +235,7 @@ dataRoutes.put("/sessions/:id", async (c) => {
     const clash = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM set_entries WHERE session_id <> ? AND id IN (SELECT value FROM json_each(?))")
       .bind(doc.id, JSON.stringify(doc.sets.map((s) => s.id)))
       .first<{ n: number }>();
-    if (clash?.n) return fail(c, 409, "set_conflict", "شناسه‌ی ست متعلق به جلسه‌ی دیگری است.");
+    if (clash?.n) return fail(c, 409, "set_conflict", "A set id belongs to another session.");
   }
 
   // Last-writer-wins on updated_at: an older document never overwrites a newer one.
@@ -334,7 +333,7 @@ const bodyMassSchema = z.object({ value: z.number().positive().max(1000).nullabl
 /** Manual body weight for a day ("body weight today" at the end of a session); null clears it. */
 dataRoutes.put("/body-mass/:date", async (c) => {
   const date = c.req.param("date");
-  if (!DATE_RE.test(date)) return fail(c, 400, "invalid_input", "تاریخ معتبر نیست.");
+  if (!DATE_RE.test(date)) return fail(c, 400, "invalid_input", "The date is not valid.");
   const body = await readJson(c, bodyMassSchema);
   if (body.value === null) {
     await c.env.DB.prepare("DELETE FROM body_metrics WHERE local_date = ? AND kind = 'body_mass' AND source = 'manual'").bind(date).run();
@@ -351,7 +350,7 @@ dataRoutes.put("/body-mass/:date", async (c) => {
 
 dataRoutes.delete("/sessions/:id", async (c) => {
   const sid = c.req.param("id");
-  if (!ID_RE.test(sid)) return fail(c, 400, "invalid_input", "شناسه‌ی جلسه معتبر نیست.");
+  if (!ID_RE.test(sid)) return fail(c, 400, "invalid_input", "The session id is not valid.");
   await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM set_entries WHERE session_id = ?").bind(sid),
     c.env.DB.prepare("DELETE FROM workout_sessions WHERE id = ?").bind(sid),

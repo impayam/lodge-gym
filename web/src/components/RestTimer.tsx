@@ -32,16 +32,16 @@ export function RestTimer() {
   return (
     <div class={`rest${over ? " over" : ""}${flashing ? " flash" : ""}`} role="timer" aria-live="polite" data-testid="rest-timer">
       <div>
-        <small>{over ? "استراحت تمام شد" : rest.label}</small>
+        <small>{over ? "Rest is over" : rest.label}</small>
         <br />
         <b class="num">{over ? "+" + clock(-left) : clock(Math.ceil(left))}</b>
       </div>
       <div class="row" style={{ flex: "none", gap: "6px" }}>
         <button type="button" onClick={() => extendRest(30)}>
-          +۳۰ ث
+          +30 s
         </button>
         <button type="button" onClick={stopRest}>
-          بستن
+          Close
         </button>
       </div>
     </div>

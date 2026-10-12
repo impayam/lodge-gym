@@ -95,7 +95,7 @@ describe("POST /api/health/raw with Heart Rate + Active Energy samples", () => {
     const res = await shortcut(JSON.stringify(samplesIso));
     const body = (await res.json()) as { sessions: number; hr_samples: number; energy_samples: number; stored: number; message: string };
     expect(body).toMatchObject({ sessions: 1, hr_samples: 6, energy_samples: 6, stored: 0 });
-    expect(body.message).toBe("Lodge Gym: داده‌ی ساعت برای ۱ جلسه ثبت شد.");
+    expect(body.message).toBe("Lodge Gym: watch data saved for 1 session.");
     const [r] = await sessionRows();
     expect(r).toMatchObject({ matched_session_id: s.id, hr_avg: 142.5, hr_max: 160, active_kcal: 40.5, duration_sec: 3600, started_at: s.started_at, ended_at: s.ended_at });
     expect(r.external_key).toBe(`session:${s.id}`);
@@ -157,7 +157,7 @@ describe("POST /api/health/raw with Heart Rate + Active Energy samples", () => {
   it("samples without a session in the app are reported, not stored", async () => {
     const body = (await (await shortcut(JSON.stringify(samplesIso))).json()) as { sessions: number; message: string };
     expect(body.sessions).toBe(0);
-    expect(body.message).toContain("جلسه‌ای در برنامه ثبت نشده");
+    expect(body.message).toContain("no session is logged in this time window");
     expect(await sessionRows()).toEqual([]);
   });
 
@@ -191,7 +191,7 @@ describe("POST /api/health/raw (legacy workout fields)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; stored: number; matched: number; message: string };
     expect(body).toMatchObject({ ok: true, stored: 1, matched: 1 });
-    expect(body.message).toContain("۱ تمرین دریافت شد، ۱ مورد به جلسه وصل شد");
+    expect(body.message).toContain("1 workout received, 1 matched to a session");
     const [w] = await rows();
     expect(w).toMatchObject({
       activity_type: "Traditional Strength Training",

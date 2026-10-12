@@ -35,5 +35,5 @@ export const deviceLabel = () => {
   if (/iPhone/.test(ua)) return "iPhone";
   if (/iPad/.test(ua)) return "iPad";
   if (/Macintosh/.test(ua)) return "Mac";
-  return "دستگاه تازه";
+  return "New device";
 };

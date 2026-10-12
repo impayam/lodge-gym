@@ -13,7 +13,6 @@ import {
   shiftMonth,
   weeklyReport,
 } from "../../worker/lib/reports";
-import { gregorianToJalali, jalaliToGregorian } from "../../worker/lib/jalali";
 import { reportData } from "../fixtures/report-data";
 
 describe("building blocks", () => {
@@ -33,16 +32,13 @@ describe("building blocks", () => {
     expect(muscleTargets(reportData())).toEqual({ chest: 13, back: 13, quads: 10, hamstrings_glutes: 9, shoulders: 9, rear_delts: 6, calves: 6, core: 6, biceps: 3, triceps: 3 });
     expect(mainLifts(reportData())).toEqual(["bench", "squat", "cs_row", "deadlift", "ohp"]);
   });
-  it("Jalali months", () => {
-    expect(gregorianToJalali(2026, 9, 28)).toEqual([1405, 7, 6]);
-    expect(jalaliToGregorian(1405, 7, 6)).toEqual([2026, 9, 28]);
-    expect(monthRange("1405-06", "jalali")).toEqual({ key: "1405-06", calendar: "jalali", start: "2026-08-23", end: "2026-09-22" });
-    expect(monthRange("1405-12", "jalali").end).toBe("2027-03-20");
-    expect(monthRange("2026-02", "gregorian")).toMatchObject({ start: "2026-02-01", end: "2026-02-28" });
-    expect(monthKeyOf("2026-09-28", "jalali")).toBe("1405-07");
-    expect(monthKeyOf("2026-09-28", "gregorian")).toBe("2026-09");
+  it("Gregorian months", () => {
+    expect(monthRange("2026-02")).toEqual({ key: "2026-02", start: "2026-02-01", end: "2026-02-28" });
+    expect(monthRange("2028-02").end).toBe("2028-02-29");
+    expect(monthRange("2026-12")).toMatchObject({ start: "2026-12-01", end: "2026-12-31" });
+    expect(monthKeyOf("2026-09-28")).toBe("2026-09");
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
-    expect(shiftMonth("1405-12", 1)).toBe("1406-01");
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
   });
   it("balance thresholds", () => {
     expect(balanceStatus(0, 5)).toBe("none");
@@ -62,9 +58,9 @@ describe("weekly report", () => {
       done: 3,
       target: 4,
       days: [
-        { date: "2026-09-21", day_id: "D1", name_fa: "روز ۱ – سینه" },
-        { date: "2026-09-23", day_id: "D2", name_fa: "روز ۲ – پا" },
-        { date: "2026-09-26", day_id: "D3", name_fa: "روز ۳ – پشت" },
+        { date: "2026-09-21", day_id: "D1", name_en: "Day 1 · Chest" },
+        { date: "2026-09-23", day_id: "D2", name_en: "Day 2 · Legs" },
+        { date: "2026-09-26", day_id: "D3", name_en: "Day 3 · Back" },
       ],
       total_minutes: 180,
     });
@@ -101,7 +97,7 @@ describe("weekly report", () => {
   });
 
   it("notes", () => {
-    expect(r.notes).toEqual([{ date: "2026-09-21", name_fa: "روز ۱ – سینه", note: "خوب بود" }]);
+    expect(r.notes).toEqual([{ date: "2026-09-21", name_en: "Day 1 · Chest", note: "خوب بود" }]);
   });
 
   it("week boundaries follow each week-start setting", () => {
@@ -167,12 +163,6 @@ describe("monthly report", () => {
     expect(r.photos.map((p) => [p!.pose, p!.first.id, p!.last.id])).toEqual([["front", "F1", "F2"]]);
     expect(r.avg_minutes).toBe(60);
     expect(r.avg_active_kcal).toBe(280);
-  });
-
-  it("uses the Jalali month when set", () => {
-    const j = monthlyReport(reportData({ month_calendar: "jalali" }), "1405-06");
-    expect(j.range).toMatchObject({ start: "2026-08-23", end: "2026-09-22" });
-    expect(j.sessions).toBe(3);
   });
 });
 

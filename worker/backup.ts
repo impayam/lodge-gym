@@ -70,8 +70,8 @@ exportRoutes.get("/backups", async (c) => {
 exportRoutes.get("/backups/latest", async (c) => {
   const page = await c.env.PHOTOS.list({ prefix: BACKUP_PREFIX });
   const latest = page.objects.map((o) => o.key).sort().pop();
-  if (!latest) return fail(c, 404, "no_backup", "هنوز پشتیبان خودکاری ساخته نشده است.");
+  if (!latest) return fail(c, 404, "no_backup", "No automatic backup has been made yet.");
   const obj = await c.env.PHOTOS.get(latest);
-  if (!obj) return fail(c, 404, "no_backup", "پشتیبان پیدا نشد.");
+  if (!obj) return fail(c, 404, "no_backup", "Backup not found.");
   return download(obj.body, latest.slice(BACKUP_PREFIX.length));
 });

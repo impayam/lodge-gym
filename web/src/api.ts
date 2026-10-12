@@ -4,7 +4,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
-    public messageFa: string
+    /** Server message (sent in the `message_fa` field of the API error shape, SPEC §11). */
+    public messageText: string
   ) {
     super(code);
   }
@@ -33,11 +34,11 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   try {
     data = await res.json();
   } catch {
-    if (res.ok) throw new ApiError(res.status, "bad_response", "پاسخ سرور قابل خواندن نیست.");
+    if (res.ok) throw new ApiError(res.status, "bad_response", "The server response could not be read.");
   }
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message_fa?: string } } | null)?.error;
-    throw new ApiError(res.status, err?.code ?? "http_" + res.status, err?.message_fa ?? "خطا در ارتباط با سرور.");
+    throw new ApiError(res.status, err?.code ?? "http_" + res.status, err?.message_fa ?? "Could not reach the server.");
   }
   return data as T;
 }
@@ -51,14 +52,14 @@ export async function apiUpload<T>(path: string, body: Blob): Promise<T> {
     throw new NetworkError();
   }
   const data = (await res.json().catch(() => null)) as { error?: { code?: string; message_fa?: string } } | null;
-  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? "http_" + res.status, data?.error?.message_fa ?? "آپلود انجام نشد.");
+  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? "http_" + res.status, data?.error?.message_fa ?? "Upload failed.");
   return data as T;
 }
 
 export function errorText(e: unknown): string {
-  if (e instanceof ApiError) return e.messageFa;
-  if (e instanceof NetworkError) return "اتصال اینترنت برقرار نیست.";
-  if (e instanceof DOMException && e.name === "NotAllowedError") return "Face ID لغو شد یا اجازه داده نشد.";
-  if (e instanceof Error && e.name === "NotAllowedError") return "Face ID لغو شد یا اجازه داده نشد.";
-  return "کار انجام نشد. دوباره امتحان کن.";
+  if (e instanceof ApiError) return e.messageText;
+  if (e instanceof NetworkError) return "No internet connection.";
+  if (e instanceof DOMException && e.name === "NotAllowedError") return "Face ID was cancelled or not allowed.";
+  if (e instanceof Error && e.name === "NotAllowedError") return "Face ID was cancelled or not allowed.";
+  return "That didn't work. Try again.";
 }

@@ -1,7 +1,7 @@
 // Numeric field with −/+ buttons (press and hold repeats). Accepts Persian/Latin digits and , or . decimals.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { faNum, parseNumber } from "../../../worker/lib/digits";
+import { fmtNum, parseNumber } from "../../../worker/lib/digits";
 
 interface Props {
   value: number | null;
@@ -59,10 +59,10 @@ export function Stepper({ value, placeholder, step, onChange, base, min, decimal
     bump(dir);
   };
 
-  const shown = text ?? (value == null ? "" : faNum(value));
+  const shown = text ?? (value == null ? "" : fmtNum(value));
   return (
     <div class="stepper" data-testid={testId}>
-      <button type="button" aria-label={`کم کردن ${label}`} onPointerDown={press(-1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(-1)}>
+      <button type="button" aria-label={`Decrease ${label}`} onPointerDown={press(-1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(-1)}>
         −
       </button>
       <input
@@ -82,7 +82,7 @@ export function Stepper({ value, placeholder, step, onChange, base, min, decimal
           if (n !== null && (decimals || Number.isInteger(n)) && (min === undefined || n >= min)) onChange(n);
         }}
       />
-      <button type="button" aria-label={`زیاد کردن ${label}`} onPointerDown={press(1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(1)}>
+      <button type="button" aria-label={`Increase ${label}`} onPointerDown={press(1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(1)}>
         +
       </button>
     </div>

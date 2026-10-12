@@ -1,13 +1,12 @@
-import { faNum } from "../../../worker/lib/digits";
 import type { DayExercise } from "../../../worker/lib/types";
-import { ytLink } from "../format";
+import { fmtNum, ytLink } from "../format";
 import { exerciseMap } from "../model";
 import { useStore } from "../store";
 
 export function targetText(p: DayExercise) {
-  if (p.is_time) return `${faNum(p.sets)} × ${faNum(p.reps_max)} ثانیه`;
-  const reps = p.reps_min !== p.reps_max ? `${faNum(p.reps_min)}–${faNum(p.reps_max)}` : faNum(p.reps_max);
-  return `${faNum(p.sets)} × ${reps}${p.per_leg ? " هر پا" : ""}`;
+  if (p.is_time) return `${fmtNum(p.sets)} × ${fmtNum(p.reps_max)} s`;
+  const reps = p.reps_min !== p.reps_max ? `${fmtNum(p.reps_min)}–${fmtNum(p.reps_max)}` : fmtNum(p.reps_max);
+  return `${fmtNum(p.sets)} × ${reps}${p.per_leg ? " per leg" : ""}`;
 }
 
 export function Program() {
@@ -15,24 +14,23 @@ export function Program() {
   const exMap = exerciseMap(boot);
   return (
     <>
-      <h2>قوانین برنامه</h2>
+      <h2>Program rules</h2>
       <div class="card">
         <ul class="rules">
-          <li>فول‌بادی با تمرکز روزانه: هر جلسه کل بدن را کار می‌دهد و حرکت اول، حرکت اصلی و سنگین آن روز است.</li>
-          <li>ترتیب: روز ۱ ← ۲ ← ۳ ← ۴. هر روزی که رفتی، جلسه‌ی بعدی را بزن. بیشتر از دو روز پشت‌سرهم تمرین نکن.</li>
-          <li>هدف: ۴ جلسه در ۷ روز.</li>
-          <li>هفته‌ی ۱ و ۲: آخر هر ست ۳ تا ۴ تکرار ذخیره. از هفته‌ی ۳: ۱ تا ۲ تکرار ذخیره.</li>
-          <li>همه‌ی ست‌ها کامل شد؟ جلسه‌ی بعد اضافه کن: بالاتنه ۵ پوند (۲٫۵ کیلو)، پایین‌تنه ۱۰ پوند (۵ کیلو)، دمبل ۵ پوند (۲ کیلو) برای هر دست.</li>
-          <li>برای اینکه عضله از دست نرود: کالری کمتر از نیاز بدن نخور، ۱۳۰ تا ۱۵۰ گرم پروتئین در روز، ۷ تا ۹ ساعت خواب.</li>
-          <li>A1/A2 و B1/B2 سوپرست‌اند: یکی در میان، بعد از هر دور ۶۰ تا ۹۰ ثانیه استراحت.</li>
-          <li>هر ۶ تا ۸ هفته یک هفته‌ی سبک با نصف ست‌ها.</li>
+          <li>Full body with a daily focus: every session trains the whole body, and the first exercise is the main, heavy lift of the day.</li>
+          <li>Order: Day 1 → 2 → 3 → 4. Whenever you train, do the next day. No more than two training days in a row.</li>
+          <li>Goal: 4 sessions in 7 days.</li>
+          <li>Weeks 1 and 2: end each set with 3–4 reps in reserve. From week 3: 1–2 reps in reserve.</li>
+          <li>All sets completed? Next session add: upper body 5 lb (2.5 kg), lower body 10 lb (5 kg), dumbbells 5 lb (2 kg) per hand.</li>
+          <li>To keep muscle: don't eat below maintenance, 130–150 g of protein a day, 7–9 hours of sleep.</li>
+          <li>A1/A2 and B1/B2 are supersets: alternate them and rest 60–90 s after each round.</li>
+          <li>Every 6–8 weeks, a light week with half the sets.</li>
         </ul>
       </div>
       {boot.program.days.map((d) => (
         <>
           <h2>
-            {d.name_fa}{" "}
-            <small class="ltr">{d.name_en}</small> <small>· حدود {faNum(d.est_minutes)} دقیقه</small>
+            {d.name_en} <small>· about {fmtNum(d.est_minutes)} min</small>
           </h2>
           <div class="card prog-day">
             {d.exercises.map((p) => {
@@ -41,19 +39,16 @@ export function Program() {
                 <div class="prog-item">
                   <div>
                     <b>
-                      {p.is_main ? <span class="mainb">اصلی</span> : null}
-                      {e.name_fa}
-                      {p.superset_tag ? <span class="tag ltr">{p.superset_tag}</span> : null}
-                    </b>
-                    <small class="ltr" style={{ textAlign: "right" }}>
+                      {p.is_main ? <span class="mainb">Main</span> : null}
                       {e.name_en}
-                    </small>
+                      {p.superset_tag ? <span class="tag">{p.superset_tag}</span> : null}
+                    </b>
                     <small>
-                      {targetText(p)} · استراحت {faNum(p.rest_sec)} ثانیه
+                      {targetText(p)} · rest {fmtNum(p.rest_sec)} s
                     </small>
                   </div>
                   <a href={ytLink(e.name_en)} target="_blank" rel="noopener noreferrer">
-                    ویدیوی فرم ↗
+                    Form video ↗
                   </a>
                 </div>
               );

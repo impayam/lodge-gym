@@ -15,8 +15,27 @@ export function sql(command: string): unknown[] {
   return parsed[0]?.results ?? [];
 }
 
+const PROXY = `http://localhost:${process.env.E2E_PROXY_PORT ?? "8790"}`;
+const isWebKit = () => test.info().project.name.startsWith("webkit");
+const network = async (offline: boolean) => {
+  const res = await fetch(`${PROXY}/__network?offline=${offline ? 1 : 0}`, { headers: { Connection: "close" } });
+  if (((await res.json()) as { offline: boolean }).offline !== offline) throw new Error("e2e proxy did not switch");
+};
+
+/**
+ * Airplane mode. Chromium uses Playwright's offline emulation. WebKit's emulation also fails every Blob read and every
+ * service-worker navigation (iOS does not), so for WebKit the e2e proxy drops the network instead and the page gets the
+ * offline/online event the phone would fire.
+ */
+export async function setOffline(context: BrowserContext, page: Page, offline: boolean) {
+  if (!isWebKit()) return context.setOffline(offline);
+  await network(offline);
+  await page.evaluate((off) => window.dispatchEvent(new Event(off ? "offline" : "online")), offline);
+}
+
 /** Signs in by creating a full session row and setting its cookie (for browsers without a virtual authenticator). */
 export async function signIn(context: BrowserContext, baseURL: string) {
+  if (isWebKit()) await network(false);
   const token = randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update(token).digest("hex");
   const now = new Date();
@@ -32,5 +51,5 @@ export function resetWorkouts() {
 }
 
 export async function waitForSynced(page: Page) {
-  await page.getByTestId("sync-chip").filter({ hasText: "همگام" }).waitFor();
+  await page.getByTestId("sync-chip").filter({ hasText: "Synced" }).waitFor();
 }

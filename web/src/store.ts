@@ -148,7 +148,7 @@ export async function refresh() {
       // Only reached while loading when we were not logged in on this device.
       if (state.auth === "loading") setState({ auth: state.boot ? "login" : "first-offline" });
     } else {
-      setSync({ error: e instanceof ApiError ? e.messageFa : "خطا در بارگذاری" });
+      setSync({ error: e instanceof ApiError ? e.messageText : "Loading failed" });
       if (state.auth === "loading") setState({ auth: state.boot ? "ready" : "first-offline" });
     }
   }
@@ -388,7 +388,7 @@ async function syncOnce() {
   } catch (err) {
     if (err instanceof NetworkError) setSync({ online: false });
     else if (err instanceof ApiError && err.status === 401) setState({ auth: "login" });
-    else if (err instanceof ApiError) setSync({ error: err.messageFa });
+    else if (err instanceof ApiError) setSync({ error: err.messageText });
   } finally {
     setSync({ syncing: false, pending: (await ldb.outboxAll()).length });
   }

@@ -1,18 +1,17 @@
 // Session screen (SPEC §7): fewest taps — prefilled suggestions, one-tap check, steppers, rest timer, autosave.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { faNum } from "../../../worker/lib/digits";
 import { localHM } from "../../../worker/lib/time";
 import type { SetEntry, Unit, WorkoutSession } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { IconCheck } from "../components/Icons";
 import { Stepper } from "../components/Stepper";
-import { clock, faHM, greg, jalali, ytLink } from "../format";
+import { clock, dateLong, fmtNum, hm, ytLink } from "../format";
 import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
 import { flash, getState, navigate, photoSrc, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
 import { targetText } from "./Program";
-import { WatchStats, workoutTypeFa } from "./Watch";
-import { PhotoPicker, poseFa } from "./Photos";
+import { WatchStats, workoutTypeName } from "./Watch";
+import { PhotoPicker, poseLabel } from "./Photos";
 
 function useWakeLock(enabled: boolean) {
   useEffect(() => {
@@ -104,7 +103,7 @@ export function Session({ id }: { id: string }) {
   const finish = () => {
     stopRest();
     update((x) => ({ ...x, status: "done", ended_at: new Date().toISOString() }));
-    flash("جلسه ثبت شد.");
+    flash("Session saved.");
     setJustFinished(true);
     window.scrollTo(0, 0);
   };
@@ -114,28 +113,24 @@ export function Session({ id }: { id: string }) {
       <section class="sess-head">
         <div class="sess-title">
           <div>
-            <b>{day.name_fa}</b>
-            <small class="ltr" style={{ textAlign: "right" }}>
-              {day.name_en}
-            </small>
-            {day.focus_fa ? <small>{day.focus_fa}</small> : null}
+            <b>{day.name_en}</b>
           </div>
-          <div style={{ textAlign: "left" }}>
+          <div style={{ textAlign: "right" }}>
             {s.status === "active" ? (
               <>
                 <Elapsed from={s.started_at} />
                 <small class="muted" style={{ fontSize: "12px" }}>
-                  زمان سپری‌شده
+                  Elapsed
                 </small>
               </>
             ) : (
-              <span class="pill done">تمام‌شده</span>
+              <span class="pill done">Done</span>
             )}
           </div>
         </div>
         <div class="when">
           <div class="field">
-            <label for="f-date">تاریخ</label>
+            <label for="f-date">Date</label>
             <input
               id="f-date"
               type="date"
@@ -147,7 +142,7 @@ export function Session({ id }: { id: string }) {
             />
           </div>
           <div class="field">
-            <label for="f-start">شروع</label>
+            <label for="f-start">Start</label>
             <input
               id="f-start"
               type="time"
@@ -159,7 +154,7 @@ export function Session({ id }: { id: string }) {
             />
           </div>
           <div class="field">
-            <label for="f-end">پایان</label>
+            <label for="f-end">End</label>
             <input
               id="f-end"
               type="time"
@@ -172,10 +167,8 @@ export function Session({ id }: { id: string }) {
           </div>
         </div>
         <div class="jal">
-          <span>
-            {jalali(s.local_date)} · <span class="ltr">{greg(s.local_date)}</span>
-          </span>
-          <span class="seg" role="group" aria-label="واحد وزن این جلسه">
+          <span>{dateLong(s.local_date)}</span>
+          <span class="seg" role="group" aria-label="Weight unit for this session">
             {(["lb", "kg"] as Unit[]).map((u) => (
               <button type="button" aria-pressed={s.unit === u} onClick={() => update((x) => ({ ...x, unit: u }))}>
                 {u}
@@ -183,18 +176,18 @@ export function Session({ id }: { id: string }) {
             ))}
           </span>
         </div>
-        {hasSuperset ? <div class="ss-note">حرکت‌های A1/A2 و B1/B2 سوپرست هستند: یکی در میان، بعد از هر دور ۶۰ تا ۹۰ ثانیه استراحت.</div> : null}
+        {hasSuperset ? <div class="ss-note">A1/A2 and B1/B2 are supersets: alternate them and rest 60–90 s after each round.</div> : null}
       </section>
 
       {justFinished ? (
         <section class="card photo-prompt stack" style={{ marginTop: "14px" }} data-testid="photo-prompt">
-          <b>عکس پیشرفت امروز؟</b>
-          <span class="why">جلو، بغل و پشت؛ اختیاری است.</span>
+          <b>Progress photos today?</b>
+          <span class="why">Front, side and back; optional.</span>
           {(["front", "side", "back"] as const).map((pose) => (
             <PhotoPicker pose={pose} date={s.local_date} sessionId={s.id} compact />
           ))}
           <button type="button" class="btn btn-ghost btn-block" onClick={() => setJustFinished(false)}>
-            بعداً
+            Later
           </button>
         </section>
       ) : null}
@@ -202,8 +195,8 @@ export function Session({ id }: { id: string }) {
         <div class="photos" style={{ marginTop: "10px" }} data-testid="session-photos">
           {sessionPhotos.map((p) => (
             <button type="button" class="ph" onClick={() => navigate("photos")}>
-              <img src={photoSrc(p, "thumb")} alt={`عکس ${poseFa(p.pose)}`} loading="lazy" />
-              <span class="d">{poseFa(p.pose)}</span>
+              <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo`} loading="lazy" />
+              <span class="d">{poseLabel(p.pose)}</span>
             </button>
           ))}
         </div>
@@ -216,10 +209,10 @@ export function Session({ id }: { id: string }) {
             <div class="row-w">
               <b>
                 {w.kind === "session" ? (
-                  "در طول جلسه"
+                  "During the session"
                 ) : (
                   <>
-                    {workoutTypeFa(w.activity_type)} · <span class="num">{faHM(w.started_at, tz)}{w.ended_at ? `–${faHM(w.ended_at, tz)}` : ""}</span>
+                    {workoutTypeName(w.activity_type)} · <span class="num">{hm(w.started_at, tz)}{w.ended_at ? `–${hm(w.ended_at, tz)}` : ""}</span>
                   </>
                 )}
               </b>
@@ -229,17 +222,17 @@ export function Session({ id }: { id: string }) {
         </section>
       ) : null}
 
-      <h2>حرکت‌ها</h2>
+      <h2>Exercises</h2>
       <div class="stack">
         {blocks.map((b) => (
           <ExerciseCard key={b.ex.id} block={b} session={s} g={guidance(b, s, sessions)} updateSets={(fn) => updateSets(b.ex.id, fn)} />
         ))}
       </div>
 
-      <h2>یادداشت</h2>
+      <h2>Note</h2>
       <textarea
         id="f-note"
-        placeholder="حالت امروز، درد یا نکته‌ای که باید یادت بماند…"
+        placeholder="How you felt today, any pain, anything to remember…"
         value={note}
         onInput={(e) => {
           const v = (e.currentTarget as HTMLTextAreaElement).value;
@@ -253,38 +246,38 @@ export function Session({ id }: { id: string }) {
         }}
       />
 
-      <h2>وزن بدن امروز</h2>
+      <h2>Body weight today</h2>
       <div class="card bodyw" data-testid="body-weight">
         <Stepper
           value={bodyToday?.unit === s.unit || !bodyToday ? (bodyToday?.value ?? null) : null}
-          placeholder={bodyToday && bodyToday.unit !== s.unit ? `${faNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
+          placeholder={bodyToday && bodyToday.unit !== s.unit ? `${fmtNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
           base={lastBody ?? 0}
           step={0.1}
           min={0}
-          label={`وزن بدن (${s.unit})`}
+          label={`Body weight (${s.unit})`}
           onChange={(v) => void saveBodyMass(s.local_date, v, s.unit)}
         />
-        <span class="ltr">{s.unit}</span>
-        <small class="muted">اختیاری؛ برای گزارش‌ها ذخیره می‌شود.</small>
+        <span>{s.unit}</span>
+        <small class="muted">Optional; saved for the reports.</small>
       </div>
 
       <div class="stack" style={{ marginTop: "14px" }}>
         {s.status === "active" ? (
           <button class="btn btn-primary btn-block" type="button" onClick={finish} data-testid="finish">
-            پایان جلسه
+            Finish session
           </button>
         ) : null}
         <div class="row">
           <button class="btn btn-ghost" type="button" onClick={() => navigate("home")}>
-            بازگشت
+            Back
           </button>
           <button class="btn btn-danger" type="button" onClick={() => setConfirmDelete(true)}>
-            حذف جلسه
+            Delete session
           </button>
         </div>
         {confirmDelete ? (
           <div class="card" style={{ borderColor: "var(--danger)" }}>
-            <div style={{ marginBottom: "8px" }}>این جلسه برای همیشه حذف شود؟</div>
+            <div style={{ marginBottom: "8px" }}>Delete this session permanently?</div>
             <div class="row">
               <button
                 class="btn btn-danger"
@@ -295,10 +288,10 @@ export function Session({ id }: { id: string }) {
                   navigate("home");
                 }}
               >
-                بله، حذف کن
+                Yes, delete
               </button>
               <button class="btn btn-ghost" type="button" onClick={() => setConfirmDelete(false)}>
-                نه
+                No
               </button>
             </div>
           </div>
@@ -312,25 +305,26 @@ function lastText(g: Guidance, isTime: boolean): string {
   if (!g.last) return "";
   const parts = g.last.sets
     .filter((x) => x.reps != null || x.weight != null || x.seconds != null)
-    .map((x) => (isTime ? `${faNum(x.seconds)} ث` : (x.weight != null ? faNum(x.weight) + "×" : "") + faNum(x.reps)));
-  return parts.join("، ") + (isTime ? "" : ` ${g.last.unit}`);
+    .map((x) => (isTime ? `${fmtNum(x.seconds)} s` : (x.weight != null ? fmtNum(x.weight) + "×" : "") + fmtNum(x.reps)));
+  return parts.join(", ") + (isTime ? "" : ` ${g.last.unit}`);
 }
 
 function suggestionText(g: Guidance): string {
   const sg = g.suggestion;
-  const easy = "، همه‌ی ست‌ها با ۳+ تکرار ذخیره";
   if (sg.kind === "weight")
-    return sg.allHit ? `پیشنهاد: ${faNum(sg.weight)} ${sg.unit}${sg.easy ? ` (دو پله${easy})` : ""}` : `همان ${faNum(sg.weight)} ${sg.unit} تا همه‌ی ست‌ها کامل شود`;
-  if (sg.kind === "bodyweight") return sg.allHit ? (sg.easy ? "دو تکرار بیشتر، یا وزنه‌ی کمکی کمتر" : "یک تکرار بیشتر، یا وزنه‌ی کمکی کمتر") : "همان";
-  if (sg.kind === "time") return sg.allHit ? `هدف: ${faNum(sg.seconds)} ثانیه` : "همان زمان";
+    return sg.allHit
+      ? `Suggested: ${fmtNum(sg.weight)} ${sg.unit}${sg.easy ? " (two steps: every set had 3+ reps in reserve)" : ""}`
+      : `Stay at ${fmtNum(sg.weight)} ${sg.unit} until every set is complete`;
+  if (sg.kind === "bodyweight") return sg.allHit ? (sg.easy ? "Two more reps, or less assistance" : "One more rep, or less assistance") : "Same as last time";
+  if (sg.kind === "time") return sg.allHit ? `Target: ${fmtNum(sg.seconds)} s` : "Same time";
   return "";
 }
 
 const RIR_CHOICES: [number, string][] = [
-  [0, "۰"],
-  [1, "۱"],
-  [2, "۲"],
-  [3, "۳+"],
+  [0, "0"],
+  [1, "1"],
+  [2, "2"],
+  [3, "3+"],
 ];
 
 function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock; session: WorkoutSession; g: Guidance; updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void }) {
@@ -339,8 +333,8 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
   const isTime = plan.is_time;
   const isBw = ex.equipment === "bodyweight";
   const allDone = sets.length > 0 && sets.every((x) => x.done);
-  const wLabel = isBw ? `وزنه‌ی اضافه/کمکی (${unit})` : ex.equipment === "dumbbell" ? `هر دمبل (${unit})` : `وزنه (${unit})`;
-  const rLabel = isTime ? "ثانیه" : plan.per_leg ? "تکرار هر پا" : "تکرار";
+  const wLabel = isBw ? `Added/assist (${unit})` : ex.equipment === "dumbbell" ? `Per dumbbell (${unit})` : `Weight (${unit})`;
+  const rLabel = isTime ? "Seconds" : plan.per_leg ? "Reps per leg" : "Reps";
   const sgText = suggestionText(g);
   const lt = lastText(g, isTime);
 
@@ -359,7 +353,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       }
     }
     setField(i, patch);
-    if (done && session.status === "active") startRest(plan.rest_sec, `استراحت بعد از ${ex.name_fa}`);
+    if (done && session.status === "active") startRest(plan.rest_sec, `Rest after ${ex.name_en}`);
   };
 
   const addSet = () =>
@@ -395,23 +389,22 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       <div class="ex-top">
         <div class="ex-name">
           <b>
-            {plan.is_main ? <span class="mainb">اصلی</span> : null}
-            {ex.name_fa}
-            {plan.superset_tag ? <span class="tag ltr">{plan.superset_tag}</span> : null}
+            {plan.is_main ? <span class="mainb">Main</span> : null}
+            {ex.name_en}
+            {plan.superset_tag ? <span class="tag">{plan.superset_tag}</span> : null}
           </b>
-          <span class="en ltr">{ex.name_en}</span>
         </div>
         <div class="target num">{targetText(plan)}</div>
       </div>
-      {ex.cue_fa ? <div class="cue">{ex.cue_fa}</div> : null}
+      {ex.cue_en ? <div class="cue">{ex.cue_en}</div> : null}
       <div class="ex-links">
         <a href={ytLink(ex.name_en)} target="_blank" rel="noopener noreferrer">
-          ویدیوی فرم ↗
+          Form video ↗
         </a>
         {g.last ? (
           <>
             <span class="last" data-testid="last-perf">
-              دفعه‌ی قبل: <span class="num">{lt}</span>
+              Last time: <span class="num">{lt}</span>
             </span>
             {sgText ? (
               <span class="suggest" data-testid="suggestion">
@@ -420,11 +413,11 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
             ) : null}
           </>
         ) : (
-          <span class="last">اولین بار؛ سبک شروع کن.</span>
+          <span class="last">First time: start light.</span>
         )}
       </div>
       <div class={`colhead${isTime ? " timed" : ""}`}>
-        <span>ست</span>
+        <span>Set</span>
         {isTime ? null : <span>{wLabel}</span>}
         <span>{rLabel}</span>
         <span />
@@ -433,15 +426,15 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
         {sets.map((x, i) => (
           <div class="setwrap" key={x.id}>
           <div class={`setrow${isTime ? " timed" : ""}${x.done ? " ok" : ""}`}>
-            <span class="n num">{faNum(i + 1)}</span>
+            <span class="n num">{i + 1}</span>
             {isTime ? null : (
               <Stepper
                 value={x.weight}
-                placeholder={g.prefillWeight != null ? faNum(g.prefillWeight) : isBw ? "۰" : "–"}
+                placeholder={g.prefillWeight != null ? fmtNum(g.prefillWeight) : isBw ? "0" : "–"}
                 base={g.prefillWeight ?? 0}
                 step={g.step}
                 min={isBw ? undefined : 0}
-                label={`${wLabel} ست ${faNum(i + 1)}`}
+                label={`${wLabel}, set ${i + 1}`}
                 testId={`w-${ex.id}-${i}`}
                 onChange={(v) => setField(i, { weight: v })}
               />
@@ -449,38 +442,38 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
             {isTime ? (
               <Stepper
                 value={x.seconds}
-                placeholder={faNum(g.prefillSeconds ?? plan.reps_max)}
+                placeholder={fmtNum(g.prefillSeconds ?? plan.reps_max)}
                 base={g.prefillSeconds ?? plan.reps_max}
                 step={5}
                 min={0}
                 decimals={false}
-                label={`ثانیه ست ${faNum(i + 1)}`}
+                label={`Seconds, set ${i + 1}`}
                 testId={`s-${ex.id}-${i}`}
                 onChange={(v) => setField(i, { seconds: v })}
               />
             ) : (
               <Stepper
                 value={x.reps}
-                placeholder={faNum(plan.reps_max)}
+                placeholder={fmtNum(plan.reps_max)}
                 base={plan.reps_max}
                 step={1}
                 min={0}
                 decimals={false}
-                label={`${rLabel} ست ${faNum(i + 1)}`}
+                label={`${rLabel}, set ${i + 1}`}
                 testId={`r-${ex.id}-${i}`}
                 onChange={(v) => setField(i, { reps: v })}
               />
             )}
-            <button type="button" class="check" aria-pressed={x.done} aria-label={`ست ${faNum(i + 1)} انجام شد`} data-testid={`check-${ex.id}-${i}`} onClick={() => toggle(i)}>
+            <button type="button" class="check" aria-pressed={x.done} aria-label={`Set ${i + 1} done`} data-testid={`check-${ex.id}-${i}`} onClick={() => toggle(i)}>
               <IconCheck />
             </button>
           </div>
           {isTime ? null : (
-            <div class="rir" role="group" aria-label={`تکرار ذخیره (RIR) ست ${faNum(i + 1)}`} data-testid={`rir-${ex.id}-${i}`}>
+            <div class="rir" role="group" aria-label={`Reps in reserve (RIR), set ${i + 1}`} data-testid={`rir-${ex.id}-${i}`}>
               <span>RIR</span>
               {RIR_CHOICES.map(([v, label]) => (
                 <button type="button" aria-pressed={x.rir === v} aria-label={label} onClick={() => setField(i, { rir: x.rir === v ? null : v })}>
-                  <span class="ltr">{label}</span>
+                  {label}
                 </button>
               ))}
             </div>
@@ -491,17 +484,17 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       <div class="ex-actions">
         <span>
           <button type="button" onClick={addSet}>
-            + افزودن ست
+            + Add set
           </button>
           {sets.length > 0 ? (
             <button type="button" onClick={removeSet} style={{ marginInlineStart: "14px" }}>
-              − حذف ست
+              − Remove set
             </button>
           ) : null}
         </span>
         {g.last ? (
           <button type="button" class="copy" onClick={copyLast}>
-            مثل دفعه‌ی قبل
+            Same as last time
           </button>
         ) : null}
       </div>

@@ -40,7 +40,7 @@ photoRoutes.post("/", async (c) => {
   const p = await readJson(c, createSchema);
   if (p.session_id) {
     const s = await c.env.DB.prepare("SELECT id FROM workout_sessions WHERE id = ?").bind(p.session_id).first();
-    if (!s) return fail(c, 400, "unknown_session", "جلسه‌ی این عکس پیدا نشد.");
+    if (!s) return fail(c, 400, "unknown_session", "The session for this photo was not found.");
   }
   await c.env.DB.prepare(
     `INSERT INTO photos (id, session_id, local_date, pose, r2_key, thumb_r2_key, width, height, bytes, created_at)
@@ -57,16 +57,16 @@ photoRoutes.post("/", async (c) => {
 photoRoutes.put("/:id/blob", async (c) => {
   const id = c.req.param("id");
   const size = c.req.query("size");
-  if (!ID_RE.test(id) || (size !== "full" && size !== "thumb")) return fail(c, 400, "invalid_input", "درخواست آپلود معتبر نیست.");
+  if (!ID_RE.test(id) || (size !== "full" && size !== "thumb")) return fail(c, 400, "invalid_input", "The upload request is not valid.");
   const row = await c.env.DB.prepare("SELECT r2_key, thumb_r2_key FROM photos WHERE id = ?").bind(id).first<{ r2_key: string; thumb_r2_key: string }>();
-  if (!row) return fail(c, 404, "not_found", "عکس پیدا نشد.");
+  if (!row) return fail(c, 404, "not_found", "Photo not found.");
   const key = size === "full" ? row.r2_key : row.thumb_r2_key;
   if (await c.env.PHOTOS.head(key)) return c.json({ ok: true, existed: true });
   const max = size === "full" ? MAX_FULL : MAX_THUMB;
-  if (Number(c.req.header("Content-Length") ?? "0") > max) return fail(c, 413, "too_large", "عکس خیلی بزرگ است.");
+  if (Number(c.req.header("Content-Length") ?? "0") > max) return fail(c, 413, "too_large", "The photo is too large.");
   const raw = new Uint8Array(await c.req.arrayBuffer());
-  if (raw.length > max) return fail(c, 413, "too_large", "عکس خیلی بزرگ است.");
-  if (!isJpeg(raw)) return fail(c, 415, "not_jpeg", "فقط عکس JPEG پذیرفته می‌شود.");
+  if (raw.length > max) return fail(c, 413, "too_large", "The photo is too large.");
+  if (!isJpeg(raw)) return fail(c, 415, "not_jpeg", "Only JPEG photos are accepted.");
   const clean = stripJpegMetadata(raw);
   await c.env.PHOTOS.put(key, clean, { httpMetadata: { contentType: "image/jpeg" } });
   if (size === "full") await c.env.DB.prepare("UPDATE photos SET bytes = ? WHERE id = ?").bind(clean.length, id).run();
@@ -76,11 +76,11 @@ photoRoutes.put("/:id/blob", async (c) => {
 photoRoutes.get("/:id", async (c) => {
   const id = c.req.param("id");
   const size = c.req.query("size") === "full" ? "full" : "thumb";
-  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "شناسه معتبر نیست.");
+  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "The id is not valid.");
   const row = await c.env.DB.prepare("SELECT r2_key, thumb_r2_key FROM photos WHERE id = ?").bind(id).first<{ r2_key: string; thumb_r2_key: string }>();
-  if (!row) return fail(c, 404, "not_found", "عکس پیدا نشد.");
+  if (!row) return fail(c, 404, "not_found", "Photo not found.");
   const obj = await c.env.PHOTOS.get(size === "full" ? row.r2_key : row.thumb_r2_key);
-  if (!obj) return fail(c, 404, "not_uploaded", "عکس هنوز آپلود نشده است.");
+  if (!obj) return fail(c, 404, "not_uploaded", "The photo has not been uploaded yet.");
   return new Response(obj.body, {
     headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=31536000, immutable", ETag: obj.httpEtag },
   });
@@ -88,7 +88,7 @@ photoRoutes.get("/:id", async (c) => {
 
 photoRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "شناسه معتبر نیست.");
+  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "The id is not valid.");
   const row = await c.env.DB.prepare("SELECT r2_key, thumb_r2_key FROM photos WHERE id = ?").bind(id).first<{ r2_key: string; thumb_r2_key: string }>();
   if (row) {
     await c.env.PHOTOS.delete([row.r2_key, row.thumb_r2_key]);

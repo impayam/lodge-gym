@@ -47,11 +47,10 @@
 [hidden] { display: none !important; }
 html, body { background: var(--bg); margin: 0; }
 body {
-  font-family: "Vazirmatn", Tahoma, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
   font-size: 15px;
   line-height: 1.6;
-  direction: rtl;
   padding: 0 16px calc(96px + var(--safe-bottom));
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
@@ -63,7 +62,6 @@ button { cursor: pointer; touch-action: manipulation; }
 button:disabled { opacity: 0.55; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
-.ltr { direction: ltr; unicode-bidi: isolate; }
 .muted { color: var(--muted); }
 a { color: var(--accent); }
 
@@ -112,7 +110,7 @@ h2 small { color: var(--muted); font-weight: 500; }
 .big span { display: block; font-size: 14px; color: var(--muted); font-weight: 500; }
 .why { font-size: 13px; color: var(--ink-2); }
 .daygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.dayopt { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; text-align: right; display: flex; flex-direction: column; gap: 2px; }
+.dayopt { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; }
 .dayopt b { font-size: 15px; }
 .dayopt small { color: var(--muted); font-size: 12px; }
 .dayopt.is-next { border-color: var(--accent); background: var(--accent-soft); }
@@ -124,13 +122,13 @@ h2 small { color: var(--muted); font-weight: 500; }
 .dots i.on { background: var(--accent); }
 
 /* history */
-.hist { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; width: 100%; text-align: right; }
+.hist { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; width: 100%; text-align: left; }
 .hist .dot { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 13px; flex: none; background: var(--accent-soft); color: var(--accent); }
 .hist .dot.legacy { background: var(--plate-soft); color: var(--plate); }
 .hist .meta { flex: 1; min-width: 0; }
 .hist .meta b { display: block; font-size: 14.5px; }
 .hist .meta small { color: var(--muted); font-size: 12.5px; }
-.hist .side { text-align: left; font-size: 12.5px; color: var(--ink-2); }
+.hist .side { text-align: right; font-size: 12.5px; color: var(--ink-2); }
 .pill { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--plate-soft); color: var(--plate); font-weight: 700; }
 .pill.done { background: var(--accent-soft); color: var(--accent); }
 .empty { color: var(--muted); font-size: 13.5px; padding: 14px; text-align: center; border: 1px dashed var(--line); border-radius: 14px; }
@@ -156,7 +154,7 @@ h2 small { color: var(--muted); font-weight: 500; }
 .ex.done { border-color: var(--good); }
 .ex-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .ex-name b { font-size: 16px; font-weight: 800; display: block; line-height: 1.4; }
-.ex-name .en { font-size: 12.5px; color: var(--muted); font-weight: 500; display: block; text-align: right; }
+.ex-name .en { font-size: 12.5px; color: var(--muted); font-weight: 500; display: block; }
 .mainb { background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 800; border-radius: 6px; padding: 0 6px; margin-inline-end: 6px; vertical-align: 2px; }
 .tag { background: var(--plate); color: #fff; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 0 6px; margin-inline-start: 6px; vertical-align: 2px; }
 .target { font-weight: 800; color: var(--accent); white-space: nowrap; font-size: 14px; }
@@ -221,7 +219,7 @@ textarea { width: 100%; min-height: 70px; background: var(--surface-2); border: 
 .gate p { margin: 0; color: var(--ink-2); font-size: 14px; }
 .gate input { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; width: 100%; text-align: center; letter-spacing: 0.04em; }
 .err { color: var(--danger); font-size: 13px; min-height: 1.2em; }
-.codes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 15px; direction: ltr; }
+.codes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 15px; }
 .codes span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; }
 
 .settings-list { display: flex; flex-direction: column; gap: 12px; }
@@ -244,7 +242,7 @@ textarea { width: 100%; min-height: 70px; background: var(--surface-2); border: 
 .watch { border-color: var(--accent); }
 .watch .row-w { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink-2); }
 .watch .row-w b { color: var(--ink); font-size: 14px; }
-.setlink { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: right; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-weight: 700; }
+.setlink { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-weight: 700; }
 .setlink small { color: var(--muted); font-weight: 500; }
 
 /* RIR chips and body weight */
@@ -262,7 +260,7 @@ textarea { width: 100%; min-height: 70px; background: var(--surface-2); border: 
 .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ph { position: relative; aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); padding: 0; }
 .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ph .d { position: absolute; bottom: 0; inset-inline: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); color: #fff; font-size: 11.5px; padding: 14px 8px 5px; text-align: right; }
+.ph .d { position: absolute; bottom: 0; inset-inline: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); color: #fff; font-size: 11.5px; padding: 14px 8px 5px; text-align: left; }
 .ph.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
 .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cmp figure { margin: 0; }
@@ -290,8 +288,6 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .chart .readout, .musclemap .readout { font-size: 12.5px; color: var(--ink-2); min-height: 1.6em; margin-bottom: 4px; }
 .chart .hit { fill: transparent; }
 .chart .lbl, .chart .val, .chart .tick { font-family: inherit; fill: var(--ink-2); }
-/* SVG text inherits RTL, which would flip text-anchor; anchors in the charts are written for LTR geometry. */
-.chart svg text { direction: ltr; unicode-bidi: plaintext; }
 .chart .lbl { font-size: 11px; fill: var(--ink); }
 .chart .val { font-size: 10px; }
 .chart .tick { font-size: 9px; fill: var(--muted); }
@@ -315,7 +311,7 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .tableview { margin-top: 6px; font-size: 12.5px; }
 .tableview summary { color: var(--accent); cursor: pointer; font-weight: 700; }
 .tableview table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-.tableview th, .tableview td { border-top: 1px solid var(--line); padding: 4px; text-align: right; }
+.tableview th, .tableview td { border-top: 1px solid var(--line); padding: 4px; text-align: left; }
 .multiples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .multiples .card { padding: 10px; }
 .mtitle { font-size: 13px; }
@@ -347,3 +343,7 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .rv-list { list-style: none; padding: 0; margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); }
 .rv-list li { margin-bottom: 4px; }
 .rv-list span { color: var(--accent); font-weight: 700; }
+
+/* The weekly review stays in Persian (SPEC-v2 M6): rendered right-to-left with the iOS system font. */
+.review [dir="rtl"] { text-align: right; }
+.review .rv-list[dir="rtl"] { padding: 0; }

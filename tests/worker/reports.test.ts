@@ -33,17 +33,13 @@ describe("report endpoints", () => {
     const text = await res.text();
     expect(text.trim().split("\r\n")).toHaveLength(5);
   });
-  it("monthly JSON and CSV, Jalali month keys", async () => {
-    const m = (await (await client.fetch("/api/reports/month?month=2026-09")).json()) as { sessions: number; body: unknown[] };
+  it("monthly JSON and CSV (Gregorian months)", async () => {
+    const m = (await (await client.fetch("/api/reports/month?month=2026-09")).json()) as { range: { start: string; end: string }; sessions: number; body: unknown[] };
+    expect(m.range).toMatchObject({ start: "2026-09-01", end: "2026-09-30" });
     expect(m.sessions).toBe(2);
     expect(m.body).toEqual([{ date: "2026-09-22", value: 180, ma7: 180 }]);
-    await client.fetch("/api/settings", { method: "PUT", json: { month_calendar: "jalali" } });
-    const j = (await (await client.fetch("/api/reports/month?month=1405-06")).json()) as { range: { start: string; end: string }; sessions: number };
-    expect(j.range).toMatchObject({ start: "2026-08-23", end: "2026-09-22" });
-    expect(j.sessions).toBe(2);
-    const csv = await client.fetch("/api/reports/month?month=1405-06&format=csv");
-    expect(csv.headers.get("Content-Disposition")).toContain("lodge-gym-month-1405-06.csv");
-    await client.fetch("/api/settings", { method: "PUT", json: { month_calendar: "gregorian" } });
+    const csv = await client.fetch("/api/reports/month?month=2026-09&format=csv");
+    expect(csv.headers.get("Content-Disposition")).toContain("lodge-gym-month-2026-09.csv");
   });
   it("progress page", async () => {
     const p = (await (await client.fetch("/api/reports/progress")).json()) as { since: { sessions: number; lifts: { exercise_id: string; change_pct: number }[] }; balance: { muscles: unknown[] } };

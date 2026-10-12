@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { resetWorkouts, sql } from "./helpers";
 
 // Passkey ceremonies need a virtual authenticator (CDP), so this runs on Chromium only.
@@ -18,23 +18,23 @@ test("first-run setup, recovery codes, /setup closes, logout and Face ID login",
   });
 
   await page.goto("/setup");
-  await expect(page.getByRole("heading", { name: "راه‌اندازی Lodge Gym" })).toBeVisible();
-  await page.getByPlaceholder("کد راه‌اندازی").fill("wrong-token");
-  await page.getByRole("button", { name: "ثبت Face ID" }).click();
-  await expect(page.getByRole("alert")).toContainText("کد راه‌اندازی درست نیست");
+  await expect(page.getByRole("heading", { name: "Set up Lodge Gym" })).toBeVisible();
+  await page.getByPlaceholder("Setup code").fill("wrong-token");
+  await page.getByRole("button", { name: "Register Face ID" }).click();
+  await expect(page.getByRole("alert")).toContainText("The setup code is wrong");
 
-  await page.getByPlaceholder("کد راه‌اندازی").fill("e2e-setup-token-0123456789");
-  await page.getByRole("button", { name: "ثبت Face ID" }).click();
+  await page.getByPlaceholder("Setup code").fill("e2e-setup-token-0123456789");
+  await page.getByRole("button", { name: "Register Face ID" }).click();
   const codes = page.getByTestId("recovery-codes").locator("span");
   await expect(codes).toHaveCount(10);
-  await page.getByRole("button", { name: "کدها را ذخیره کردم، ادامه" }).click();
-  await expect(page.getByTestId("next-card")).toContainText("جلسه‌ی بعدی: روز ۱ – سینه");
+  await page.getByRole("button", { name: "I saved the codes, continue" }).click();
+  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
 
   const setup = await page.request.get(`${baseURL}/setup`);
   expect(setup.status()).toBe(404);
 
-  await page.getByRole("button", { name: "تنظیمات" }).click();
-  await page.getByRole("button", { name: "خروج", exact: true }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByTestId("login")).toBeVisible();
   await page.getByTestId("login").click();
   await expect(page.getByTestId("next-card")).toBeVisible();

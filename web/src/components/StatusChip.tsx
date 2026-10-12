@@ -1,4 +1,4 @@
-import { faNum } from "../../../worker/lib/digits";
+import { fmtNum } from "../../../worker/lib/digits";
 import { syncNow, useStore } from "../store";
 
 export function StatusChip() {
@@ -7,13 +7,13 @@ export function StatusChip() {
   const cls = offline ? "offline" : sync.error ? "error" : sync.pending ? "pending" : "";
   const text = offline
     ? sync.pending
-      ? `آفلاین · ${faNum(sync.pending)} در صف`
-      : "آفلاین"
+      ? `Offline · ${fmtNum(sync.pending)} pending`
+      : "Offline"
     : sync.error
-      ? "خطای همگام‌سازی"
+      ? "Sync error"
       : sync.pending
-        ? `${faNum(sync.pending)} در صف`
-        : "همگام";
+        ? `${fmtNum(sync.pending)} pending`
+        : "Synced";
   return (
     <button type="button" class={`chip ${cls}`} data-testid="sync-chip" title={sync.error ?? ""} onClick={() => void syncNow()}>
       <i />

@@ -36,7 +36,7 @@ export const reportRoutes = new Hono<AppBindings>();
 reportRoutes.get("/week", async (c) => {
   const d = await loadReportData(c.env);
   const start = c.req.query("start") ?? localDate(d.settings.timezone);
-  if (!DATE_RE.test(start)) return fail(c, 400, "invalid_input", "تاریخ هفته معتبر نیست.");
+  if (!DATE_RE.test(start)) return fail(c, 400, "invalid_input", "The week date is not valid.");
   if (c.req.query("format") === "csv") {
     const r = weekRange(start, d.settings.week_start);
     return csv(setsCsv(d, r.start, r.end), `lodge-gym-week-${r.start}.csv`);
@@ -46,10 +46,10 @@ reportRoutes.get("/week", async (c) => {
 
 reportRoutes.get("/month", async (c) => {
   const d = await loadReportData(c.env);
-  const key = c.req.query("month") ?? monthKeyOf(localDate(d.settings.timezone), d.settings.month_calendar);
-  if (!MONTH_RE.test(key)) return fail(c, 400, "invalid_input", "ماه معتبر نیست.");
+  const key = c.req.query("month") ?? monthKeyOf(localDate(d.settings.timezone));
+  if (!MONTH_RE.test(key)) return fail(c, 400, "invalid_input", "The month is not valid.");
   if (c.req.query("format") === "csv") {
-    const r = monthRange(key, d.settings.month_calendar);
+    const r = monthRange(key);
     return csv(setsCsv(d, r.start, r.end), `lodge-gym-month-${key}.csv`);
   }
   return c.json(monthlyReport(d, key));

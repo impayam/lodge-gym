@@ -1,6 +1,6 @@
-// Display helpers: Jalali + Gregorian dates, Persian digits, clocks.
+// Display helpers: Gregorian dates, Latin digits, clocks.
 
-import { faNum, toPersianDigits } from "../../worker/lib/digits";
+import { fmtNum } from "../../worker/lib/digits";
 import { localHM } from "../../worker/lib/time";
 
 const atNoon = (date: string) => {
@@ -8,29 +8,23 @@ const atNoon = (date: string) => {
   return new Date(Date.UTC(y, m - 1, d, 12));
 };
 
-const fmt = (locale: string, opts: Intl.DateTimeFormatOptions) => {
-  try {
-    return new Intl.DateTimeFormat(locale, { ...opts, timeZone: "UTC" });
-  } catch {
-    return null;
-  }
-};
-const jalaliLong = fmt("fa-IR-u-ca-persian", { weekday: "long", day: "numeric", month: "long" });
-const jalaliMonth = fmt("fa-IR-u-ca-persian", { month: "long", year: "numeric" });
-const gregShort = fmt("en-US", { weekday: "short", month: "short", day: "numeric" });
+const fmt = (opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { ...opts, timeZone: "UTC" });
+const longFmt = fmt({ weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const shortFmt = fmt({ weekday: "short", month: "short", day: "numeric" });
+const dayMonthFmt = fmt({ month: "short", day: "numeric" });
+const monthFmt = fmt({ month: "long", year: "numeric" });
 
-export const jalali = (date: string) => jalaliLong?.format(atNoon(date)) ?? date;
-const jalaliDM = fmt("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
-const persianGregMonth = fmt("fa-IR-u-ca-gregory", { month: "long", year: "numeric" });
-/** "۶ مهر" */
-export const jalaliShort = (date: string) => jalaliDM?.format(atNoon(date)) ?? date;
-/** Month label in the report calendar: "مهر ۱۴۰۵" or "سپتامبر ۲۰۲۶". */
-export const monthLabel = (startDate: string, calendar: "gregorian" | "jalali") =>
-  (calendar === "jalali" ? jalaliMonth : persianGregMonth)?.format(atNoon(startDate)) ?? startDate.slice(0, 7);
-export const jalaliMonthYear = (date: string) => jalaliMonth?.format(atNoon(date)) ?? date.slice(0, 7);
-export const greg = (date: string) => gregShort?.format(atNoon(date)) ?? date;
+/** "Mon, Oct 12, 2026" */
+export const dateLong = (date: string) => longFmt.format(atNoon(date));
+/** "Mon, Oct 12" */
+export const dateShort = (date: string) => shortFmt.format(atNoon(date));
+/** "Oct 12" */
+export const dayMonth = (date: string) => dayMonthFmt.format(atNoon(date));
+/** "October 2026" */
+export const monthLabel = (date: string) => monthFmt.format(atNoon(date));
 
-export const faHM = (iso: string | null, tz: string) => (iso ? toPersianDigits(localHM(tz, iso)) : "");
+/** Local "HH:MM" (24 h) for an ISO instant, or "". */
+export const hm = (iso: string | null, tz: string) => (iso ? localHM(tz, iso) : "");
 
 export function clock(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));
@@ -38,11 +32,14 @@ export function clock(totalSec: number): string {
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
   const mm = h ? String(m).padStart(2, "0") : String(m);
-  return toPersianDigits(h ? `${h}:${mm}:${String(sec).padStart(2, "0")}` : `${mm}:${String(sec).padStart(2, "0")}`);
+  return h ? `${h}:${mm}:${String(sec).padStart(2, "0")}` : `${mm}:${String(sec).padStart(2, "0")}`;
 }
 
 export const minutesBetween = (a: string, b: string | null) => (b ? Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000)) : null);
 
-export { faNum, toPersianDigits };
+/** "1 set", "3 sets" */
+export const plural = (n: number, one: string, many = one + "s") => `${fmtNum(n)} ${n === 1 ? one : many}`;
+
+export { fmtNum };
 
 export const ytLink = (en: string) => "https://www.youtube.com/results?search_query=" + encodeURIComponent(`${en} proper form`);

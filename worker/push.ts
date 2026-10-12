@@ -98,7 +98,7 @@ export class RestPush extends DurableObject<Env> {
     if (!p) return;
     await this.ctx.storage.delete("pending");
     const origin = (await this.ctx.storage.get<string>("origin")) ?? "https://lodge-gym.workers.dev";
-    await this.sendNow({ title: "استراحت تمام شد", body: p.label ? `${p.label} · ست بعدی` : "وقت ست بعدی است.", tag: "rest" }, origin);
+    await this.sendNow({ title: "Rest is over", body: p.label ? `${p.label} · next set` : "Time for the next set.", tag: "rest" }, origin);
   }
 }
 
@@ -126,7 +126,7 @@ pushRoutes.post("/unsubscribe", async (c) => {
 pushRoutes.post("/rest", async (c) => {
   const body = await readJson(c, z.object({ id: z.string().min(1).max(64), ends_at: z.number().int().positive(), label: z.string().max(200).default("") }));
   const now = Date.now();
-  if (body.ends_at < now - 5_000 || body.ends_at > now + 60 * 60_000) return fail(c, 400, "invalid_time", "زمان پایان استراحت معتبر نیست.");
+  if (body.ends_at < now - 5_000 || body.ends_at > now + 60 * 60_000) return fail(c, 400, "invalid_time", "The rest end time is not valid.");
   await stub(c.env).schedule({ id: body.id, endsAt: body.ends_at, label: body.label }, new URL(c.req.url).origin);
   return c.json({ ok: true });
 });
@@ -138,6 +138,6 @@ pushRoutes.post("/rest/cancel", async (c) => {
 });
 
 pushRoutes.post("/test", async (c) => {
-  const r = await stub(c.env).sendNow({ title: "Lodge Gym", body: "اعلان آزمایشی: اعلان پایان استراحت کار می‌کند.", tag: "test" }, new URL(c.req.url).origin);
+  const r = await stub(c.env).sendNow({ title: "Lodge Gym", body: "Test notification: rest-timer notifications work.", tag: "test" }, new URL(c.req.url).origin);
   return c.json({ ok: true, ...r });
 });
