@@ -61,6 +61,9 @@ describe("bootstrap", () => {
     const ex = Object.fromEntries(b.exercises.map((e) => [e.id, e]));
     for (const legacy of ["row", "lunge", "dips", "rope_pushdown"]) expect(ex[legacy]).toBeTruthy();
     expect(ex.bench.cue_fa).toContain("حرکت اصلی امروز");
+    // SPEC-v2 M6: English form cues for the seeded exercises (Triceps Rope Pushdown has no cue in either language).
+    expect(ex.bench.cue_en).toBe("Main lift today. Shoulder blades squeezed and down. Lower the bar to your chest over 2–3 seconds, pause briefly, then press.");
+    expect(b.exercises.filter((e) => !e.cue_en).map((e) => e.id)).toEqual(["rope_pushdown"]);
     expect(ex.bench).toMatchObject({ equipment: "barbell", is_lower: false, muscle_primary: "chest" });
     expect(ex.squat.is_lower).toBe(true);
   });
@@ -218,5 +221,18 @@ describe("settings", () => {
     expect((await client.fetch("/api/settings", { method: "PUT", json: { timezone: "Mars/Base" } })).status).toBe(400);
     expect((await client.fetch("/api/settings", { method: "PUT", json: { unit: "st" } })).status).toBe(400);
     await client.fetch("/api/settings", { method: "PUT", json: { unit: "lb", week_start: "mon", relock_minutes: 0 } });
+  });
+});
+
+describe("migration 0004 (SPEC-v2 §7.2)", () => {
+  it("backfills the seeded exercises as source 'seed' with their own ids, and set entries as planned", async () => {
+    const rows = await env.DB.prepare("SELECT id, source, source_id FROM exercises").all<{ id: string; source: string; source_id: string }>();
+    expect(rows.results).toHaveLength(27);
+    expect(rows.results.every((r) => r.source === "seed" && r.source_id === r.id)).toBe(true);
+    const cols = await env.DB.prepare("SELECT name, dflt_value, \"notnull\" AS nn FROM pragma_table_info('set_entries') WHERE name IN ('is_extra', 'position') ORDER BY name").all();
+    expect(cols.results).toEqual([
+      { name: "is_extra", dflt_value: "0", nn: 1 },
+      { name: "position", dflt_value: null, nn: 0 },
+    ]);
   });
 });

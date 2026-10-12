@@ -101,7 +101,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 
 - All UI strings are English, LTR, Latin digits, Gregorian dates, system font (no bundled web font). Number inputs still
   accept Persian and Arabic-Indic digits.
-- Exercises show `name_en` and the English form cue `cue_en`; `name_fa` and `cue_fa` stay in D1 as data.
+- Exercises show `name_en` and the English form cue `cue_en` (migration `0004_exercise_library.sql`, approved SPEC-v2 §7.2);
+  `name_fa` and `cue_fa` stay in D1 as data.
 - API errors keep the SPEC §11 shape `{error:{code,message_fa}}`; the `message_fa` field now carries English text.
 - The Shortcuts bridge still parses Persian-locale Shortcuts output (Persian digits, Jalali dates).
 

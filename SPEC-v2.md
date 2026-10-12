@@ -60,29 +60,35 @@ Payam asked for the whole app in English.
 
 ## M7. Exercise library
 
-### 7.1 Source **[DECIDED]**
+### 7.1 Source **[DECIDED, revised 2026-10-13]**
 
-The source is the **free open-source ExerciseDB API v1**: https://oss.exercisedb.dev/docs, repo `bootstrapping-lab/exercisedb-api`.
+**Primary source: free-exercise-db** (github.com/yuhonas/free-exercise-db).
 
-- The repo description says 1500+ exercises, with GIFs, target and secondary muscles, body parts, equipment and step-by-step instructions.
-- **Count discrepancy:** the README also mentions a larger V2 dataset. Report the actual count imported.
-- **Personal use only:** the app is private and personal.
-- **Terms not confirmed:** the terms page could not be read during research. Before importing, read the API's Terms of Use and LICENSE and report anything that forbids personal storage. Stop if it does.
+- License: Unlicense (public domain). Storing data and images locally is allowed.
+- Import into D1, and copy images to R2. Never hotlink at runtime.
+- Snapshot JSON goes to R2 under `library/free-exercise-db/<date>.json`.
 
-**Import rules:**
+**ExerciseDB is NOT used.** Its RapidAPI terms prohibit storing data or media. Do not import, store or copy any ExerciseDB names, instructions or GIFs. If a paid perpetual dataset is bought later, it will be a separate approved milestone.
 
-- The playground API is "not recommended for production" and may be rate-limited. So **import once** into D1, with media copied to R2. Never call it at runtime.
-- Import with a polite throttle and resume support, in `/seed/import-exercises.ts`. Store a JSON snapshot in R2 under `library/exercisedb-v1/<date>.json`.
-- The repo is private, but keep the media out of git anyway. The repo stays small.
-- **Network:** the Claude Code cloud environment must allow `oss.exercisedb.dev` and the host that serves the GIF and image files (the API response shows it). If that host is blocked, stop and tell Payam which domain to add under Network access (Custom). Do not work around the block.
-- Exercise names and instructions stay in English.
+**Gap fill (no images):**
+
+- Common gym exercises missing from free-exercise-db are added by hand from general training knowledge, not copied from any dataset.
+- These rows use `source = 'manual'`, have empty media, and include primary and secondary muscles, equipment, pattern and mechanic.
+- List them in the import report for Payam to review.
+
+**Video link on every exercise:**
+
+- Every exercise in the library (seed, imported, manual, custom) shows a "Watch form video" link.
+- The link is a YouTube search URL built from `name_en` + " form": `https://www.youtube.com/results?search_query=<urlencoded>`.
+- Store nothing extra; build the link at render time.
+- Exercises with no image show a neutral placeholder plus the video link.
 
 ### 7.2 Data model changes (needs approval, per CLAUDE.md)
 
 Migration `0004_exercise_library.sql`:
 
 ```sql
-ALTER TABLE exercises ADD COLUMN source TEXT;              -- 'seed' | 'fedb' | 'exercisedb' | 'custom'
+ALTER TABLE exercises ADD COLUMN source TEXT;              -- 'seed' | 'fedb' | 'manual' | 'custom'
 ALTER TABLE exercises ADD COLUMN source_id TEXT;
 ALTER TABLE exercises ADD COLUMN cue_en TEXT;
 ALTER TABLE exercises ADD COLUMN muscles_secondary TEXT;   -- JSON array of canonical muscle keys
@@ -342,6 +348,10 @@ ALTER TABLE day_exercises ADD COLUMN slot TEXT;       -- 'main'|'secondary'|'acc
 
 1. Jalali date display: removed.
 2. Weekly AI review: stays in Persian, rendered RTL inside the English UI.
-3. Exercise source: free OSS ExerciseDB v1. The app and repo are private and for personal use.
+3. Exercise source: free-exercise-db, plus hand-written gap fill without images, and a YouTube form-video link on every exercise. ExerciseDB is not used because of its storage restriction.
+6. Migrations 0004 and 0005 approved as shown by Claude Code, including the foreign key, the index, the backfill and the archived upper/lower program.
+7. Finer muscle keys for seeded exercises are approved. Reports roll them up into the existing targets.
+8. Equipment: if the 5-value limit is app-level only (Zod or TypeScript), extend it to free-exercise-db's equipment values with no table rebuild. If it is a SQL CHECK constraint, map onto the 5 values and list the rest; do not rebuild the table.
+9. Claude Code merges each milestone to `main` once it is green, then verifies the production deploy and migrations.
 4. Secondary muscles count as 0.5 set (fractional).
 5. Per-session cap: 10 fractional sets per muscle.
