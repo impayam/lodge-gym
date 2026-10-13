@@ -77,6 +77,8 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
 
   await page.getByTestId("add-exercise").click();
   const picker = page.getByTestId("exercise-picker");
+  // The picker opens on the body map (SPEC-v3 M9b); search is its second tab.
+  await picker.getByTestId("picker-tab-search").click();
   await picker.getByRole("searchbox").fill("hack squat");
   await picker.getByTestId("library-row").filter({ hasText: /^Hack Squat/ }).click();
   const card = page.locator('[data-ex="fedb-Hack_Squat"]');
@@ -90,6 +92,8 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
 
   // A second extra exercise, removed before any set is done.
   await page.getByTestId("add-exercise").click();
+  // The picker remembers the tab it was left on in this session.
+  await expect(picker.getByTestId("picker-tab-search")).toHaveAttribute("aria-selected", "true");
   await picker.getByRole("searchbox").fill("leg extensions");
   await picker.getByTestId("library-row").first().click();
   await page.getByTestId("remove-fedb-Leg_Extensions").click();

@@ -415,3 +415,24 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .chipset legend.lbl { font-size: 11.5px; color: var(--muted); }
 .tl-row .btn { white-space: nowrap; flex: none; }
 .nowrap { white-space: nowrap; }
+
+/* body-map exercise picker (SPEC-v3 M9b) */
+.bodypick .figure svg { touch-action: manipulation; }
+.pick-muscle { fill: var(--surface-2); stroke: var(--muted); stroke-width: 0.8; stroke-linejoin: round; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pick-muscle:hover, .pick-muscle:active { fill: var(--accent-soft); stroke: var(--accent); }
+.pick-muscle.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.6; }
+.pick-muscle.on:hover, .pick-muscle.on:active { fill: var(--accent); }
+.pick-hit { fill: none; stroke: transparent; stroke-width: 9; pointer-events: stroke; cursor: pointer; }
+.pick-context { fill: var(--surface-2); stroke: var(--line); stroke-width: 0.4; pointer-events: none; opacity: 0.7; }
+.zoom { display: block; width: 100%; max-height: 340px; margin: 0 auto; touch-action: manipulation; }
+.zoom .body { fill: var(--surface); stroke: var(--line); stroke-width: 0.6; }
+.bigchips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bigchip { min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 15px; color: var(--ink); padding: 8px 10px; }
+.bigchip:active { background: var(--accent-soft); border-color: var(--accent); }
+.filters.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pickrow { display: flex; flex-direction: column; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.pickmain { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 0; text-align: left; color: inherit; min-height: 48px; }
+.pickmain .meta { flex: 1; min-width: 0; }
+.pickmain .meta b { display: block; font-size: 14px; line-height: 1.35; }
+.pickmain .meta small { color: var(--muted); font-size: 12px; }
+.pickrow .formlink { font-size: 12.5px; align-self: flex-start; padding: 4px 0; }

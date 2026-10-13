@@ -9,6 +9,7 @@ import { bestSet } from "../../../worker/lib/reports";
 import type { Exercise, Pattern, SetEntry, WorkoutSession } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
+import { BodyPicker } from "../components/BodyPicker";
 import { LineChart } from "../components/Charts";
 import { dateLong, dayMonth, fmtNum, ytLink } from "../format";
 import { loadAllHistory, loadLibrary, mediaSrc, saveCustomExercise, uploadCustomPhoto, useStore, type CustomExerciseInput } from "../store";
@@ -463,8 +464,16 @@ export function Library() {
   );
 }
 
-/** Full-screen picker for "+ Add exercise" inside a session. */
-export function ExercisePicker({ onPick, onCancel }: { onPick: (ex: Exercise) => void; onCancel: () => void }) {
+/** Which tab "+ Add exercise" opened on last, per session (Body by default, SPEC-v3 M9b). */
+const pickerTab = new Map<string, "body" | "search">();
+
+/** Full-screen picker for "+ Add exercise" inside a session: the body map (default) or search. */
+export function ExercisePicker({ sessionId, onPick, onCancel }: { sessionId: string; onPick: (ex: Exercise) => void; onCancel: () => void }) {
+  const [tab, setTab] = useState<"body" | "search">(() => pickerTab.get(sessionId) ?? "body");
+  const choose = (t: "body" | "search") => {
+    pickerTab.set(sessionId, t);
+    setTab(t);
+  };
   return (
     <section class="stack" data-testid="exercise-picker">
       <div class="kv navrow">
@@ -473,10 +482,22 @@ export function ExercisePicker({ onPick, onCancel }: { onPick: (ex: Exercise) =>
           Cancel
         </button>
       </div>
+      <span class="seg wide" role="tablist" aria-label="Find an exercise by">
+        {(
+          [
+            ["body", "Body"],
+            ["search", "Search"],
+          ] as const
+        ).map(([k, label]) => (
+          <button type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} data-testid={`picker-tab-${k}`} onClick={() => choose(k)}>
+            {label}
+          </button>
+        ))}
+      </span>
       <p class="why" style={{ margin: 0 }}>
         It is added to this session only, with 3 empty sets. Your program does not change.
       </p>
-      <ExerciseList onOpen={onPick} />
+      {tab === "body" ? <BodyPicker sessionId={sessionId} onPick={onPick} /> : <ExerciseList onOpen={onPick} />}
     </section>
   );
 }

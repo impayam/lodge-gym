@@ -1,6 +1,6 @@
 # Lodge Gym
 
-Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md` and `SPEC-v2.md`; working rules: `CLAUDE.md`.
+Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`, `SPEC-v2.md` and `SPEC-v3.md` (M9, M10); working rules: `CLAUDE.md`.
 
 Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library), **M8** (training styles and program generator).
 
@@ -166,6 +166,18 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Tests: property tests over every style × days × session length × 50 seeds on the real library
   (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
   ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
+
+## Body-map exercise picker (SPEC-v3 M9b)
+
+- In a session, "+ Add exercise" opens on the **Body** tab (Search is the second tab): tap an area on the front or
+  back figure (the muscle map's drawing, no status colours) or its chip, then a muscle in the enlarged area or its
+  chip, then an exercise. It is added as an extra with 3 empty sets, as in M7.
+- Areas → muscles (`worker/lib/bodyAreas.ts`, unit-tested): Chest; Shoulders (front, side, rear delts); Arms (biceps,
+  triceps, forearms); Back (lats, upper back, traps, lower back); Core; Glutes & hips (glutes, adductors,
+  abductors); Thighs (quads, hamstrings); Calves.
+- The list: primary-muscle exercises, then "Also works this muscle"; inside each, done before (most recent first),
+  then the current program, then compound, then name. Filters: equipment and category (default: strength, the
+  counted categories). The picker remembers its place per session while the app is open.
 
 ## Artwork and credits
 
