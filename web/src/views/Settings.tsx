@@ -247,7 +247,7 @@ function AiSettings() {
           </div>
           <div class="kv">
             <span>Model</span>
-            <span class="num">{u.model}</span>
+            <span>{u.model}</span>
           </div>
         </>
       ) : null}
