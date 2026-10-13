@@ -495,3 +495,31 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .balance-card small { color: #b9c4bf; font-size: 12.5px; }
 .balance-st { font-weight: 700; white-space: nowrap; }
 .balance-legend .sw { border: 1px solid var(--line); }
+
+/* AI session report (SPEC-v3 M9a): Persian, right-to-left content in the weekly review's card style. */
+.report .rp-wait { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+.report .rp-note { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); text-align: right; }
+.report .rp-foot { padding-top: 4px; border-top: 1px solid var(--line); }
+.rv-list.warn span { color: var(--warn); }
+.rp-vol { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.rp-vol th { text-align: right; font-weight: 600; color: var(--muted); font-size: 11.5px; padding: 2px 4px; }
+.rp-vol td { text-align: right; padding: 4px; border-top: 1px solid var(--line); }
+.rp-vol th:first-child, .rp-vol td:first-child { text-align: left; padding-left: 0; }
+.rp-vol td.st-under { color: var(--warn); }
+.rp-vol td.st-on { color: var(--good); }
+.rp-vol td.st-over { color: var(--plate); }
+.rp-vol td.st-untracked { color: var(--accent); }
+.rp-vol td.st-none { color: var(--muted); }
+.banner.warn { background: var(--plate-soft); color: var(--ink); }
+.banner.bad { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--ink); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* AI plan advice (SPEC-v3 M9c): Persian card with an Apply button per suggestion. */
+.advice { border-color: var(--accent); }
+.advice .sug { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; padding-top: 10px; border-top: 1px solid var(--line); }
+.advice .sug .what { font-size: 13.5px; font-weight: 600; }
+.advice .sug .why-fa { font-size: 13px; color: var(--ink-2); margin: 2px 0 0; text-align: right; }
+.advice .sug .btn { min-height: 44px; }

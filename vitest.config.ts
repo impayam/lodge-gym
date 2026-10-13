@@ -29,6 +29,10 @@ export default defineConfig({
           // The app stylesheet, for the 3D map colours that must equal the dark theme's status tokens.
           TEST_STYLES: readFileSync("./web/src/styles.css", "utf8"),
           SETUP_TOKEN: "test-setup-token-0123456789",
+          // Tests never call the real Anthropic API: the model is mocked (worker/ai.ts aiTransport), and anything that
+          // slips past the mock goes to a host that does not exist.
+          ANTHROPIC_API_KEY: "sk-ant-test-not-a-real-key",
+          ANTHROPIC_BASE_URL: "https://anthropic.invalid",
         },
       },
     }),

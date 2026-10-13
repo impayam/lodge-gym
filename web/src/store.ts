@@ -15,7 +15,7 @@ import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./mod
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report";
 
 export interface SyncState {
   pending: number;
@@ -29,8 +29,11 @@ export interface State {
   auth: AuthState;
   boot: BootData | null;
   sessions: Record<string, WorkoutSession>;
-  /** sessionId: the session view; programId: a draft opened in the program editor; planId: the session planner. */
-  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string };
+  /**
+   * sessionId: the session view or its AI report (fresh: just finished); programId: a draft opened in the program
+   * editor; planId: the session planner.
+   */
+  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string; fresh?: boolean };
   sync: SyncState;
   rest: { id: string; endsAt: number; label: string } | null;
   flash: string | null;
@@ -90,6 +93,12 @@ export const today = () => localDate(state.boot?.settings.timezone ?? "America/D
 
 export function navigate(name: ViewName, sessionId?: string) {
   setState({ view: { name, sessionId } });
+  window.scrollTo(0, 0);
+}
+
+/** A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). */
+export function openReport(sessionId: string, fresh = false) {
+  setState({ view: { name: "report", sessionId, fresh } });
   window.scrollTo(0, 0);
 }
 
@@ -293,15 +302,22 @@ export async function discardPlan(plan: SessionPlan) {
 }
 
 /**
+ * Sends a saved plan now (NetworkError when it could not be sent) and returns its id on the server: when the day
+ * already had an open plan from another device, this plan continued under that plan's id.
+ */
+export async function sendPlan(plan: SessionPlan): Promise<string> {
+  await syncNow();
+  if ((await ldb.outboxAll()).some((e) => e.key === "plan:" + plan.id)) throw new NetworkError();
+  return state.plans[plan.id] ? plan.id : (openPlanFor(state.plans, plan.program_day_id)?.id ?? plan.id);
+}
+
+/**
  * Apply to program: saves the plan, sends it, then asks the server for a new program version with this day as planned
  * (M8 versioning: the new version is active, the old one archived). Needs a connection.
  */
 export async function applyPlanToProgram(plan: SessionPlan): Promise<string> {
   await savePlan(plan);
-  await syncNow();
-  if ((await ldb.outboxAll()).some((e) => e.key === "plan:" + plan.id)) throw new NetworkError();
-  // The day may have had an open plan from another device: this plan continued under that plan's id.
-  const id = state.plans[plan.id] ? plan.id : (openPlanFor(state.plans, plan.program_day_id)?.id ?? plan.id);
+  const id = await sendPlan(plan);
   const r = await api<{ ok: true; program_id: string }>("POST", `/sessions/${encodeURIComponent(id)}/apply-to-program`, {});
   await refresh();
   return r.program_id;

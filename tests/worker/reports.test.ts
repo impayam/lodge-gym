@@ -7,7 +7,12 @@ let client: Client;
 beforeAll(async () => {
   await resetAuth();
   ({ client } = await setupOwner("192.0.2.90"));
-  await env.DB.batch([env.DB.prepare("DELETE FROM set_entries"), env.DB.prepare("DELETE FROM workout_sessions"), env.DB.prepare("DELETE FROM body_metrics")]);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM set_entries"),
+    env.DB.prepare("DELETE FROM session_reports"),
+    env.DB.prepare("DELETE FROM workout_sessions"),
+    env.DB.prepare("DELETE FROM body_metrics"),
+  ]);
   const mk = (id: string, date: string, weight: number): WorkoutSession => ({
     id, program_day_id: "D1", local_date: date, started_at: `${date}T23:00:00.000Z`, ended_at: `${date}T23:50:00.000Z`, status: "done", unit: "lb", note: "",
     created_at: `${date}T23:00:00.000Z`, updated_at: `${date}T23:50:00.000Z`, source: "app",

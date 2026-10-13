@@ -97,7 +97,7 @@ export const readPlans = (env: Env, from: string, to: string) =>
 
 export const readAllPlans = (env: Env) => readPlansWhere(env, "1 = 1");
 
-const readPlan = async (env: Env, planId: string) => (await readPlansWhere(env, "p.id = ?", planId))[0] ?? null;
+export const readPlan = async (env: Env, planId: string): Promise<SessionPlan | null> => (await readPlansWhere(env, "p.id = ?", planId))[0] ?? null;
 
 const insertItem = (env: Env, planId: string, it: PlanItem) =>
   env.DB.prepare(

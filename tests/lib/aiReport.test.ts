@@ -1,0 +1,237 @@
+import { describe, expect, it } from "vitest";
+import { buildReportInput, normalizeReport, ReportOutput, type ReportInput } from "../../worker/lib/ai/report";
+import type { ReportData } from "../../worker/lib/reports";
+import type { Exercise, SetEntry, WorkoutSession } from "../../worker/lib/types";
+import { reportData } from "../fixtures/report-data";
+
+// SPEC-v3 M9a: the AI session report's input, built server-side. Fixture: the seed program and history of
+// tests/fixtures/report-data.ts plus one more Day 1 session on Monday 2026-09-28.
+
+const stretch: Exercise = {
+  id: "pec_stretch",
+  name_fa: "",
+  name_en: "Doorway Pec Stretch",
+  muscle_primary: "chest",
+  is_lower: false,
+  equipment: "bodyweight",
+  cue_fa: "",
+  cue_en: null,
+  source: "fedb",
+  muscles_secondary: [],
+  pattern: null,
+  mechanic: null,
+  level: null,
+  media: [],
+  instructions_en: [],
+  archived_at: null,
+  category: "stretching",
+};
+
+let k = 0;
+const set = (exercise_id: string, set_index: number, weight: number | null, reps: number | null, done = true, extra: Partial<SetEntry> = {}): SetEntry => ({
+  id: `T-${k++}`,
+  exercise_id,
+  set_index,
+  weight,
+  reps,
+  seconds: null,
+  done,
+  rir: null,
+  updated_at: "2026-09-29T00:30:00.000Z",
+  ...extra,
+});
+
+/** Day 1 on Monday 2026-09-28: bench 3 of 4 sets, incline press skipped, an extra curl and a stretch (0 volume). */
+function today(): WorkoutSession {
+  return {
+    id: "T1",
+    program_day_id: "D1",
+    local_date: "2026-09-28",
+    started_at: "2026-09-28T23:00:00.000Z",
+    ended_at: "2026-09-29T00:05:00.000Z",
+    status: "done",
+    unit: "lb",
+    note: "Shoulder felt fine.",
+    created_at: "2026-09-28T23:00:00.000Z",
+    updated_at: "2026-09-29T00:05:00.000Z",
+    source: "app",
+    sets: [
+      set("bench", 0, 140, 5),
+      set("bench", 1, 140, 5),
+      set("bench", 2, 140, 5),
+      set("bench", 3, 140, null, false),
+      set("rdl", 0, 160, 8),
+      set("rdl", 1, 160, 8),
+      set("rdl", 2, 160, 8),
+      set("cable_row", 0, 100, 10),
+      set("cable_row", 1, 100, 10),
+      set("cable_row", 2, 100, 10),
+      set("lateral", 0, 15, 12),
+      set("lateral", 1, 15, 12),
+      set("lateral", 2, 15, 12),
+      set("facepull", 0, 40, 15),
+      set("facepull", 1, 40, 15),
+      set("facepull", 2, 40, 15),
+      set("curl", 0, 30, 10, true, { is_extra: true, position: 0 }),
+      set("curl", 1, 30, 9, true, { is_extra: true, position: 0 }),
+      set("pec_stretch", 0, null, null, true, { is_extra: true, position: 1, seconds: 30 }),
+    ],
+  };
+}
+
+function data(): ReportData {
+  const d = reportData();
+  d.exercises.push(stretch);
+  d.sessions.push(today());
+  d.watch.push({ id: "W9", activity_type: null, started_at: "", ended_at: null, duration_sec: null, active_kcal: 310, total_kcal: null, hr_avg: 125, hr_max: 160, matched_session_id: "T1", kind: "session" });
+  d.body.push({ local_date: "2026-09-28", kind: "body_mass", value: 180, unit: "lb", source: "manual" });
+  return d;
+}
+
+const vol = (input: ReportInput, key: string) => input.week_so_far.volume.find((v) => v.key === key);
+
+describe("buildReportInput", () => {
+  const input = buildReportInput(data(), "T1", null);
+
+  it("covers the session: day, local times, duration, unit and note", () => {
+    expect(input.session).toEqual({ date: "2026-09-28", program_day: "Day 1 · Chest", start: "17:00", end: "18:05", duration_min: 65, unit: "lb", note: "Shoulder felt fine." });
+  });
+
+  it("lists the planned exercises in order, then the extras, with done sets only", () => {
+    expect(input.exercises.map((x) => [x.exercise_id, x.is_extra])).toEqual([
+      ["bench", false],
+      ["incline_db", false],
+      ["rdl", false],
+      ["cable_row", false],
+      ["lateral", false],
+      ["facepull", false],
+      ["curl", true],
+      ["pec_stretch", true],
+    ]);
+    const bench = input.exercises[0];
+    expect(bench.planned).toEqual({ sets: 4, reps: "5", seconds: null, per_leg: false, target_rir: null });
+    expect(bench.done_sets).toHaveLength(3);
+    expect(bench.not_done_sets).toBe(1);
+    expect(input.exercises.find((x) => x.exercise_id === "lateral")!.group).toBe("A1");
+  });
+
+  it("includes the extra exercise with its sets and no planned target", () => {
+    const curl = input.exercises.find((x) => x.exercise_id === "curl")!;
+    expect(curl).toMatchObject({ is_extra: true, planned: null, counts_volume: true, not_done_sets: 0, app_next_time: null });
+    expect(curl.done_sets).toEqual([
+      { weight: 30, reps: 10, seconds: null, rir: null },
+      { weight: 30, reps: 9, seconds: null, rir: null },
+    ]);
+  });
+
+  it("includes a 0-volume exercise, marked as not counted in volume", () => {
+    const st = input.exercises.find((x) => x.exercise_id === "pec_stretch")!;
+    expect(st).toMatchObject({ is_extra: true, category: "stretching", counts_volume: false });
+    expect(st.done_sets).toEqual([{ weight: null, reps: null, seconds: 30, rir: null }]);
+    // Its chest set adds nothing: chest today is the 3 bench sets only.
+    expect(vol(input, "chest")!.today).toBe(3);
+  });
+
+  it("lists missed exercises and missed sets", () => {
+    expect(input.missed).toEqual({ exercises_not_done: ["Incline Dumbbell Press"], partly_done: [{ name: "Barbell Bench Press", planned_sets: 4, done_sets: 3 }] });
+    expect(input.exercises.find((x) => x.exercise_id === "incline_db")).toMatchObject({ done_sets: [], not_done_sets: 3 });
+  });
+
+  it("compares with the previous session of the same day and finds today's records", () => {
+    const bench = input.exercises[0];
+    expect(bench.previous_same_day).toMatchObject({ date: "2026-09-21", best_e1rm: 157.5 });
+    expect(bench.previous_same_day!.sets).toHaveLength(4);
+    expect(bench.best_e1rm_today).toBe(163.3);
+    expect(input.prs_today).toContainEqual({ name: "Barbell Bench Press", weight: 140, reps: 5, e1rm: 163.3, previous_best_e1rm: 157.5 });
+  });
+
+  it("gives the app's own progression for next time", () => {
+    expect(input.exercises[0].app_next_time).toMatch(/^140 lb, same weight/);
+    expect(input.exercises.find((x) => x.exercise_id === "rdl")!.app_next_time).toMatch(/^170 lb \(all planned sets reached 8 reps: one increment\)/);
+  });
+
+  it("counts each set at most once per group (cable row: upper back + lats are both Back)", () => {
+    // 3 cable rows count 3 for Back (not 4.5); 3 face pulls add 0.5 each through their upper-back secondary.
+    expect(vol(input, "back")!.today).toBe(4.5);
+    expect(vol(input, "biceps")!.today).toBe(2 + 1.5);
+  });
+
+  it("has the week so far against the targets, and the session count", () => {
+    expect(input.week_so_far).toMatchObject({ start: "2026-09-28", end: "2026-10-04", sessions_done: 1, sessions_planned: 4 });
+    const chest = vol(input, "chest")!;
+    expect(chest).toMatchObject({ group: "Chest", today: 3, week: 3, status: "under" });
+    expect(chest.target).toBeGreaterThan(0);
+    // Every targeted group is listed; untargeted ones only when trained.
+    expect(input.week_so_far.volume.map((v) => v.key)).toEqual(expect.arrayContaining(["chest", "back", "quads", "calves", "core", "forearms", "lower_back"]));
+    expect(input.week_so_far.volume.map((v) => v.key)).not.toContain("neck");
+  });
+
+  it("adds the watch numbers and body weight when present", () => {
+    expect(input.watch).toEqual({ hr_avg: 125, hr_max: 160, active_kcal: 310 });
+    expect(input.body_weight).toMatchObject({ unit: "lb", today: 180 });
+    expect(input.body_weight!.weekly_avg_last_4_weeks.map((w) => w.week_start)).toEqual(["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
+  });
+
+  it("follows the session's plan when it has one (order, sets, added exercises)", () => {
+    const d = data();
+    const plan = {
+      id: "T1",
+      program_day_id: "D1",
+      status: "started" as const,
+      started_at: "2026-09-28T23:00:00.000Z",
+      created_at: "2026-09-28T22:00:00.000Z",
+      updated_at: "2026-09-28T23:00:00.000Z",
+      items: ["rdl", "bench", "cable_row"].map((x, i) => ({
+        id: `T1-${i + 1}`,
+        exercise_id: x,
+        position: i,
+        sets: 3,
+        reps_min: 5,
+        reps_max: 8,
+        per_leg: false,
+        is_time: false,
+        rest_sec: 120,
+        target_rir_min: 1,
+        target_rir_max: 2,
+        origin: "program" as const,
+        replaced_exercise_id: null,
+        group_tag: null,
+        group_rest_sec: null,
+        removed_at: null,
+        created_at: "2026-09-28T22:00:00.000Z",
+        updated_at: "2026-09-28T22:00:00.000Z",
+      })),
+    };
+    const p = buildReportInput(d, "T1", plan);
+    expect(p.exercises.slice(0, 3).map((x) => x.exercise_id)).toEqual(["rdl", "bench", "cable_row"]);
+    expect(p.exercises[1].planned).toEqual({ sets: 3, reps: "5–8", seconds: null, per_leg: false, target_rir: "1–2" });
+    // Not in the plan: logged exercises count as extras, and the skipped incline press is no longer "missed".
+    expect(p.exercises.find((x) => x.exercise_id === "lateral")!.is_extra).toBe(true);
+    expect(p.missed.exercises_not_done).toEqual([]);
+  });
+});
+
+describe("normalizeReport", () => {
+  it("keeps the prose and copies the volume numbers and status from the input; unknown groups go", () => {
+    const input = buildReportInput(data(), "T1", null);
+    const out = ReportOutput.parse({
+      summary_fa: "جلسهٔ خوبی بود.",
+      highlights: Array.from({ length: 10 }, (_, i) => `نکتهٔ ${i + 1}`),
+      volume: [
+        { group: "Chest", today: 9, week: 99, target: 1, status: "over" },
+        { group: "Wings", today: 1, week: 1, target: 1, status: "on" },
+        { group: "chest", today: 3, week: 3, target: 1, status: "Under target" },
+      ],
+      extras_note_fa: null,
+      missed_note_fa: "پرس بالاسینه انجام نشد.",
+      next_time: [],
+      warnings: [],
+    });
+    const r = normalizeReport(out, input);
+    const chest = input.week_so_far.volume.find((v) => v.key === "chest")!;
+    expect(r.volume).toEqual([{ group: "Chest", today: chest.today, week: chest.week, target: chest.target, status: chest.status }]);
+    expect(r.summary_fa).toBe("جلسهٔ خوبی بود.");
+    // List lengths are not enforced by the API: over-long lists are cut, not rejected.
+    expect(r.highlights).toHaveLength(8);
+  });
+});

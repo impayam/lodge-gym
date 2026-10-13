@@ -24,6 +24,7 @@ import {
 } from "./lib/types";
 import { isCategory } from "./lib/category";
 import { readPlans } from "./plans";
+import { queueReport } from "./aiReports";
 import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
@@ -344,7 +345,7 @@ dataRoutes.put("/sessions/:id", async (c) => {
   }
 
   // Last-writer-wins on updated_at: an older document never overwrites a newer one.
-  const existing = await c.env.DB.prepare("SELECT updated_at FROM workout_sessions WHERE id = ?").bind(doc.id).first<{ updated_at: string }>();
+  const existing = await c.env.DB.prepare("SELECT updated_at, status FROM workout_sessions WHERE id = ?").bind(doc.id).first<{ updated_at: string; status: string }>();
   if (existing && Date.parse(existing.updated_at) > Date.parse(doc.updated_at)) {
     const [current] = await readSessionsById(c.env, [doc.id]);
     return c.json({ ok: true, applied: false, session: current });
@@ -378,6 +379,8 @@ dataRoutes.put("/sessions/:id", async (c) => {
   await db.batch(stmts);
   // A watch workout may have arrived before this session was synced (SPEC §9.1 matching).
   await rematchAround(c.env, doc.started_at);
+  // SPEC-v3 M9a: a session that reaches the server as done gets its AI report, written in the background.
+  if (doc.status === "done" && doc.source === "app" && existing?.status !== "done") c.executionCtx.waitUntil(queueReport(c.env, doc.id).catch((e) => console.error(`report queue: ${e instanceof Error ? e.message : String(e)}`)));
   return c.json({ ok: true, applied: true });
 });
 
@@ -459,6 +462,8 @@ dataRoutes.delete("/sessions/:id", async (c) => {
   if (!ID_RE.test(sid)) return fail(c, 400, "invalid_input", "The session id is not valid.");
   await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM set_entries WHERE session_id = ?").bind(sid),
+    // Its AI reports describe a session that no longer exists (approved with migration 0009).
+    c.env.DB.prepare("DELETE FROM session_reports WHERE session_id = ?").bind(sid),
     c.env.DB.prepare("DELETE FROM workout_sessions WHERE id = ?").bind(sid),
     c.env.DB.prepare("DELETE FROM health_workouts WHERE external_key = ?").bind(`session:${sid}`),
     // Photos are kept (they belong to the date), only unlinked from the deleted session.

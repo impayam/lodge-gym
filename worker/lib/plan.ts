@@ -177,13 +177,15 @@ export const inPlan = (p: Pick<SessionPlan, "items">, exerciseId: string) => liv
 export function replaceItem(p: SessionPlan, itemId: string, exerciseId: string, now: string): SessionPlan {
   const it = findLive(p, itemId);
   if (!it || inPlan(p, exerciseId)) return p;
+  // An exercise added to the plan (by Payam, or by an applied advice) stays an addition, whatever it is swapped to.
+  const added = it.origin === "added" || (it.origin === "ai" && it.replaced_exercise_id == null);
   const original = it.origin === "program" ? it.exercise_id : it.replaced_exercise_id;
   const back = original === exerciseId;
   const next: PlanItem = {
     ...it,
     exercise_id: exerciseId,
-    origin: it.origin === "added" ? "added" : back ? "program" : "replaced",
-    replaced_exercise_id: it.origin === "added" || back ? null : original,
+    origin: added ? it.origin : back ? "program" : "replaced",
+    replaced_exercise_id: added || back ? null : original,
   };
   return settle(p, liveItems(p).map((x) => (x.id === itemId ? next : x)), now, new Set([itemId]));
 }
@@ -261,6 +263,43 @@ export function moveBlock(p: SessionPlan, from: number, to: number, now: string)
   const [b] = blocks.splice(from, 1);
   blocks.splice(to, 0, b);
   return settle(p, blocks.flatMap((x) => x.items), now);
+}
+
+/**
+ * Moves an item towards live index `index` (0-based). A grouped item moves with its whole group, and nothing lands
+ * inside another group: the item's block goes to the last block boundary at or before the place asked for.
+ */
+export function moveItemTo(p: SessionPlan, itemId: string, index: number, now: string): SessionPlan {
+  const blocks = planBlocks(p);
+  const bi = blocks.findIndex((b) => b.items.some((it) => it.id === itemId));
+  if (bi < 0) return p;
+  const [block] = blocks.splice(bi, 1);
+  const start = index - block.items.findIndex((it) => it.id === itemId);
+  let to = 0;
+  for (let count = 0; to < blocks.length && count + blocks[to].items.length <= start; to++) count += blocks[to].items.length;
+  blocks.splice(to, 0, block);
+  return settle(p, blocks.flatMap((b) => b.items), now);
+}
+
+/**
+ * Puts an item back as it was (Undo of an applied advice): its exercise, sets, reps, rest and origin, live again near
+ * live index `index`. Group membership is not restored (groups may have been re-lettered since); a live item keeps
+ * the group it is in now.
+ */
+export function restoreItem(p: SessionPlan, before: PlanItem, index: number, now: string): SessionPlan {
+  const current = p.items.find((it) => it.id === before.id);
+  const live = !!current && !current.removed_at;
+  const back: PlanItem = {
+    ...before,
+    position: live ? current!.position : Number.MAX_SAFE_INTEGER,
+    removed_at: null,
+    group_tag: live ? current!.group_tag : null,
+    group_rest_sec: live ? current!.group_rest_sec : null,
+    updated_at: now,
+  };
+  const items = current ? p.items.map((it) => (it.id === before.id ? back : it)) : [...p.items, back];
+  const settled = settle({ ...p, items }, liveItems({ items }), now, new Set([before.id]));
+  return moveItemTo(settled, before.id, index, now);
 }
 
 /** Moves a group member to index `to` inside its group. */

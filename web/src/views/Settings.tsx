@@ -2,7 +2,8 @@ import { useEffect, useState } from "preact/hooks";
 import { isValidTimeZone } from "../../../worker/lib/time";
 import type { ProgramInfo, Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
-import { dateLong, fmtNum, instantShort } from "../format";
+import { dateLong, fmtNum, instantShort, plural } from "../format";
+import { fetchUsage, type AiUsage } from "../ai";
 import { activeProgramInfo, programName, styleLabel } from "../model";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
@@ -103,6 +104,9 @@ export function Settings() {
       <h2>Rest-timer notification</h2>
       <PushSettings />
 
+      <h2>AI reports</h2>
+      <AiSettings />
+
       <h2>Backup</h2>
       <Backups />
 
@@ -194,6 +198,61 @@ function ProgramSettings() {
       ) : null}
       <p class="why" style={{ margin: 0 }}>
         Past programs are in History, where you can switch back to one.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * SPEC-v3 M9a: this month's AI reports and plan advice with their estimated cost, and the API key's state as the last
+ * call saw it (the key itself never reaches the phone).
+ */
+function AiSettings() {
+  const online = useStore((s) => s.sync.online);
+  const [u, setU] = useState<AiUsage | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    fetchUsage()
+      .then((r) => {
+        setU(r);
+        setFailed(false);
+      })
+      .catch(() => setFailed(true));
+  }, [online]);
+  const keyProblem = u ? (u.key === "missing" ? "Report unavailable — API key not set" : u.key_status === "invalid" ? "Report unavailable — API key expired or invalid" : null) : null;
+  return (
+    <div class="card stack" data-testid="ai-settings">
+      {keyProblem ? (
+        <div class="banner bad" role="alert" data-testid="ai-key-problem" style={{ margin: 0 }}>
+          {keyProblem}
+        </div>
+      ) : null}
+      <div class="kv">
+        <span>This month</span>
+        <span class="num" data-testid="ai-cost">
+          {u
+            ? `${plural(u.month.reports, "report")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`
+            : failed
+              ? "Needs connection"
+              : "–"}
+        </span>
+      </div>
+      {u ? (
+        <>
+          <div class="kv">
+            <span>Today</span>
+            <span class="num">
+              {fmtNum(u.today.reports)}/{fmtNum(u.limits.report)} reports · {fmtNum(u.today.advice)}/{fmtNum(u.limits.advice)} advice
+            </span>
+          </div>
+          <div class="kv">
+            <span>Model</span>
+            <span class="num">{u.model}</span>
+          </div>
+        </>
+      ) : null}
+      <p class="why" style={{ margin: 0 }}>
+        A short Persian report is written after each session, and the planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
     </div>
   );

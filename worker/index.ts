@@ -13,8 +13,10 @@ import { pushRoutes } from "./push";
 import { exerciseRoutes, mediaRoutes } from "./exercises";
 import { programRoutes } from "./programs";
 import { planRoutes } from "./plans";
+import { aiRoutes, aiSessionRoutes } from "./aiReports";
 
 export { RestPush } from "./push";
+export { AiJobs } from "./aiReports";
 import { ApiError, errorBody } from "./http";
 
 
@@ -54,6 +56,8 @@ const api = new Hono<AppBindings>();
 api.use("*", requireSession);
 api.route("/", dataRoutes);
 api.route("/sessions", planRoutes);
+api.route("/sessions", aiSessionRoutes);
+api.route("/ai", aiRoutes);
 api.route("/tokens", tokenRoutes);
 api.route("/health", healthRoutes);
 api.route("/photos", photoRoutes);
