@@ -7,6 +7,7 @@ import { getState, navigate, setState, today, useStore, type ViewName } from "./
 import { FirstOffline, Locked, Login, Recovery, Setup } from "./views/Auth";
 import { History } from "./views/History";
 import { Library } from "./views/Library";
+import { NewProgram } from "./views/NewProgram";
 import { Home } from "./views/Home";
 import { Photos } from "./views/Photos";
 import { Program } from "./views/Program";
@@ -59,7 +60,7 @@ export function App() {
   if (auth === "first-offline" || !hasBoot) return <FirstOffline />;
 
   const t = today();
-  const current = view.name === "session" ? "home" : view.name === "watch" ? "settings" : view.name;
+  const current = view.name === "session" ? "home" : view.name === "watch" || view.name === "newprogram" ? "settings" : view.name;
   return (
     <>
       <div class="wrap">
@@ -92,6 +93,8 @@ export function App() {
             <Settings />
           ) : view.name === "watch" ? (
             <Watch />
+          ) : view.name === "newprogram" ? (
+            <NewProgram key={view.programId ?? "new"} />
           ) : (
             <Home />
           )}

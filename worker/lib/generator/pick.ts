@@ -21,7 +21,7 @@ export interface Candidate {
   perLeg: boolean;
 }
 
-const EQUIPMENT_OK: Readonly<Record<EquipmentChoice, ReadonlySet<string>>> = {
+export const EQUIPMENT_OK: Readonly<Record<EquipmentChoice, ReadonlySet<string>>> = {
   full_gym: new Set(["barbell", "dumbbell", "cable", "machine", "bodyweight"]),
   dumbbells: new Set(["dumbbell", "bodyweight"]),
 };
@@ -34,6 +34,10 @@ export const isOlympicLift = (ex: Pick<Exercise, "name_en" | "category">) => ex.
 export const isHeavyHinge = (ex: Pick<Exercise, "pattern" | "name_en">) => ex.pattern === "hinge" && /deadlift|romanian|\brdl\b|good morning|stiff[- ]?leg/i.test(ex.name_en);
 const TIMED = /plank|hold|hang\b|wall sit|l-sit|hollow/i;
 const PER_LEG = /bulgarian|split squat|lunge|single[- ]leg|one[- ]leg|step[- ]?up|pistol|copenhagen/i;
+/** A core hold logged in seconds (plank, hollow hold). */
+export const looksTimed = (ex: Pick<Exercise, "pattern" | "name_en">) => ex.pattern === "core" && TIMED.test(ex.name_en);
+/** Logged per leg (split squat, lunge, single-leg work). */
+export const looksPerLeg = (ex: Pick<Exercise, "name_en">) => PER_LEG.test(ex.name_en);
 
 export interface PoolContext {
   exercises: Exercise[];
@@ -62,8 +66,8 @@ export function candidatePool(ctx: PoolContext, equipment: EquipmentChoice, avoi
       inProgram: main === undefined ? 0 : main ? 2 : 1,
       levelOk: ex.level === null || ex.level === "beginner" || ex.level === "intermediate",
       heavyHinge: isHeavyHinge(ex),
-      timed: ctx.timedIds.has(ex.id) || (ex.pattern === "core" && TIMED.test(ex.name_en)),
-      perLeg: ctx.perLegIds.has(ex.id) || PER_LEG.test(ex.name_en),
+      timed: ctx.timedIds.has(ex.id) || looksTimed(ex),
+      perLeg: ctx.perLegIds.has(ex.id) || looksPerLeg(ex),
     });
   }
   return out;

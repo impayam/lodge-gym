@@ -3,11 +3,47 @@
 import { nextDay, restAdvised, weekRange } from "../../worker/lib/cycle";
 import { lastPerformance, stepperIncrement, suggest, type Suggestion } from "../../worker/lib/progression";
 import { zonedToUtcISO } from "../../worker/lib/time";
-import type { DayExercise, Exercise, ProgramDay, SetEntry, WorkoutSession } from "../../worker/lib/types";
+import type { DayExercise, Exercise, ProgramDay, ProgramInfo, SetEntry, WorkoutSession } from "../../worker/lib/types";
+import { MAX_TWO_IN_A_ROW, STYLE_NAME, type ResolvedStyle } from "../../worker/lib/generator/model";
 import { ulid } from "../../worker/lib/ulid";
 import type { BootData } from "./localdb";
 
 export const exerciseMap = (boot: BootData) => new Map(boot.exercises.map((e) => [e.id, e]));
+
+/* ---------------- programs (SPEC-v2 M8) ---------------- */
+
+/** The active program's metadata; a bootstrap cached before M8 has none. */
+export const activeProgramInfo = (boot: BootData): ProgramInfo | null => (boot.programs ?? []).find((p) => p.status === "active") ?? null;
+
+/** Planned sessions per week of the active program. */
+export const daysPerWeek = (boot: BootData) => activeProgramInfo(boot)?.days_per_week ?? boot.program.days.length;
+
+export function styleLabel(style: string | null): string {
+  if (style === "seed_full_body") return "Full body (original program)";
+  if (style === "seed_upper_lower") return "Upper/lower (original program)";
+  return style && style in STYLE_NAME ? STYLE_NAME[style as ResolvedStyle] : "Program";
+}
+
+/** English display name: the seed programs carry Persian names in data (SPEC §6), the UI stays English (SPEC-v2 M6). */
+export function programName(p: Pick<ProgramInfo, "name" | "style"> | null | undefined, fallback = "Program"): string {
+  if (!p) return fallback;
+  if (p.style === "seed_full_body") return "Full body · 4 days";
+  if (p.style === "seed_upper_lower") return "Upper/lower · 4 days";
+  return p.name || fallback;
+}
+
+/** Full-body and strength weeks allow at most two training days in a row (§8.4); split days are sequenced instead. */
+export function twoInARowRule(boot: BootData): boolean {
+  const style = activeProgramInfo(boot)?.style ?? "seed_full_body";
+  return style === "seed_full_body" || MAX_TWO_IN_A_ROW.has(style as ResolvedStyle);
+}
+
+/** The latest program switch within the last 3 weeks (§8.5 "too many switches"), not counting the first activation. */
+export function recentSwitch(boot: BootData, now = Date.now()): string | null {
+  const starts = (boot.programs ?? []).flatMap((p) => p.activations.map((a) => a.started_at)).sort();
+  const recent = starts.slice(1).filter((t) => now - Date.parse(t) < 21 * 86_400_000);
+  return recent.length ? recent[recent.length - 1] : null;
+}
 
 export function dayInfo(boot: BootData, dayId: string): { id: string; name_en: string; legacy: boolean; position: number } {
   const d = boot.program.days.find((x) => x.id === dayId) ?? boot.other_days.find((x) => x.id === dayId);
@@ -30,7 +66,7 @@ export function homeModel(boot: BootData, sessions: Record<string, WorkoutSessio
   const weekDone = all.filter((s) => s.status === "done" && s.local_date >= week.start && s.local_date <= week.end).length;
   return {
     next,
-    rest: restAdvised(today, all),
+    rest: twoInARowRule(boot) && restAdvised(today, all),
     weekDone,
     recent: sortedSessions(sessions)
       .filter((s) => s.status === "done")

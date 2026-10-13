@@ -36,7 +36,7 @@ import {
 
 export * from "./model";
 export * from "./check";
-export { candidatePool, isHeavyHinge, isOlympicLift, pick, type Candidate } from "./pick";
+export { EQUIPMENT_OK, candidatePool, isHeavyHinge, isOlympicLift, looksPerLeg, looksTimed, pick, type Candidate } from "./pick";
 
 export interface GeneratorContext {
   /** The library: seed, imported, manual and custom exercises. */
@@ -423,6 +423,56 @@ function heavyHingeNear(days: readonly PlanDay[], i: number, byId: ReadonlyMap<s
     if (j === i || !d.exercises.some((x) => byId.get(x.exercise_id)?.heavyHinge)) return false;
     return Math.min((d.offset - o + 7) % 7, (o - d.offset + 7) % 7) < 3;
   });
+}
+
+/** One exercise of an edited proposal: the editor changes only the exercise (a swap) and the sets. */
+export interface EditedExercise {
+  exercise_id: string;
+  slot: Slot;
+  sets: number;
+  per_leg: boolean;
+  is_time: boolean;
+  superset_tag: string | null;
+}
+
+/**
+ * Rebuilds a plan from the generator inputs and the edited days (a draft, or a program read back from the database):
+ * day names, kinds and offsets come from the style's layout, and reps, rest, target RIR and set ranges from the slot.
+ */
+export function planFromEdits(params: GeneratorInput, days: readonly { exercises: readonly EditedExercise[] }[]): Plan {
+  const style = resolveStyle(params.style, params.days_per_week);
+  if (!style) throw new GeneratorInputError(`${params.style} does not run ${params.days_per_week} days a week.`);
+  const layout = LAYOUTS[style][params.days_per_week];
+  if (days.length !== layout.length) throw new GeneratorInputError(`This style has ${layout.length} days.`);
+  const strength = style === "strength";
+  return {
+    style,
+    days_per_week: params.days_per_week,
+    session_minutes: params.session_minutes,
+    days: layout.map((l, i) => ({
+      name_en: l.name,
+      kind: l.kind,
+      offset: l.offset,
+      exercises: days[i].exercises.map((x) => {
+        const sc = scheme(x.slot, strength);
+        const reps = x.is_time ? HOLD_SECONDS : sc.reps;
+        return {
+          exercise_id: x.exercise_id,
+          slot: x.slot,
+          sets: x.sets,
+          reps_min: reps[0],
+          reps_max: reps[1],
+          rest_sec: sc.rest,
+          target_rir_min: sc.rir[0],
+          target_rir_max: sc.rir[1],
+          per_leg: x.per_leg,
+          is_time: x.is_time,
+          superset_tag: x.superset_tag,
+          set_range: sc.range,
+        };
+      }),
+    })),
+  };
 }
 
 /** Day exercises of a plan day as stored rows (ids are assigned by the caller). */

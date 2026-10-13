@@ -9,7 +9,8 @@ export function HistoryItem({ s, boot }: { s: WorkoutSession; boot: BootData }) 
   const tz = boot.settings.timezone;
   const mins = minutesBetween(s.started_at, s.ended_at);
   const setsDone = s.sets.filter((x) => x.done).length;
-  const badge = d.legacy ? d.name_en.replace(/^(Upper|Lower) /, "") : fmtNum(d.position);
+  // Archived upper/lower days keep their letter; every other day shows its position in its program.
+  const badge = d.legacy && /^(Upper|Lower) [AB]$/.test(d.name_en) ? d.name_en.slice(-1) : d.position ? fmtNum(d.position) : "–";
   return (
     <button type="button" class="hist" onClick={() => navigate("session", s.id)}>
       <span class={`dot${d.legacy ? " legacy" : ""}`}>{badge}</span>

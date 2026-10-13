@@ -10,8 +10,6 @@ import { mapExercise, readProgram, readProgramInfos, readProgramVersions } from 
 import {
   EQUIPMENT_CHOICES,
   GeneratorInputError,
-  HOLD_SECONDS,
-  LAYOUTS,
   SEED_PRIORITY,
   SLOTS,
   STYLES,
@@ -19,14 +17,12 @@ import {
   checkPlan,
   dayMinutes,
   generateProgram,
+  planFromEdits,
   programVolume,
-  resolveStyle,
-  scheme,
   toDayExercises,
   weeklyTargets,
   type GeneratorInput,
   type Plan,
-  type PlanDay,
   type TargetGroup,
 } from "./lib/generator";
 import { TARGET_GROUPS } from "./lib/muscles";
@@ -90,43 +86,14 @@ async function generatorContext(env: Env) {
   return { exercises, historyIds: new Set(history.results.map((r) => r.id)), current: program.days.length ? program : null, currentPriority };
 }
 
-/** A stored or submitted program as a plan the check can read: day names, kinds and offsets come from the layout. */
+/** A stored or submitted program as a plan the check can read (layout days, slot prescriptions). */
 function toPlan(params: GeneratorInput, days: Draft["days"]): Plan {
-  const style = resolveStyle(params.style, params.days_per_week);
-  if (!style) throw new ApiError(400, "invalid_style", `${params.style} does not run ${params.days_per_week} days a week.`);
-  const layout = LAYOUTS[style][params.days_per_week];
-  if (days.length !== layout.length) throw new ApiError(400, "invalid_input", `This style has ${layout.length} days.`);
-  const strength = style === "strength";
-  return {
-    style,
-    days_per_week: params.days_per_week,
-    session_minutes: params.session_minutes,
-    days: layout.map(
-      (l, i): PlanDay => ({
-        name_en: l.name,
-        kind: l.kind,
-        offset: l.offset,
-        exercises: days[i].exercises.map((x) => {
-          const sc = scheme(x.slot, strength);
-          const reps = x.is_time ? HOLD_SECONDS : sc.reps;
-          return {
-            exercise_id: x.exercise_id,
-            slot: x.slot,
-            sets: x.sets,
-            reps_min: reps[0],
-            reps_max: reps[1],
-            rest_sec: sc.rest,
-            target_rir_min: sc.rir[0],
-            target_rir_max: sc.rir[1],
-            per_leg: x.per_leg,
-            is_time: x.is_time,
-            superset_tag: x.superset_tag,
-            set_range: sc.range,
-          };
-        }),
-      })
-    ),
-  };
+  try {
+    return planFromEdits(params, days);
+  } catch (e) {
+    if (e instanceof GeneratorInputError) throw new ApiError(400, "invalid_style", e.message);
+    throw e;
+  }
 }
 
 async function checkStored(env: Env, p: ProgramVersion) {
