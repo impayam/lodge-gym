@@ -200,7 +200,7 @@ function OverviewBody({ view }: { view: OverviewView }) {
           </table>
         </div>
       ) : null}
-      {list("Trends", o.trends, "↗", "overview-trends")}
+      {list("Trends", o.trends, "•", "overview-trends")}
       {para("Volume", o.volume_fa, "overview-volume")}
       {para("Consistency", o.consistency_fa, "overview-consistency")}
       {list("Focus next", o.focus_next, "←", "overview-focus")}

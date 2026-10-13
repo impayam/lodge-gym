@@ -34,8 +34,7 @@ export function History() {
   return (
     <>
       {programs.length ? <Timeline programs={ordered} /> : null}
-      <h2>Weekly reviews</h2>
-      <button type="button" class="hist" data-testid="open-reviews" onClick={() => navigate("reviews")}>
+      <button type="button" class="hist" style={{ marginTop: "14px" }} data-testid="open-reviews" onClick={() => navigate("reviews")}>
         <span class="meta">
           <b>Weekly reviews</b>
           <small>Every weekly review, newest first</small>
