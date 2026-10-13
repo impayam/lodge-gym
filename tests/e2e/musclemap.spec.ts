@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { STAGE_STATUS_COLOR } from "../../web/src/lib/anatomy-status";
+import { groupOf } from "../../worker/lib/muscles";
 import type { BalanceStatus } from "../../worker/lib/reports";
 import { expect, test, type Page } from "./fixtures";
 import { resetWorkouts, signIn } from "./helpers";
@@ -64,6 +65,7 @@ async function mixedWeek(page: Page, baseURL: string) {
 interface Hook {
   view: {
     colorOf(m: string): string | null;
+    partColors(): { name: string; muscle: string | null; color: string }[];
     pointOn(name: string): { x: number; y: number } | null;
     lit(): string[];
     moving(): boolean;
@@ -91,8 +93,25 @@ test("3D map: each mapped muscle in its group's status colour, unmapped dark; a 
     await expect(page.getByTestId(`muscle-${group}`), key).toContainText({ under: "Under target", on: "On target", over: "Over target", untracked: "No target", none: "No sets" }[status]);
   }
   expect(await view(page, (v) => v.colorOf("unmapped"))).toBe("#3b2725");
+
+  // Every muscle mesh, mesh by mesh: a mapped one in the colour of its group's status in the table, an unmapped one dark.
+  const table = Object.fromEntries(
+    await page.getByTestId("muscle-map").locator("li[data-testid^='muscle-']").evaluateAll((rows) =>
+      rows.map((r) => [r.getAttribute("data-testid")!.slice("muscle-".length), r.querySelector(".st")!.className.replace(/^.*\bst-(\w+).*$/, "$1")])
+    )
+  ) as Record<string, BalanceStatus>;
+  const parts = await view(page, (v) => v.partColors());
+  // The model's 440 muscle nodes, less one without a mesh (a patellar retinaculum).
+  expect(parts.length).toBe(439);
+  for (const p of parts) expect(p.color, `${p.name} (${p.muscle ?? "unmapped"})`).toBe(p.muscle ? STAGE_STATUS_COLOR[table[groupOf(p.muscle)!]] : "#3b2725");
+  // Traps (0 sets, no target) are muted; the trapezius's middle and lower parts are upper back (back under target).
+  expect(table.traps).toBe("none");
+  const trapezius = (n: string) => [...new Set(parts.filter((p) => p.name === n).map((p) => p.color))];
+  expect(trapezius("Ascending part of trapezius muscle")).toEqual([STAGE_STATUS_COLOR.none]);
+  expect(trapezius("Descending part of trapezius muscle")).toEqual([STAGE_STATUS_COLOR.under]);
+  expect(trapezius("Transverse part of trapezius muscle")).toEqual([STAGE_STATUS_COLOR.under]);
   const legend = page.getByTestId("balance-legend");
-  for (const label of ["▼ Under target", "✓ On target", "▲ Over target", "· No target", "– Not trained this week", "Not mapped"]) await expect(legend).toContainText(label);
+  for (const label of ["▼ Under target", "✓ On target", "▲ Over target", "· No target", "– No sets", "Not mapped"]) await expect(legend).toContainText(label);
 
   // The stage below the sticky header, fully on screen.
   await stage.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 70));

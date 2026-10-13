@@ -6,9 +6,16 @@ const migrations = await readD1Migrations("./migrations");
 const seedSql = readFileSync("./seed/seed.sql", "utf8");
 // The 3D anatomy model's nodes (name, extras.type, has a mesh), read from the GLB's JSON chunk for the mapping tests.
 const glb = readFileSync("./web/public/models/body.glb");
-const glbNodes = (JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")).nodes as { name: string; mesh?: number; extras?: { type?: string } }[]).map(
-  (n) => ({ name: n.name, type: n.extras?.type ?? null, mesh: n.mesh !== undefined })
-);
+const glbJson = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as {
+  nodes: { name: string; mesh?: number; extras?: { type?: string }; translation?: number[]; rotation?: number[]; scale?: number[] }[];
+  meshes: { primitives: { attributes: { POSITION: number } }[] }[];
+  accessors: { min?: number[]; max?: number[] }[];
+};
+// Each node's name, type, whether it has a mesh, and (for an untransformed mesh node) its bounds in model space.
+const glbNodes = glbJson.nodes.map((n) => {
+  const a = n.mesh !== undefined && !n.translation && !n.rotation && !n.scale ? glbJson.accessors[glbJson.meshes[n.mesh].primitives[0].attributes.POSITION] : null;
+  return { name: n.name, type: n.extras?.type ?? null, mesh: n.mesh !== undefined, min: a?.min ?? null, max: a?.max ?? null };
+});
 
 export default defineConfig({
   plugins: [

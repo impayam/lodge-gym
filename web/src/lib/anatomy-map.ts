@@ -84,11 +84,14 @@ export const ANATOMY_ROWS: readonly AnatomyEntry[] = [
   row("Rhomboid major muscle", "back_upper", "back_upper"),
   row("Rhomboid minor muscle", "back_upper", "back_upper"),
   row("Transverse part of trapezius muscle", "back_upper", "back_upper"),
-  row("Ascending part of trapezius muscle", "back_upper", "back_upper"),
+  // The model names its two outer trapezius parts the other way round: its "Descending part" is the lower triangle
+  // (1.12–1.41 m up), its "Ascending part" the upper fibres along the neck (1.42–1.57 m). Mapped by where they are:
+  // mid and lower trapezius are upper back, upper trapezius is traps (tests/lib/anatomyMap.test.ts checks the heights).
+  row("Descending part of trapezius muscle", "back_upper", "back_upper"),
   row("Infraspinatus muscle", "back_upper", "back_upper"),
   row("Teres minor muscle", "back_upper", "back_upper"),
   // Back: traps (shrugs)
-  row("Descending part of trapezius muscle", "traps", "traps"),
+  row("Ascending part of trapezius muscle", "traps", "traps"),
   row("Levator scapulae", "traps", "traps"),
   // Back: lower back (erector spinae and quadratus lumborum)
   row("Iliocostalis lumborum muscle", "lower_back"),

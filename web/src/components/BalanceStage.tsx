@@ -178,7 +178,7 @@ export function BalanceStage({ muscles, text, fallback }: { muscles: MuscleRow[]
       <div class="legend balance-legend" data-testid="balance-legend">
         {(["under", "on", "over", "untracked", "none"] as BalanceStatus[]).map((s) => (
           <span>
-            <i class="sw" style={{ background: STAGE_STATUS_COLOR[s] }} /> {text.icon[s]} {s === "none" ? "Not trained this week" : text.name[s]}
+            <i class="sw" style={{ background: STAGE_STATUS_COLOR[s] }} /> {text.icon[s]} {text.name[s]}
           </span>
         ))}
         <span>

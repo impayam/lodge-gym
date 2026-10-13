@@ -618,6 +618,16 @@ export class AnatomyView {
     return this.model.parts.filter((p) => glows.has(p.mesh.material as Material)).map((p) => p.name);
   }
 
+  /** Test hook: every muscle mesh with its model name, app muscle (null when unmapped) and the colour it is drawn in. */
+  partColors(): { name: string; muscle: Muscle | null; color: string }[] {
+    return this.model.parts
+      .filter((p) => p.kind === "muscle")
+      .map((p) => {
+        const m = p.mesh.material as MeshStandardMaterial;
+        return { name: p.name, muscle: p.muscle, color: (m.userData.tint as string | undefined) ?? `#${m.color.getHexString()}` };
+      });
+  }
+
   /** Test hook: the colour (#rrggbb) an app muscle is drawn in, or "unmapped" for the colour of unmapped muscles. */
   colorOf(muscle: Muscle | "unmapped"): string | null {
     const part = this.model.parts.find((p) => p.kind === "muscle" && (muscle === "unmapped" ? !p.muscle : p.muscle === muscle));
