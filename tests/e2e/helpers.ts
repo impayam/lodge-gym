@@ -46,8 +46,24 @@ export async function signIn(context: BrowserContext, baseURL: string) {
 }
 
 export function resetWorkouts() {
-  sql("DELETE FROM set_entries");
-  sql("DELETE FROM workout_sessions");
+  sql("DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
+}
+
+/** The seed program active again; versions made by the generator (M8) or by Apply to program (M9c) go. */
+export function resetPrograms() {
+  const made = "SELECT id FROM programs WHERE generated_by IN ('generator', 'session')";
+  sql(
+    [
+      `DELETE FROM session_plan_items WHERE session_id IN (SELECT id FROM planned_sessions WHERE program_day_id IN (SELECT id FROM program_days WHERE program_id IN (${made})))`,
+      `DELETE FROM planned_sessions WHERE program_day_id IN (SELECT id FROM program_days WHERE program_id IN (${made}))`,
+      `DELETE FROM day_exercises WHERE day_id IN (SELECT id FROM program_days WHERE program_id IN (${made}))`,
+      `DELETE FROM program_days WHERE program_id IN (${made})`,
+      "DELETE FROM program_activations WHERE id <> 'act-fullbody4-seed'",
+      "DELETE FROM programs WHERE generated_by IN ('generator', 'session')",
+      "UPDATE program_activations SET ended_at = NULL",
+      "UPDATE programs SET active = CASE id WHEN 'fullbody4' THEN 1 ELSE 0 END, archived_at = CASE id WHEN 'fullbody4' THEN NULL ELSE created_at END",
+    ].join("; ")
+  );
 }
 
 export async function waitForSynced(page: Page) {

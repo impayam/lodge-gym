@@ -195,7 +195,8 @@ planRoutes.post("/plan", async (c) => {
 
 /**
  * The full ordered item list, removed items included (idempotent upsert by item id; an item missing from the list is
- * marked removed). Last writer wins on updated_at. A planned plan can be discarded here; a started plan stays started.
+ * marked removed). Last writer wins on updated_at, except over the server's own fresh copy. A planned plan can be
+ * discarded here; a started plan stays started.
  */
 planRoutes.put("/:id/plan-items", async (c) => {
   const planId = c.req.param("id");
@@ -203,7 +204,10 @@ planRoutes.put("/:id/plan-items", async (c) => {
   const body = await readJson(c, itemsSchema);
   const plan = await readPlan(c.env, planId);
   if (!plan) return fail(c, 404, "not_found", "Plan not found.");
-  if (Date.parse(plan.updated_at) > Date.parse(body.updated_at)) return c.json({ ok: true, applied: false, plan });
+  // A plan nobody has written since the server created it (POST /plan copies the day) takes the first list, even one
+  // edited offline before that copy was made; after that, the last writer wins.
+  const untouched = plan.updated_at === plan.created_at;
+  if (!untouched && Date.parse(plan.updated_at) > Date.parse(body.updated_at)) return c.json({ ok: true, applied: false, plan });
   const ids = new Set(body.items.map((it) => it.id));
   if (ids.size !== body.items.length) return fail(c, 400, "invalid_input", "Duplicate item ids.");
   const bad = checkItems(body.items);
@@ -243,16 +247,20 @@ planRoutes.post("/:id/start", async (c) => {
   const plan = await readPlan(c.env, planId);
   if (!plan) return fail(c, 404, "not_found", "Plan not found.");
   if (plan.status === "discarded") return fail(c, 409, "plan_discarded", "This plan was discarded.");
+  // The phone stamped the plan when it tapped Start; the server's later clock must not make that write look stale.
   if (plan.status === "planned")
-    await c.env.DB.prepare("UPDATE planned_sessions SET status = 'started', started_at = ?, updated_at = ? WHERE id = ? AND status = 'planned'")
-      .bind(body.started_at, nowISO(), planId)
+    await c.env.DB.prepare(
+      "UPDATE planned_sessions SET status = 'started', started_at = ?, updated_at = CASE WHEN updated_at < ? THEN ? ELSE updated_at END WHERE id = ? AND status = 'planned'"
+    )
+      .bind(body.started_at, body.started_at, body.started_at, planId)
       .run();
   return c.json({ ok: true, plan: await readPlan(c.env, planId) });
 });
 
 /**
  * "Apply to program": a new version of the active program with this plan's day as planned (groups kept as superset
- * tags). The new version becomes active and the old one is archived (M8 versioning); nothing is deleted.
+ * tags). The new version becomes active and the old one is archived (M8 versioning); nothing is deleted. An open
+ * plan follows its day into the new version.
  */
 planRoutes.post("/:id/apply-to-program", async (c) => {
   const planId = c.req.param("id");
@@ -323,6 +331,14 @@ planRoutes.post("/:id/apply-to-program", async (c) => {
     c.env.DB.prepare("UPDATE programs SET active = 1 WHERE id = ?").bind(newId),
     c.env.DB.prepare("INSERT INTO program_activations (id, program_id, started_at) VALUES (?, ?, ?)").bind(ulid(), newId, now)
   );
+  // An open plan now matches the new version's day: it moves there (still planned, no longer "edited").
+  if (plan.status === "planned")
+    stmts.push(
+      c.env.DB.prepare("UPDATE planned_sessions SET program_day_id = ?, updated_at = ? WHERE id = ? AND status = 'planned'").bind(`${newId}-d${day.position}`, now, planId),
+      c.env.DB.prepare(
+        "UPDATE session_plan_items SET origin = 'program', replaced_exercise_id = NULL, updated_at = ? WHERE session_id = ? AND removed_at IS NULL AND origin <> 'program'"
+      ).bind(now, planId)
+    );
   await c.env.DB.batch(stmts);
   return c.json({ ok: true, program_id: newId, programs: await readProgramInfos(c.env) });
 });

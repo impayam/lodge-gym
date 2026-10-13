@@ -1,21 +1,11 @@
 import { expect, test, type Page } from "./fixtures";
-import { resetWorkouts, signIn, sql, waitForSynced } from "./helpers";
+import { resetPrograms, resetWorkouts, signIn, sql, waitForSynced } from "./helpers";
 
 // SPEC-v2 §8.8 E2E: generate a program, swap an exercise, approve it; old sessions still show under the archived
 // program; bench press progression continues from the old weights. Then switch back to the seed program.
 test.describe.configure({ mode: "serial" });
 
 /** Back to the seed state: the seed program active with its seed activation, no generated programs. */
-function resetPrograms() {
-  sql(
-    "DELETE FROM day_exercises WHERE day_id IN (SELECT d.id FROM program_days d JOIN programs p ON p.id = d.program_id WHERE p.generated_by = 'generator')"
-  );
-  sql("DELETE FROM program_days WHERE program_id IN (SELECT id FROM programs WHERE generated_by = 'generator')");
-  sql("DELETE FROM program_activations WHERE id <> 'act-fullbody4-seed'");
-  sql("DELETE FROM programs WHERE generated_by = 'generator'");
-  sql("UPDATE program_activations SET ended_at = NULL");
-  sql("UPDATE programs SET active = CASE id WHEN 'fullbody4' THEN 1 ELSE 0 END, archived_at = CASE id WHEN 'fullbody4' THEN NULL ELSE created_at END");
-}
 
 const daysAgo = (n: number) => {
   const d = new Date(Date.now() - n * 86_400_000);

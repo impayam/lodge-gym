@@ -648,12 +648,23 @@ async function syncOnce() {
 async function syncPlan(localId: string) {
   let plan = state.plans[localId] ?? (await ldb.allPlans()).find((p) => p.id === localId);
   if (!plan) return;
-  const created = await api<{ plan: SessionPlan }>("POST", "/sessions/plan", {
-    id: plan.id,
-    program_day_id: plan.program_day_id,
-    status: plan.status === "started" ? "started" : "planned",
-    started_at: plan.started_at,
-  });
+  let created: { plan: SessionPlan };
+  try {
+    created = await api<{ plan: SessionPlan }>("POST", "/sessions/plan", {
+      id: plan.id,
+      program_day_id: plan.program_day_id,
+      status: plan.status === "started" ? "started" : "planned",
+      started_at: plan.started_at,
+    });
+  } catch (e) {
+    // The program changed on another device before this plan reached the server: its day can't be planned any more.
+    if (e instanceof ApiError && e.code === "not_active_day") {
+      await forgetPlan(plan.id);
+      if (plan.status === "planned") flash("A saved plan was dropped: its day is no longer in the active program.");
+      return;
+    }
+    throw e;
+  }
   if (created.plan.id !== plan.id) {
     // Nothing to discard on the server: drop the local copy.
     if (plan.status === "discarded") return forgetPlan(plan.id);
@@ -662,14 +673,30 @@ async function syncPlan(localId: string) {
     setState((st) => ({ plans: { ...st.plans, [plan!.id]: plan! } }));
     await ldb.putPlan(plan);
   }
-  if (plan.status === "started" && plan.started_at) await api("POST", `/sessions/${encodeURIComponent(plan.id)}/start`, { started_at: plan.started_at });
-  const r = await api<{ applied: boolean; plan?: SessionPlan }>("PUT", `/sessions/${encodeURIComponent(plan.id)}/plan-items`, {
-    status: plan.status,
-    updated_at: plan.updated_at,
-    items: plan.items,
-  });
-  if (!r.applied && r.plan) {
-    // The server has a newer version (edited on another device): take it.
+  if (plan.status === "started" && plan.started_at) {
+    try {
+      await api("POST", `/sessions/${encodeURIComponent(plan.id)}/start`, { started_at: plan.started_at });
+    } catch (e) {
+      // Discarded on another device while this phone started it offline: the session itself still syncs.
+      if (!(e instanceof ApiError && e.code === "plan_discarded")) throw e;
+    }
+  }
+  let r: { applied: boolean; plan?: SessionPlan };
+  try {
+    r = await api<{ applied: boolean; plan?: SessionPlan }>("PUT", `/sessions/${encodeURIComponent(plan.id)}/plan-items`, {
+      status: plan.status,
+      updated_at: plan.updated_at,
+      items: plan.items,
+    });
+  } catch (e) {
+    // Discarded on another device: the day is back to the program default here too.
+    if (e instanceof ApiError && e.code === "plan_discarded") return forgetPlan(plan.id);
+    throw e;
+  }
+  if (r.plan?.status === "discarded") return forgetPlan(plan.id);
+  // The server has a newer version (edited on another device): take it, unless this phone changed the plan again while
+  // it was being sent (that change is queued and goes next).
+  if (!r.applied && r.plan && (state.plans[plan.id] ?? plan) === plan) {
     await ldb.putPlan(r.plan);
     setState((st) => ({ plans: { ...st.plans, [r.plan!.id]: r.plan! } }));
   }

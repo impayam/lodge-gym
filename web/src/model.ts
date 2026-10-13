@@ -83,10 +83,10 @@ export function homeModel(boot: BootData, sessions: Record<string, WorkoutSessio
 export const openPlanFor = (plans: Record<string, SessionPlan>, dayId: string) =>
   Object.values(plans).find((p) => p.status === "planned" && p.program_day_id === dayId) ?? null;
 
-/** "Planned: Day 1 · Chest (edited)" */
-export function plannedLabel(boot: BootData, plan: SessionPlan): string {
+/** "Planned: Day 1 · Chest (edited)", or without the day name "Planned (edited)". */
+export function plannedLabel(boot: BootData, plan: SessionPlan, withDay = true): string {
   const day = boot.program.days.find((d) => d.id === plan.program_day_id);
-  return `Planned: ${dayInfo(boot, plan.program_day_id).name_en}${day && isEdited(plan, day) ? " (edited)" : ""}`;
+  return `Planned${withDay ? `: ${dayInfo(boot, plan.program_day_id).name_en}` : ""}${day && isEdited(plan, day) ? " (edited)" : ""}`;
 }
 
 /** The plan a session follows: the started plan with the session's id. */

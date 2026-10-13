@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { addItem, groupItems, liveItems, moveItem, removeItem, replaceItem, type SessionPlan } from "../../worker/lib/plan";
+import { addItem, groupItems, liveItems, moveItem, planFromDay, removeItem, replaceItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
 import type { Bootstrap, ProgramVersion, WorkoutSession } from "../../worker/lib/types";
 import { localDate } from "../../worker/lib/time";
 import { ulid } from "../../worker/lib/ulid";
@@ -60,7 +60,7 @@ describe("PUT /api/sessions/:id/plan-items", () => {
   it("stores replace, delete and reorder; removed items stay with removed_at", async () => {
     let p = await freshPlan("D3");
     const now = tick(p);
-    p = replaceItem(p, liveItems(p)[1].id, "oh_tri", now);
+    p = replaceItem(p, liveItems(p)[1].id, "dips", now);
     p = removeItem(p, liveItems(p)[2].id, now);
     p = moveItem(p, liveItems(p)[0].id, 1, now);
     const res = await putItems(p);
@@ -68,7 +68,7 @@ describe("PUT /api/sessions/:id/plan-items", () => {
     expect(await res.json()).toMatchObject({ applied: true });
     const stored = (await bootstrap()).plans.find((x) => x.id === p.id)!;
     expect(liveItems(stored).map((it) => it.exercise_id)).toEqual(liveItems(p).map((it) => it.exercise_id));
-    expect(liveItems(stored)[0]).toMatchObject({ exercise_id: "oh_tri", origin: "replaced" });
+    expect(liveItems(stored)[0]).toMatchObject({ exercise_id: "dips", origin: "replaced", replaced_exercise_id: "pullup" });
     expect(stored.items.filter((it) => it.removed_at)).toHaveLength(1);
     expect(stored.items).toHaveLength(6);
   });
@@ -82,6 +82,24 @@ describe("PUT /api/sessions/:id/plan-items", () => {
     expect(await stale.json()).toMatchObject({ applied: false });
     p = (await bootstrap()).plans.find((x) => x.id === p.id)!;
     expect(liveItems(p).at(-1)!.exercise_id).toBe("dips");
+  });
+
+  it("a plan edited offline before it reached the server keeps the edits (older than the server's fresh copy)", async () => {
+    const day = (await bootstrap()).program.days.find((d) => d.id === "D3")!;
+    const id = ulid();
+    const past = new Date(Date.now() - 3_600_000).toISOString();
+    const offline = removeItem(planFromDay(day, id, past, seqIds(id)), `${id}-3`, past);
+    // An open D3 plan from an earlier test would be returned instead: discard it first.
+    const open = (await bootstrap()).plans.find((x) => x.program_day_id === "D3" && x.status === "planned");
+    if (open) await putItems({ ...open, updated_at: tick(open) }, "discarded");
+    expect((await create(id, "D3")).plan!.id).toBe(id);
+    const res = await putItems(offline);
+    expect(await res.json()).toMatchObject({ applied: true });
+    const stored = (await bootstrap()).plans.find((x) => x.id === id)!;
+    expect(liveItems(stored).map((it) => it.exercise_id)).toEqual(liveItems(offline).map((it) => it.exercise_id));
+    // From then on the last writer wins: the same old list again is refused.
+    const again = await putItems({ ...offline, updated_at: new Date(Date.now() - 7_200_000).toISOString() });
+    expect(await again.json()).toMatchObject({ applied: false });
   });
 
   it("refuses broken lists: gaps, groups of one or four, unknown exercises", async () => {
@@ -162,6 +180,22 @@ describe("start", () => {
   });
 });
 
+describe("start, then edits in the session", () => {
+  it("the phone's start stamp stands: its edits made right after starting are applied, not taken as stale", async () => {
+    let p = await freshPlan("D3");
+    const started = new Date(Date.now() - 60_000).toISOString();
+    expect((await client.post(`/api/sessions/${p.id}/start`, { started_at: started })).status).toBe(200);
+    p = { ...p, status: "started", started_at: started, updated_at: started };
+    expect(await (await putItems(p)).json()).toMatchObject({ applied: true });
+    const moved = moveItem(p, liveItems(p)[0].id, 1, new Date(Date.parse(started) + 5_000).toISOString());
+    expect(await (await putItems(moved)).json()).toMatchObject({ applied: true });
+    // No workout session yet, so the bootstrap leaves this started plan out; the export has every plan.
+    const stored = ((await (await client.fetch("/api/export")).json()) as { plans: SessionPlan[] }).plans.find((x) => x.id === p.id)!;
+    expect(stored).toMatchObject({ status: "started", started_at: started });
+    expect(liveItems(stored).map((it) => it.exercise_id)).toEqual(liveItems(moved).map((it) => it.exercise_id));
+  });
+});
+
 describe("apply to program", () => {
   it("makes a new version with the plan's day (groups as superset tags); the old program is archived, not deleted", async () => {
     let p = await freshPlan("D1");
@@ -185,6 +219,11 @@ describe("apply to program", () => {
     // The other days are copies; the old days stay for history.
     expect(after.program.days.slice(1).map((d) => d.exercises.map((x) => x.exercise_id))).toEqual(before.program.days.slice(1).map((d) => d.exercises.map((x) => x.exercise_id)));
     expect(after.other_days.map((d) => d.id)).toEqual(expect.arrayContaining(["D1", "D2", "D3", "D4"]));
+    // The open plan moved to the new version's day and now matches it.
+    const moved = after.plans.find((x) => x.id === p.id)!;
+    expect(moved).toMatchObject({ status: "planned", program_day_id: after.program.days[0].id });
+    expect(liveItems(moved).every((it) => it.origin === "program" && it.replaced_exercise_id === null)).toBe(true);
+    expect(moved.items.filter((it) => it.removed_at)).toHaveLength(p.items.filter((it) => it.removed_at).length);
     const versions = (await (await client.fetch("/api/programs")).json()) as { programs: ProgramVersion[] };
     expect(versions.programs.find((x) => x.id === before.program.id)!.days[0].exercises.map((x) => x.exercise_id)).toEqual(before.program.days[0].exercises.map((x) => x.exercise_id));
   });
