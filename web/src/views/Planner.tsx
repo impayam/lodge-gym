@@ -40,10 +40,11 @@ export function Planner({ id }: { id: string }) {
   const [confirm, setConfirm] = useState<"apply" | "discard" | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // A plan started or discarded elsewhere (or a stale link) leaves the planner.
+  // Started (here or elsewhere): its session; discarded elsewhere, or a stale link: Home.
   useEffect(() => {
-    if (!plan || plan.status !== "planned" || (saved && saved.status !== "planned")) navigate("home");
-  }, [plan, saved]);
+    if (plan?.status === "started") navigate("session", plan.id);
+    else if (!plan || plan.status !== "planned") navigate("home");
+  }, [plan]);
   if (!plan || plan.status !== "planned") return null;
 
   const exMap = allExercises();

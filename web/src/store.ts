@@ -11,7 +11,7 @@ import { cancelPush, schedulePush } from "./push";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
-import { planForSession, sessionFromPlan, sessionPlan } from "./model";
+import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
@@ -93,13 +93,13 @@ export function navigate(name: ViewName, sessionId?: string) {
   window.scrollTo(0, 0);
 }
 
-/** Opens the program editor: a new proposal, or a saved draft. */
 /** The session planner (SPEC-v3 M9c) for a saved plan or a draft. */
 export function openPlan(planId: string) {
   setState({ view: { name: "plan", planId } });
   window.scrollTo(0, 0);
 }
 
+/** Opens the program editor: a new proposal, or a saved draft. */
 export function openProgramEditor(programId?: string) {
   setState({ view: { name: "newprogram", programId } });
   window.scrollTo(0, 0);
@@ -299,7 +299,8 @@ export async function applyPlanToProgram(plan: SessionPlan): Promise<string> {
   await savePlan(plan);
   await syncNow();
   if ((await ldb.outboxAll()).some((e) => e.key === "plan:" + plan.id)) throw new NetworkError();
-  const id = state.plans[plan.id]?.id ?? plan.id;
+  // The day may have had an open plan from another device: this plan continued under that plan's id.
+  const id = state.plans[plan.id] ? plan.id : (openPlanFor(state.plans, plan.program_day_id)?.id ?? plan.id);
   const r = await api<{ ok: true; program_id: string }>("POST", `/sessions/${encodeURIComponent(id)}/apply-to-program`, {});
   await refresh();
   return r.program_id;
@@ -326,16 +327,6 @@ export async function removeSessionExercise(sessionId: string, exerciseId: strin
   }
   if (mine.length) await saveSession({ ...s, sets: s.sets.filter((x) => x.exercise_id !== exerciseId) });
   return true;
-}
-
-/** Reorders or regroups a session's exercises through its plan (created on first use, approved default 7). */
-export async function editSessionPlan(sessionId: string, edit: (p: SessionPlan, now: string) => SessionPlan) {
-  const s = state.sessions[sessionId];
-  if (!s) return;
-  const now = new Date().toISOString();
-  const base = planForSession(state.boot!, s, sessionPlan(state.plans, sessionId), allExercises(), now);
-  const next = edit(base, now);
-  if (next !== base || !state.plans[sessionId]) await savePlan(next);
 }
 
 export async function removeSession(id: string) {
@@ -468,8 +459,7 @@ export function allExercises(): Map<string, Exercise> {
   return map;
 }
 
-/** Keeps an exercise in the cached bootstrap so a session that uses it renders offline. */
-/** Keeps an exercise picked from the library in the cached bootstrap, so it resolves offline. */
+/** Keeps an exercise in the cached bootstrap so a session or plan that uses it renders offline. */
 export async function rememberExercise(ex: Exercise) {
   if (!state.boot) return;
   const exercises = [...state.boot.exercises.filter((e) => e.id !== ex.id), ex];

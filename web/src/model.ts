@@ -126,7 +126,10 @@ export function planForSession(boot: BootData, s: WorkoutSession, plan: SessionP
   const blocks = sessionBlocks(boot, s, exMap, plan);
   if (plan) {
     let p = plan;
-    for (const b of blocks) if (!b.itemId) p = addItem(p, b.ex.id, now, ulid(), { sets: clampSets(b.sets.length), is_time: b.plan.is_time, reps_min: null, reps_max: null, rest_sec: b.plan.rest_sec });
+    // Same ids on every render until saved: "<plan id>-<n>", n after every item the plan ever had.
+    for (const b of blocks)
+      if (!b.itemId)
+        p = addItem(p, b.ex.id, now, `${p.id}-${p.items.length + 1}`, { sets: clampSets(b.sets.length), is_time: b.plan.is_time, reps_min: null, reps_max: null, rest_sec: b.plan.rest_sec });
     return p;
   }
   const newId = seqIds(s.id);
