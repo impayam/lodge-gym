@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const data = JSON.parse(readFileSync(here("./program.json"), "utf8"));
 const CREATED = "2026-09-27T00:00:00.000Z";
+// The seed program's first activation: local midnight of 2026-09-27 in America/Denver (migration 0007).
+const ACTIVATED = "2026-09-27T06:00:00.000Z";
 // Program metadata for a fresh database, the same values migration 0006 backfills on an existing one.
 const META = {
   fullbody4: { style: "seed_full_body", days_per_week: 4, approved_at: CREATED, archived_at: null },
@@ -32,7 +34,7 @@ for (const p of data.programs) {
   );
   if (p.active) {
     out.push(
-      `INSERT OR IGNORE INTO program_activations (id, program_id, started_at) SELECT ${q(`act-${p.id}-seed`)}, ${q(p.id)}, ${q(CREATED)} WHERE NOT EXISTS (SELECT 1 FROM program_activations WHERE program_id = ${q(p.id)});`
+      `INSERT OR IGNORE INTO program_activations (id, program_id, started_at) SELECT ${q(`act-${p.id}-seed`)}, ${q(p.id)}, ${q(ACTIVATED)} WHERE NOT EXISTS (SELECT 1 FROM program_activations WHERE program_id = ${q(p.id)});`
     );
   }
   p.days.forEach((d, di) => {
