@@ -150,7 +150,7 @@ export const hook = {
 (globalThis as unknown as { __anatomy: typeof hook }).__anatomy = hook;
 
 export interface ViewOptions {
-  /** Called with the muscle a tap picked, or null when the tap hit nothing tappable. */
+  /** Called with the muscle a tap picked, or null when the tap hit nothing tappable (the picker then calls select). */
   onSelect: (muscle: Muscle | null) => void;
   /** Called after a drag with the side that now faces the viewer. */
   onFacing: (view: FigureView) => void;
@@ -437,10 +437,9 @@ export class AnatomyView {
     return n;
   }
 
+  /** A tap reports the muscle under it (or null); the picker decides: zoom to its area, or light it up. */
   private tap(clientX: number, clientY: number) {
-    const m = this.pickAt(clientX, clientY);
-    this.select(m);
-    this.o.onSelect(m);
+    this.o.onSelect(this.pickAt(clientX, clientY));
   }
 
   private onDown = (e: PointerEvent) => {
@@ -576,6 +575,11 @@ export class AnatomyView {
   /** Test hook: model names (without the left/right suffix, so a muscle lit on both sides is listed twice) of the meshes drawn highlighted. */
   lit(): string[] {
     return this.model.parts.filter((p) => p.mesh.material === this.mats.highlight).map((p) => p.name);
+  }
+
+  /** Test hook: whether a Front / Back turn or an area move is still running. */
+  moving(): boolean {
+    return this.move !== null;
   }
 
   /** Test hook: the camera's turn around the body, in radians (0 front, π back). */

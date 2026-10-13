@@ -1,14 +1,16 @@
 // Body-map exercise picker (SPEC-v3 M9b with the SPEC-v6 3D model), the "Body" tab of "+ Add exercise":
-//   1. the 3D body (lazily loaded, see ../lib/anatomy3d.ts): drag turns it, Front / Back turn it round, a tap lights
-//      up the muscle group on both sides with "Show exercises"; the area chips under it zoom to an area and show its
-//      muscle chips, which open the list directly (the chips do everything the model does, and work without it);
-//   2. the exercises for the chosen muscle: primary first, then "Also works this muscle", with filters;
-//   3. tapping an exercise adds it to the session (the caller's onPick). Back goes list → body, and the place is
+//   1. the whole 3D body (lazily loaded, see ../lib/anatomy3d.ts): drag turns it, Front / Back turn it round; a tap on
+//      a muscle, or an area chip, zooms to that area's close-up;
+//   2. the close-up: a tap lights up a muscle group on both sides with "Show exercises"; the area's muscle chips
+//      replace the area chips and open the list directly; "← Body" goes back (the chips do everything the model does,
+//      and work without it);
+//   3. the exercises for the chosen muscle: primary first, then "Also works this muscle", with filters;
+//   4. tapping an exercise adds it to the session (the caller's onPick). Back goes list → body, and the place is
 //      remembered while the app is open, per session.
 // Without WebGL 2, or when the model fails or takes over 10 s, only the chips show, with a "3D unavailable" note.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { BODY_AREAS, areaDef, musclePicks, type BodyArea, type CategoryFilter, type FigureView } from "../../../worker/lib/bodyAreas";
+import { BODY_AREAS, areaDef, areaOfMuscle, musclePicks, type BodyArea, type CategoryFilter, type FigureView } from "../../../worker/lib/bodyAreas";
 import { CATEGORIES, countsVolume } from "../../../worker/lib/category";
 import type { Muscle } from "../../../worker/lib/muscles";
 import type { Equipment, Exercise, WorkoutSession } from "../../../worker/lib/types";
@@ -83,7 +85,17 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
     import("../lib/anatomy3d")
       .then((m) =>
         m.AnatomyView.create(host.current!, {
-          onSelect: (muscle) => go({ selected: muscle }, false),
+          onSelect: (muscle) => {
+            const p = placeRef.current;
+            if (!p.area) {
+              // Whole body: the tap picks the muscle's area and zooms in, on the side the body faces now.
+              const area = muscle ? areaOfMuscle(muscle) : null;
+              if (area) zoom(area, p.view);
+              return;
+            }
+            go({ selected: muscle }, false);
+            view3d.current?.select(muscle);
+          },
           onFacing: (v) => go({ view: v }, false),
           accent: accentColor(),
           openedAt,
@@ -113,14 +125,14 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
     };
   }, []);
 
-  const chooseArea = (area: BodyArea | null) => {
-    // An area's close-up opens on its first side (the camera preset's side, ../lib/anatomy-camera.ts).
-    const view = area ? areaDef(area).views[0] : place.view;
-    const selected = area && place.selected && !areaDef(area).muscles.includes(place.selected) ? null : place.selected;
-    go({ area, view, selected }, false);
+  /** Enters an area's close-up, or goes back to the whole body. The muscle is chosen in the close-up only. */
+  function zoom(area: BodyArea | null, view: FigureView) {
+    go({ area, view, selected: null }, false);
     view3d.current?.setArea(area, view);
-    view3d.current?.select(selected);
-  };
+    view3d.current?.select(null);
+  }
+  // A chip opens the close-up on the area's first side (the camera preset's side, ../lib/anatomy-camera.ts).
+  const chooseArea = (area: BodyArea | null) => zoom(area, area ? areaDef(area).views[0] : placeRef.current.view);
   const turn = (view: FigureView) => {
     go({ view }, false);
     view3d.current?.setView(view);
@@ -173,7 +185,7 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
             <span class={hint ? "anatomy-hint" : "anatomy-hint gone"} data-testid="anatomy-hint" aria-hidden="true">
               Drag to turn.
               <br />
-              Tap a muscle.
+              {def ? "Tap a muscle." : "Tap to zoom in."}
             </span>
           ) : null}
           {mode === "3d" && place.selected ? (
@@ -186,22 +198,24 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
           ) : null}
         </div>
       )}
-      <div class="chiprow" role="group" aria-label="Body areas">
-        {BODY_AREAS.map((a) => (
-          <button type="button" class="bigchip" aria-pressed={place.area === a.key} data-testid={`area-${a.key}`} onClick={() => chooseArea(place.area === a.key ? null : a.key)}>
-            {a.label}
-          </button>
-        ))}
-      </div>
       {def ? (
-        <div class="bigchips" role="group" aria-label={`${def.label} muscles`}>
+        // In a close-up the area's muscle chips take the place of the area chips; "← Body" goes back.
+        <div class="chiprow" role="group" aria-label={`${def.label} muscles`} data-testid="muscle-chips">
           {def.muscles.map((m) => (
             <button type="button" class="bigchip" data-testid={`muscle-${m}`} onClick={() => go({ step: "list", muscle: m, selected: m })}>
               {muscleLabel(m)}
             </button>
           ))}
         </div>
-      ) : null}
+      ) : (
+        <div class="chiprow" role="group" aria-label="Body areas" data-testid="area-chips">
+          {BODY_AREAS.map((a) => (
+            <button type="button" class="bigchip" data-testid={`area-${a.key}`} onClick={() => chooseArea(a.key)}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

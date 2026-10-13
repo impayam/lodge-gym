@@ -49,5 +49,17 @@ Same CLAUDE.md working rules. This replaces only the drawn body in M9b. The M9b 
 - Offline: after one online open, reload offline → model still loads.
 - Screenshots on iPhone size for approval before merge: whole body front, back, Arms close-up with Triceps selected, the triceps list, the fallback.
 
-## 7. Out of scope (ask first)
-- Replacing the Reports muscle map (PR #3) with the 3D model colored by weekly status. Payam said "even the whole body"; confirm with him whether that means this too, as a separate step after the picker.
+## 7. Decisions by Payam (2026-10-13)
+1. **Mapping, packages, CSP:** approved as proposed by Claude Code (18 keys, `'wasm-unsafe-eval'` + `worker-src 'self' blob:`).
+2. **Whole-body tap = region only.** In the whole-body view, a tap on a muscle selects its **region** and animates to that region's close-up. The muscle itself is chosen only in the close-up (fewer wrong taps on the small view). Region chips still work as before.
+3. **Close-up layout:** the region chips are replaced by that region's muscle chips, all fully visible above the tab bar without scrolling; "← Body" goes back.
+4. **iPhone numbers:** Payam measures with a stopwatch after deploy (first open on Wi-Fi ≤ 3 s, second open ≤ 1 s, rotation smooth by eye). No stats line in the app.
+
+## 8. Next step (separate PR after #6 is merged): 3D muscle map in Reports
+Payam approved replacing the Reports muscle map (PR #3) with the 3D model.
+- Same model, scene module, mapping and lazy loading as the picker (reuse, no second copy).
+- Each mapped app muscle is colored by its weekly status from the existing report numbers (same fractional rules): under / on / over target use the app's existing status colors plus their icon and label; not trained this week = muted; unmapped meshes = dark.
+- Tap a muscle (whole body: tap selects region and zooms, as in the picker) → card with the muscle name and "done / target sets this week".
+- Front/Back, drag to turn; the existing table/list view stays as the accessible alternative.
+- The old SVG map code is removed only after Payam approves the 3D version's screenshots.
+- Same tests (mapping, colors match report numbers for a fixture week, fallback when no WebGL) and screenshots before merge.

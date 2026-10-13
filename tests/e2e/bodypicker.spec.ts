@@ -1,3 +1,4 @@
+import { BODY_AREAS } from "../../worker/lib/bodyAreas";
 import { expect, test, type Page } from "./fixtures";
 import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
 
@@ -22,30 +23,37 @@ interface Hook {
     pickAt(x: number, y: number, radius?: number): string | null;
     lit(): string[];
     yaw(): number;
+    moving(): boolean;
     memory(): { geometries: number; textures: number; programs: number };
   } | null;
 }
 const hook = <T,>(page: Page, fn: (h: Hook) => T) => page.evaluate(`(${fn.toString()})(window.__anatomy)`) as Promise<T>;
-/** Waits for a Front / Back turn to end: cos(yaw) is 1 facing the front, -1 facing the back. */
-const facing = (page: Page, cos: 1 | -1) => expect.poll(() => hook(page, (h) => Math.cos(h.view!.yaw())), { timeout: 5_000 }).toBeCloseTo(cos, 3);
+/** Waits for a Front / Back turn or an area move to end; cos(yaw) is 1 facing the front, -1 facing the back. */
+async function facing(page: Page, cos: 1 | -1) {
+  await expect.poll(() => hook(page, (h) => !h.view!.moving() && Math.cos(h.view!.yaw())), { timeout: 5_000 }).toBeCloseTo(cos, 3);
+}
 
-const AREAS = ["chest", "shoulders", "arms", "back", "core", "glutes_hips", "thighs", "calves"];
-
-/** All eight area chips are on screen at once: inside the width, above the tab bar, in at most two rows. */
-async function allAreasVisible(page: Page) {
-  await page.evaluate(() => window.scrollTo(0, 0));
+/**
+ * Chips fully on screen as the page stands (no scrolling): inside the width, below the top, above the tab bar, at
+ * least 44 px tall; returns how many rows they take.
+ */
+async function chipsVisible(page: Page, testIds: string[]) {
   const width = page.viewportSize()!.width;
   const navTop = (await page.getByRole("navigation").boundingBox())!.y;
   const rows = new Set<number>();
-  for (const a of AREAS) {
-    const b = (await page.getByTestId(`area-${a}`).boundingBox())!;
-    expect(b.height, a).toBeGreaterThanOrEqual(44);
-    expect(b.x + b.width, a).toBeLessThanOrEqual(width);
-    expect(b.y + b.height, a).toBeLessThanOrEqual(navTop);
+  for (const id of testIds) {
+    const b = (await page.getByTestId(id).boundingBox())!;
+    expect(b.height, id).toBeGreaterThanOrEqual(44);
+    expect(b.x, id).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width, id).toBeLessThanOrEqual(width);
+    expect(b.y, id).toBeGreaterThanOrEqual(0);
+    expect(b.y + b.height, id).toBeLessThanOrEqual(navTop);
     rows.add(Math.round(b.y));
   }
-  expect(rows.size).toBeLessThanOrEqual(2);
+  return rows.size;
 }
+/** All eight area chips on screen at once, in at most two rows. */
+const allAreasVisible = async (page: Page) => expect(await chipsVisible(page, BODY_AREAS.map((a) => `area-${a.key}`))).toBeLessThanOrEqual(2);
 
 async function startSession(page: Page) {
   await page.goto("/");
@@ -78,9 +86,9 @@ test("chips: Arms → Triceps lists triceps-primary exercises first; picking one
 
   await step.getByTestId("area-arms").click();
   await expect(step).toHaveAttribute("data-area", "arms");
-  await expect(step.getByTestId("area-arms")).toHaveAttribute("aria-pressed", "true");
-  for (const m of ["biceps", "triceps", "forearms"]) expect((await step.getByTestId(`muscle-${m}`).boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  for (const a of ["chest", "arms", "calves"]) expect((await step.getByTestId(`area-${a}`).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  // In the close-up the area's muscle chips replace the area chips.
+  await expect(step.getByTestId("area-chips")).toHaveCount(0);
+  await chipsVisible(page, ["muscle-biceps", "muscle-triceps", "muscle-forearms"]);
   await step.getByTestId("muscle-triceps").click();
 
   const list = page.getByTestId("muscle-step");
@@ -115,39 +123,54 @@ test("chips: Arms → Triceps lists triceps-primary exercises first; picking one
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
-test("3D: a tap on the triceps lights the group on both sides; near misses count, empty space and unmapped muscles clear it", async ({ page }) => {
+test("3D: a tap on the body zooms to its area; in the close-up a tap lights the muscle on both sides", async ({ page }) => {
   await startSession(page);
   const step = await openPicker(page);
+  const chip = step.getByTestId("anatomy-selection");
+  const hint = step.getByTestId("anatomy-hint");
 
-  // Back turns the body round (in under 400 ms, unit-tested) and ends facing its back.
+  // A muscle that is not mapped (the forehead), with nothing mapped within 24 px: the tap does nothing.
+  const brow = (await hook(page, (h) => h.view!.pointOn("Frontalis muscle", false)))!;
+  await expect(hint).not.toHaveClass(/gone/);
+  await page.touchscreen.tap(brow.x, brow.y);
+  await expect(step).toHaveAttribute("data-area", "");
+  await expect(chip).toHaveCount(0);
+  // The first touch on the model fades the hint out.
+  await expect(hint).toHaveClass(/gone/);
+
+  // Whole body seen from the back: a tap on the triceps opens the Arms close-up on the same side, nothing chosen yet.
   await step.getByTestId("view-back").click();
   await expect(step.getByTestId("view-back")).toHaveAttribute("aria-pressed", "true");
   await facing(page, -1);
+  const far = (await hook(page, (h) => h.view!.pointOn("Long head of triceps brachii")))!;
+  expect(far).not.toBeNull();
+  await page.touchscreen.tap(far.x, far.y);
+  await expect(step).toHaveAttribute("data-area", "arms");
+  await facing(page, -1);
+  await expect(chip).toHaveCount(0);
+  await expect(step.getByTestId("area-chips")).toHaveCount(0);
+  await expect(step.getByTestId("muscle-triceps")).toBeVisible();
 
+  // In the close-up a tap on the triceps lights the whole group, left and right.
   const tri = (await hook(page, (h) => h.view!.pointOn("Long head of triceps brachii")))!;
-  expect(tri).not.toBeNull();
-  await expect(step.getByTestId("anatomy-hint")).not.toHaveClass(/gone/);
   await page.touchscreen.tap(tri.x, tri.y);
-  const chip = step.getByTestId("anatomy-selection");
   await expect(chip).toHaveAttribute("data-muscle", "triceps");
   await expect(chip).toContainText("Triceps");
   // The tap stays on the model: WebKit's touch adjustment must not hand it to the Front button nearby.
   await expect(step.getByTestId("view-back")).toHaveAttribute("aria-pressed", "true");
   await facing(page, -1);
-  // Every triceps mesh lights up, left and right.
   const lit = await hook(page, (h) => h.view!.lit());
   for (const name of ["Long head of triceps brachii", "Lateral head of triceps brachii", "Medial head of triceps brachii", "Anconeus muscle"])
     expect(lit.filter((n) => n === name), name).toHaveLength(2);
   expect(lit).toHaveLength(8);
 
-  // Empty space (the left edge of the stage, beside the body) clears it.
+  // Empty space (the left edge of the stage) clears it.
   const box = (await step.getByTestId("anatomy-canvas").boundingBox())!;
   await page.touchscreen.tap(box.x + 10, box.y + box.height / 2);
   await expect(chip).toHaveCount(0);
-  // The hint faded out at the first touch and stays out.
-  await expect(step.getByTestId("anatomy-hint")).toHaveClass(/gone/);
+  await expect(step).toHaveAttribute("data-area", "arms");
 
-  // A tap just off the body's outline still finds the nearest muscle (within 24 px).
+  // A tap just off a muscle's outline still finds the nearest muscle (within 24 px).
   const miss = await hook(page, (h) => {
     const p = h.view!.pointOn("Long head of triceps brachii")!;
     for (let dx = 1; dx < 160; dx++) {
@@ -160,19 +183,11 @@ test("3D: a tap on the triceps lights the group on both sides; near misses count
   await page.touchscreen.tap(miss!.x, miss!.y);
   await expect(chip).toHaveAttribute("data-muscle", miss!.near!);
 
-  // A muscle that is not mapped (the forehead) is not tappable and nothing mapped is within 24 px: the selection clears.
-  await step.getByTestId("view-front").click();
-  await facing(page, 1);
-  const brow = (await hook(page, (h) => h.view!.pointOn("Frontalis muscle", false)))!;
-  await page.touchscreen.tap(brow.x, brow.y);
-  await expect(chip).toHaveCount(0);
-
   // Show exercises opens the list of the lit muscle.
-  const bi = (await hook(page, (h) => h.view!.pointOn("Long head of biceps brachii")))!;
-  await page.touchscreen.tap(bi.x, bi.y);
-  await expect(chip).toHaveAttribute("data-muscle", "biceps");
+  await page.touchscreen.tap(tri.x, tri.y);
+  await expect(chip).toHaveAttribute("data-muscle", "triceps");
   await chip.getByTestId("show-exercises").click();
-  await expect(page.getByTestId("muscle-step")).toHaveAttribute("data-muscle", "biceps");
+  await expect(page.getByTestId("muscle-step")).toHaveAttribute("data-muscle", "triceps");
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
@@ -190,10 +205,25 @@ test("3D: an area close-up keeps only its own muscles tappable", async ({ page }
   const tri = (await hook(page, (h) => h.view!.pointOn("Lateral head of triceps brachii")))!;
   await page.touchscreen.tap(tri.x, tri.y);
   await expect(step.getByTestId("anatomy-selection")).toHaveAttribute("data-muscle", "triceps");
-  // ← Body goes back to the whole body; the selection stays.
+  // ← Body goes back to the whole body and its area chips; the muscle is only chosen in a close-up.
   await step.getByTestId("pick-back").click();
   await expect(step).toHaveAttribute("data-area", "");
-  await expect(step.getByTestId("anatomy-selection")).toHaveAttribute("data-muscle", "triceps");
+  await expect(step.getByTestId("anatomy-selection")).toHaveCount(0);
+  await allAreasVisible(page);
+  await page.getByRole("button", { name: "Cancel" }).click();
+});
+
+test("close-up: every area's muscle chips are fully visible above the tab bar, in place of the area chips", async ({ page }) => {
+  await startSession(page);
+  const step = await openPicker(page);
+  for (const a of BODY_AREAS) {
+    await step.getByTestId(`area-${a.key}`).click();
+    await expect(step).toHaveAttribute("data-area", a.key);
+    await expect(step.getByTestId("area-chips")).toHaveCount(0);
+    await chipsVisible(page, a.muscles.map((m) => `muscle-${m}`));
+    await step.getByTestId("pick-back").click();
+    await expect(step).toHaveAttribute("data-area", "");
+  }
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 

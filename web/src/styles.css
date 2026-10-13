@@ -439,8 +439,6 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 /* All eight areas visible: the chips wrap and stretch to fill their rows. */
 .chiprow { display: flex; flex-wrap: wrap; gap: 6px; }
 .chiprow .bigchip { flex: 1 1 auto; min-height: 44px; padding: 6px 10px; font-size: 14px; }
-.bigchip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.bigchips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .bigchip { min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 15px; color: var(--ink); padding: 8px 10px; }
 .bigchip:active { background: var(--accent-soft); border-color: var(--accent); }
 .filters.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }

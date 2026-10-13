@@ -474,6 +474,8 @@ export function ExercisePicker({ sessionId, onPick, onCancel }: { sessionId: str
     pickerTab.set(sessionId, t);
     setTab(t);
   };
+  // The picker replaces the session page, which may be scrolled down to "+ Add exercise": start it at the top.
+  useEffect(() => window.scrollTo(0, 0), []);
   return (
     <section class="stack" data-testid="exercise-picker">
       <div class="kv navrow">

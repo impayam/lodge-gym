@@ -171,11 +171,13 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 
 - In a session, "+ Add exercise" opens on the **Body** tab (Search is the second tab) with a 3D anatomy model on a dark
   stage: drag turns it around the vertical axis, pinch zooms (never inside the body, no panning), Front / Back turn it
-  round in 380 ms. A tap lights up the app muscle under the finger on both sides, with "Show exercises"; a tap within
-  24 px of a muscle still finds it; empty space and unmapped muscles (face, neck, deep spine, hands, feet, shins…)
-  clear it. The area chips under the model zoom to a close-up where only that area's muscles are tappable and show its
-  muscle chips, which open the list directly. The chips do everything the model does (VoiceOver never needs the
-  canvas). The exercise is added as an extra with 3 empty sets, as in M7.
+  round in 380 ms. In the whole-body view a tap on a muscle, or one of the 8 area chips, zooms to that area's close-up
+  (SPEC-v6 §7: the muscle itself is chosen only in a close-up). In the close-up the area's muscle chips take the place
+  of the area chips, all visible above the tab bar; only that area's muscles are tappable; a tap lights up the app
+  muscle on both sides with "Show exercises", a tap within 24 px still finds it, empty space and unmapped muscles
+  (face, neck, deep spine, hands, feet, shins…) clear it; "← Body" goes back. The chips do everything the model does
+  (VoiceOver never needs the canvas). The exercise is added as an extra with 3 empty sets, as in M7. A "Drag to turn"
+  hint sits beside the feet until the first touch on the model.
 - Areas → muscles (`worker/lib/bodyAreas.ts`): Chest; Shoulders (front, side, rear delts); Arms (biceps, triceps,
   forearms); Back (lats, upper back, traps, lower back); Core; Glutes & hips (glutes, adductors, abductors); Thighs
   (quads, hamstrings); Calves. Model muscle → app muscle and M10 coverage region: `web/src/lib/anatomy-map.ts`
@@ -192,9 +194,7 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - CSP (approved for SPEC-v6): `script-src 'self' 'wasm-unsafe-eval'` for the decoder's WebAssembly and
   `worker-src 'self' blob:` for its worker; eval stays blocked.
 - Without WebGL 2, when the model fails, or after 10 s, the picker shows the chips only with a "3D unavailable" note.
-- `window.__anatomy` (the 3D view's hook) gives `stats` (load and first-frame ms of the last open, warm or cold) and
-  `view.spin(ms)` (frames per second while turning), for the tests and for measuring on the iPhone through Safari's
-  Web Inspector.
+- `window.__anatomy` is the 3D view's test hook (points on a muscle, picks, lit meshes, GPU memory, load times).
 
 ## Artwork and credits
 
