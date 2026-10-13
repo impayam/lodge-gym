@@ -4,16 +4,18 @@ import { useEffect, useState } from "preact/hooks";
 import type { Category } from "../../worker/lib/category";
 import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
+import { liveItems, removeItem, type SessionPlan } from "../../worker/lib/plan";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
 import { cancelPush, schedulePush } from "./push";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
+import { planForSession, sessionFromPlan, sessionPlan } from "./model";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan";
 
 export interface SyncState {
   pending: number;
@@ -27,8 +29,8 @@ export interface State {
   auth: AuthState;
   boot: BootData | null;
   sessions: Record<string, WorkoutSession>;
-  /** sessionId: the session view; programId: a draft opened in the program editor. */
-  view: { name: ViewName; sessionId?: string; programId?: string };
+  /** sessionId: the session view; programId: a draft opened in the program editor; planId: the session planner. */
+  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string };
   sync: SyncState;
   rest: { id: string; endsAt: number; label: string } | null;
   flash: string | null;
@@ -38,6 +40,8 @@ export interface State {
   pendingPhotos: Record<string, { thumb: string; full: string }>;
   /** The exercise library (GET /api/exercises), cached for offline use; null until first loaded. */
   library: Exercise[] | null;
+  /** Session plans (SPEC-v3 M9c) by id: open plans and the plans of recent sessions. */
+  plans: Record<string, SessionPlan>;
 }
 
 let state: State = {
@@ -51,6 +55,7 @@ let state: State = {
   photos: [],
   pendingPhotos: {},
   library: null,
+  plans: {},
 };
 
 const listeners = new Set<() => void>();
@@ -89,6 +94,12 @@ export function navigate(name: ViewName, sessionId?: string) {
 }
 
 /** Opens the program editor: a new proposal, or a saved draft. */
+/** The session planner (SPEC-v3 M9c) for a saved plan or a draft. */
+export function openPlan(planId: string) {
+  setState({ view: { name: "plan", planId } });
+  window.scrollTo(0, 0);
+}
+
 export function openProgramEditor(programId?: string) {
   setState({ view: { name: "newprogram", programId } });
   window.scrollTo(0, 0);
@@ -116,14 +127,20 @@ export async function init() {
     if (state.sync.pending > 0) void syncNow();
   }, 30_000);
 
-  const [boot, loggedIn, sessions, outbox, library] = await Promise.all([
+  const [boot, loggedIn, sessions, outbox, library, plans] = await Promise.all([
     ldb.kvGet<BootData>("boot"),
     ldb.kvGet<boolean>("logged_in"),
     ldb.allSessions(),
     ldb.outboxAll(),
     ldb.kvGet<Exercise[]>("library"),
+    ldb.allPlans(),
   ]);
-  setState({ boot: boot ?? null, sessions: Object.fromEntries(sessions.map((s) => [s.id, s])), library: library ?? null });
+  setState({
+    boot: boot ?? null,
+    sessions: Object.fromEntries(sessions.map((s) => [s.id, s])),
+    library: library ?? null,
+    plans: Object.fromEntries(plans.map((p) => [p.id, p])),
+  });
   await restorePendingPhotos();
   setSync({ pending: outbox.length });
 
@@ -143,10 +160,11 @@ export async function init() {
 export async function refresh() {
   try {
     const b = await api<Bootstrap>("GET", "/bootstrap");
-    const { sessions, server_time, ...boot } = b;
+    const { sessions, server_time, plans, ...boot } = b;
     await ldb.kvSet("boot", boot);
     await ldb.kvSet("logged_in", true);
     await mergeServerSessions(sessions, addDays(localDate(boot.settings.timezone), -60));
+    await mergeServerPlans(plans ?? []);
     setState((s) => ({ boot, auth: s.auth === "locked" ? "locked" : "ready" }));
     setSync({ online: true, lastSync: server_time });
     void syncNow();
@@ -194,6 +212,34 @@ async function mergeServerSessions(server: WorkoutSession[], windowStart: string
   setState({ sessions: next });
 }
 
+/**
+ * Server plans win unless a local write is pending or the local copy is newer. A local open plan the server no longer
+ * lists (discarded or started on another device) goes, unless it is still waiting to sync.
+ */
+async function mergeServerPlans(server: SessionPlan[]) {
+  const outbox = new Set((await ldb.outboxAll()).map((e) => e.key));
+  const next = { ...state.plans };
+  const put: SessionPlan[] = [];
+  const remove: string[] = [];
+  const seen = new Set<string>();
+  for (const p of server) {
+    seen.add(p.id);
+    if (outbox.has("plan:" + p.id)) continue;
+    const local = next[p.id];
+    if (!local || Date.parse(p.updated_at) >= Date.parse(local.updated_at)) {
+      next[p.id] = p;
+      put.push(p);
+    }
+  }
+  for (const p of Object.values(next))
+    if (!seen.has(p.id) && !outbox.has("plan:" + p.id) && p.status === "planned") {
+      delete next[p.id];
+      remove.push(p.id);
+    }
+  await ldb.putPlans(put, remove);
+  setState({ plans: next });
+}
+
 /** Loads the full history (all dates) when online. */
 export async function loadAllHistory() {
   try {
@@ -222,6 +268,74 @@ export async function saveSession(doc: WorkoutSession) {
   setState((st) => ({ sessions: { ...st.sessions, [s.id]: s } }));
   await ldb.putSession(s);
   await enqueue({ key: "session:" + s.id, op: "put_session", id: s.id });
+}
+
+/** Stores a plan locally and queues it (SPEC-v3 M9c: planning works offline through the outbox). */
+export async function savePlan(plan: SessionPlan) {
+  setState((st) => ({ plans: { ...st.plans, [plan.id]: plan } }));
+  await ldb.putPlan(plan);
+  await enqueue({ key: "plan:" + plan.id, op: "put_plan", id: plan.id });
+}
+
+/** Start session: the plan becomes the workout session with the same id; the timer starts now, not at planning time. */
+export async function startPlan(plan: SessionPlan) {
+  const now = new Date().toISOString();
+  const started: SessionPlan = { ...plan, status: "started", started_at: now, updated_at: now };
+  await savePlan(started);
+  await saveSession(sessionFromPlan(state.boot!, started, today(), now));
+  navigate("session", plan.id);
+}
+
+/** Discard plan: kept with status "discarded" (never deleted); the day goes back to the program default. */
+export async function discardPlan(plan: SessionPlan) {
+  await savePlan({ ...plan, status: "discarded", updated_at: new Date().toISOString() });
+}
+
+/**
+ * Apply to program: saves the plan, sends it, then asks the server for a new program version with this day as planned
+ * (M8 versioning: the new version is active, the old one archived). Needs a connection.
+ */
+export async function applyPlanToProgram(plan: SessionPlan): Promise<string> {
+  await savePlan(plan);
+  await syncNow();
+  if ((await ldb.outboxAll()).some((e) => e.key === "plan:" + plan.id)) throw new NetworkError();
+  const id = state.plans[plan.id]?.id ?? plan.id;
+  const r = await api<{ ok: true; program_id: string }>("POST", `/sessions/${encodeURIComponent(id)}/apply-to-program`, {});
+  await refresh();
+  return r.program_id;
+}
+
+/**
+ * Removes an exercise from a session (SPEC-v3 M9c): only while none of its sets is done, so history is never removed
+ * silently. Its undone sets go, and the session's plan drops the exercise (soft delete); a session without a plan
+ * gets one (approved default 7). Returns false when it is blocked.
+ */
+export async function removeSessionExercise(sessionId: string, exerciseId: string): Promise<boolean> {
+  const s = state.sessions[sessionId];
+  if (!s) return false;
+  const mine = s.sets.filter((x) => x.exercise_id === exerciseId);
+  if (mine.some((x) => x.done)) return false;
+  const now = new Date().toISOString();
+  const extraOnly = mine.length > 0 && mine.every((x) => x.is_extra);
+  const current = sessionPlan(state.plans, sessionId);
+  // An extra exercise in a session without a plan is simply its sets (as before M9c).
+  if (!(extraOnly && !current)) {
+    const plan = planForSession(state.boot!, s, current, allExercises(), now);
+    const item = liveItems(plan).find((it) => it.exercise_id === exerciseId);
+    await savePlan(item ? removeItem(plan, item.id, now) : plan);
+  }
+  if (mine.length) await saveSession({ ...s, sets: s.sets.filter((x) => x.exercise_id !== exerciseId) });
+  return true;
+}
+
+/** Reorders or regroups a session's exercises through its plan (created on first use, approved default 7). */
+export async function editSessionPlan(sessionId: string, edit: (p: SessionPlan, now: string) => SessionPlan) {
+  const s = state.sessions[sessionId];
+  if (!s) return;
+  const now = new Date().toISOString();
+  const base = planForSession(state.boot!, s, sessionPlan(state.plans, sessionId), allExercises(), now);
+  const next = edit(base, now);
+  if (next !== base || !state.plans[sessionId]) await savePlan(next);
 }
 
 export async function removeSession(id: string) {
@@ -355,7 +469,8 @@ export function allExercises(): Map<string, Exercise> {
 }
 
 /** Keeps an exercise in the cached bootstrap so a session that uses it renders offline. */
-async function rememberExercise(ex: Exercise) {
+/** Keeps an exercise picked from the library in the cached bootstrap, so it resolves offline. */
+export async function rememberExercise(ex: Exercise) {
   if (!state.boot) return;
   const exercises = [...state.boot.exercises.filter((e) => e.id !== ex.id), ex];
   const boot = { ...state.boot, exercises };
@@ -402,7 +517,7 @@ export async function removeExtraExercise(sessionId: string, exerciseId: string)
   if (!s) return;
   const mine = s.sets.filter((x) => x.exercise_id === exerciseId);
   if (!mine.length || mine.some((x) => x.done || !x.is_extra)) return;
-  await saveSession({ ...s, sets: s.sets.filter((x) => x.exercise_id !== exerciseId) });
+  await removeSessionExercise(sessionId, exerciseId);
 }
 
 export interface CustomExerciseInput {
@@ -509,6 +624,8 @@ async function syncOnce() {
         photoUploaded(e.photo.id);
       } else if (e.op === "delete_photo") {
         await api("DELETE", `/photos/${encodeURIComponent(e.id)}`);
+      } else if (e.op === "put_plan") {
+        await syncPlan(e.id);
       } else {
         await api("PUT", "/settings", e.patch);
       }
@@ -522,6 +639,49 @@ async function syncOnce() {
   } finally {
     setSync({ syncing: false, pending: (await ldb.outboxAll()).length });
   }
+}
+
+/**
+ * One plan to the server: create-or-get it, mark it started if it is, then send its full item list. When the day
+ * already had an open plan from another device, the local plan continues under that plan's id.
+ */
+async function syncPlan(localId: string) {
+  let plan = state.plans[localId] ?? (await ldb.allPlans()).find((p) => p.id === localId);
+  if (!plan) return;
+  const created = await api<{ plan: SessionPlan }>("POST", "/sessions/plan", {
+    id: plan.id,
+    program_day_id: plan.program_day_id,
+    status: plan.status === "started" ? "started" : "planned",
+    started_at: plan.started_at,
+  });
+  if (created.plan.id !== plan.id) {
+    // Nothing to discard on the server: drop the local copy.
+    if (plan.status === "discarded") return forgetPlan(plan.id);
+    plan = { ...plan, id: created.plan.id };
+    await forgetPlan(localId);
+    setState((st) => ({ plans: { ...st.plans, [plan!.id]: plan! } }));
+    await ldb.putPlan(plan);
+  }
+  if (plan.status === "started" && plan.started_at) await api("POST", `/sessions/${encodeURIComponent(plan.id)}/start`, { started_at: plan.started_at });
+  const r = await api<{ applied: boolean; plan?: SessionPlan }>("PUT", `/sessions/${encodeURIComponent(plan.id)}/plan-items`, {
+    status: plan.status,
+    updated_at: plan.updated_at,
+    items: plan.items,
+  });
+  if (!r.applied && r.plan) {
+    // The server has a newer version (edited on another device): take it.
+    await ldb.putPlan(r.plan);
+    setState((st) => ({ plans: { ...st.plans, [r.plan!.id]: r.plan! } }));
+  }
+}
+
+async function forgetPlan(id: string) {
+  setState((st) => {
+    const plans = { ...st.plans };
+    delete plans[id];
+    return { plans };
+  });
+  await ldb.putPlans([], [id]);
 }
 
 /* ---------------- auth transitions ---------------- */

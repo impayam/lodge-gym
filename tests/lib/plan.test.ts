@@ -95,6 +95,12 @@ describe("planner edits", () => {
     expect(isEdited(p, DAY)).toBe(false);
   });
 
+  it("an exercise appears once: adding or replacing with one already in the plan changes nothing", () => {
+    const p = fresh();
+    expect(addItem(p, "bench", T1, "N1")).toBe(p);
+    expect(replaceItem(p, "I1", "rdl", T1)).toBe(p);
+  });
+
   it("add appends with the defaults (3 × 8–12, 90 s, no RIR target)", () => {
     const p = addItem(fresh(), "dips", T1, "N1");
     const last = liveItems(p).at(-1)!;

@@ -169,10 +169,13 @@ export function planFromDay(day: ProgramDay, id: string, now: string, newId: () 
 
 const findLive = (p: SessionPlan, itemId: string) => liveItems(p).find((it) => it.id === itemId);
 
+/** An exercise appears at most once in a plan (a session's sets are kept per exercise). */
+export const inPlan = (p: Pick<SessionPlan, "items">, exerciseId: string) => liveItems(p).some((it) => it.exercise_id === exerciseId);
+
 /** Replaces an item's exercise; the slot's sets, reps, rest and RIR target stay. */
 export function replaceItem(p: SessionPlan, itemId: string, exerciseId: string, now: string): SessionPlan {
   const it = findLive(p, itemId);
-  if (!it || it.exercise_id === exerciseId) return p;
+  if (!it || inPlan(p, exerciseId)) return p;
   const original = it.origin === "program" ? it.exercise_id : it.replaced_exercise_id;
   const back = original === exerciseId;
   const next: PlanItem = {
@@ -186,6 +189,7 @@ export function replaceItem(p: SessionPlan, itemId: string, exerciseId: string, 
 
 /** Adds an exercise at the end with the planner defaults. */
 export function addItem(p: SessionPlan, exerciseId: string, now: string, id: string, init: Partial<Pick<PlanItem, "sets" | "reps_min" | "reps_max" | "rest_sec" | "is_time">> = {}): SessionPlan {
+  if (inPlan(p, exerciseId)) return p;
   const item: PlanItem = {
     id,
     exercise_id: exerciseId,

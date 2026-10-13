@@ -6,6 +6,7 @@ import { zonedToUtcISO } from "../../worker/lib/time";
 import type { DayExercise, Exercise, ProgramDay, ProgramInfo, SetEntry, WorkoutSession } from "../../worker/lib/types";
 import { MAX_TWO_IN_A_ROW, STYLE_NAME, type ResolvedStyle } from "../../worker/lib/generator/model";
 import { ulid } from "../../worker/lib/ulid";
+import { addItem, groupLabels, isEdited, itemAsDayExercise, liveItems, planBlocks, seqIds, type PlanItem, type SessionPlan } from "../../worker/lib/plan";
 import type { BootData } from "./localdb";
 
 export const exerciseMap = (boot: BootData) => new Map(boot.exercises.map((e) => [e.id, e]));
@@ -76,6 +77,84 @@ export function homeModel(boot: BootData, sessions: Record<string, WorkoutSessio
   };
 }
 
+/* ---------------- session plans (SPEC-v3 M9c) ---------------- */
+
+/** The open plan of a program day, if any. */
+export const openPlanFor = (plans: Record<string, SessionPlan>, dayId: string) =>
+  Object.values(plans).find((p) => p.status === "planned" && p.program_day_id === dayId) ?? null;
+
+/** "Planned: Day 1 · Chest (edited)" */
+export function plannedLabel(boot: BootData, plan: SessionPlan): string {
+  const day = boot.program.days.find((d) => d.id === plan.program_day_id);
+  return `Planned: ${dayInfo(boot, plan.program_day_id).name_en}${day && isEdited(plan, day) ? " (edited)" : ""}`;
+}
+
+/** The plan a session follows: the started plan with the session's id. */
+export const sessionPlan = (plans: Record<string, SessionPlan>, sessionId: string) => {
+  const p = plans[sessionId];
+  return p && p.status === "started" ? p : null;
+};
+
+/** A started plan's workout session: same id, the plan's exercises and set counts in order; timed from now. */
+export function sessionFromPlan(boot: BootData, plan: SessionPlan, today: string, now = new Date().toISOString()): WorkoutSession {
+  const sets: SetEntry[] = [];
+  for (const it of liveItems(plan))
+    for (let i = 0; i < it.sets; i++)
+      sets.push({ id: ulid(), exercise_id: it.exercise_id, set_index: i, weight: null, reps: null, seconds: null, done: false, updated_at: now });
+  return {
+    id: plan.id,
+    program_day_id: plan.program_day_id,
+    local_date: today,
+    started_at: now,
+    ended_at: null,
+    status: "active",
+    unit: boot.settings.unit,
+    note: "",
+    created_at: now,
+    updated_at: now,
+    source: "app",
+    sets,
+  };
+}
+
+/**
+ * The plan to edit for a session (approved default 7): its started plan with any exercise added during the session
+ * appended, or, for a session started without a plan, a new started plan with the session's id copying the session's
+ * exercises, order and groups as they are.
+ */
+export function planForSession(boot: BootData, s: WorkoutSession, plan: SessionPlan | null, exMap: Map<string, Exercise>, now: string): SessionPlan {
+  const blocks = sessionBlocks(boot, s, exMap, plan);
+  if (plan) {
+    let p = plan;
+    for (const b of blocks) if (!b.itemId) p = addItem(p, b.ex.id, now, ulid(), { sets: clampSets(b.sets.length), is_time: b.plan.is_time, reps_min: null, reps_max: null, rest_sec: b.plan.rest_sec });
+    return p;
+  }
+  const newId = seqIds(s.id);
+  const items: PlanItem[] = blocks.map((b, i) => ({
+    id: newId(),
+    exercise_id: b.ex.id,
+    position: i,
+    sets: clampSets(b.extra ? b.sets.length : b.plan.sets),
+    reps_min: b.extra ? null : b.plan.reps_min,
+    reps_max: b.extra ? null : b.plan.reps_max,
+    per_leg: b.plan.per_leg,
+    is_time: b.plan.is_time,
+    rest_sec: b.plan.rest_sec,
+    target_rir_min: b.plan.target_rir_min,
+    target_rir_max: b.plan.target_rir_max,
+    origin: b.extra || b.plan.id.startsWith("extra_") ? "added" : "program",
+    replaced_exercise_id: null,
+    group_tag: b.group?.tag ?? null,
+    group_rest_sec: b.group?.rest ?? null,
+    removed_at: null,
+    created_at: now,
+    updated_at: now,
+  }));
+  return { id: s.id, program_day_id: s.program_day_id, status: "started", started_at: s.started_at, created_at: now, updated_at: now, items };
+}
+
+const clampSets = (n: number) => Math.min(10, Math.max(1, n));
+
 export function newSession(boot: BootData, day: ProgramDay, today: string): WorkoutSession {
   const now = new Date().toISOString();
   const sets: SetEntry[] = [];
@@ -98,29 +177,66 @@ export function newSession(boot: BootData, day: ProgramDay, today: string): Work
   };
 }
 
+/** A superset or tri-set in a session: its letter, the member's place in it, and the rest after a full round. */
+export interface BlockGroup {
+  tag: string;
+  index: number;
+  size: number;
+  rest: number;
+}
+
 export interface ExerciseBlock {
   ex: Exercise;
   plan: DayExercise;
   sets: SetEntry[];
   /** Added during this session from the library (SPEC-v2 §7.3): no plan and no progression target. */
   extra: boolean;
+  /** The session plan's item for this exercise (SPEC-v3 M9c), when the session follows a plan. */
+  itemId: string | null;
+  group: BlockGroup | null;
 }
 
 /**
- * Exercise cards for a session: the day's plan in order, then the exercises added during the session (by position),
- * then any other exercise present in the logged sets (e.g. imported history).
+ * Exercise cards for a session: the plan's exercises in order when the session follows one (SPEC-v3 M9c), otherwise
+ * the day's exercises in order; then the exercises added during the session (by position), then any other exercise
+ * present in the logged sets (e.g. imported history). Groups come from the plan, or from the day's superset tags.
  * @param exMap every known exercise (library plus bootstrap), so extra exercises resolve offline.
  */
-export function sessionBlocks(boot: BootData, s: WorkoutSession, exMap: Map<string, Exercise> = exerciseMap(boot)): ExerciseBlock[] {
+export function sessionBlocks(boot: BootData, s: WorkoutSession, exMap: Map<string, Exercise> = exerciseMap(boot), plan: SessionPlan | null = null): ExerciseBlock[] {
   const day = boot.program.days.find((d) => d.id === s.program_day_id);
-  const plans = day ? day.exercises : [];
+  const dayExercises = day ? day.exercises : [];
   const blocks: ExerciseBlock[] = [];
   const seen = new Set<string>();
-  for (const plan of plans) {
-    const ex = exMap.get(plan.exercise_id);
-    if (!ex) continue;
-    seen.add(plan.exercise_id);
-    blocks.push({ ex, plan, sets: s.sets.filter((x) => x.exercise_id === plan.exercise_id).sort((a, b) => a.set_index - b.set_index), extra: false });
+  const setsOf = (id: string) => s.sets.filter((x) => x.exercise_id === id).sort((a, b) => a.set_index - b.set_index);
+  if (plan) {
+    const labels = groupLabels(plan);
+    for (const b of planBlocks(plan))
+      b.items.forEach((it, i) => {
+        const ex = exMap.get(it.exercise_id);
+        if (!ex) return;
+        seen.add(it.exercise_id);
+        const sets = setsOf(it.exercise_id);
+        const label = labels.get(it.id) ?? null;
+        const extra = sets.some((x) => x.is_extra);
+        const slot = it.origin === "added" ? undefined : dayExercises.find((x) => x.exercise_id === (it.replaced_exercise_id ?? it.exercise_id));
+        blocks.push({
+          ex,
+          plan: extra ? { ...extraPlan(it.exercise_id, sets), superset_tag: label } : itemAsDayExercise(it, label, slot),
+          sets,
+          extra,
+          itemId: it.id,
+          group: b.tag ? { tag: b.tag, index: i, size: b.items.length, rest: it.group_rest_sec ?? it.rest_sec ?? 90 } : null,
+        });
+      });
+  } else {
+    const ordered = [...dayExercises].sort((a, b) => a.position - b.position);
+    for (const de of ordered) {
+      const ex = exMap.get(de.exercise_id);
+      if (!ex) continue;
+      seen.add(de.exercise_id);
+      blocks.push({ ex, plan: de, sets: setsOf(de.exercise_id), extra: false, itemId: null, group: null });
+    }
+    dayGroups(blocks);
   }
   const positionOf = (id: string) => {
     const p = s.sets.find((x) => x.exercise_id === id && x.is_extra)?.position;
@@ -130,32 +246,48 @@ export function sessionBlocks(boot: BootData, s: WorkoutSession, exMap: Map<stri
   for (const id of extra) {
     const ex = exMap.get(id);
     if (!ex) continue;
-    const sets = s.sets.filter((x) => x.exercise_id === id).sort((a, b) => a.set_index - b.set_index);
-    const maxReps = Math.max(0, ...sets.map((x) => x.reps ?? 0));
-    const isTime = sets.some((x) => x.seconds != null) && !sets.some((x) => x.reps != null);
-    blocks.push({
-      ex,
-      plan: {
-        id: `extra_${id}`,
-        exercise_id: id,
-        position: 99,
-        sets: sets.length,
-        reps_min: maxReps,
-        reps_max: maxReps,
-        per_leg: false,
-        is_time: isTime,
-        rest_sec: 90,
-        superset_tag: null,
-        is_main: false,
-        target_rir_min: null,
-        target_rir_max: null,
-        slot: null,
-      },
-      sets,
-      extra: sets.some((x) => x.is_extra),
-    });
+    const sets = setsOf(id);
+    blocks.push({ ex, plan: extraPlan(id, sets), sets, extra: sets.some((x) => x.is_extra), itemId: null, group: null });
   }
   return blocks;
+}
+
+/** The stand-in plan of an exercise without one (added during the session, or imported): read from its sets. */
+function extraPlan(id: string, sets: SetEntry[]): DayExercise {
+  const maxReps = Math.max(0, ...sets.map((x) => x.reps ?? 0));
+  const isTime = sets.some((x) => x.seconds != null) && !sets.some((x) => x.reps != null);
+  return {
+    id: `extra_${id}`,
+    exercise_id: id,
+    position: 99,
+    sets: sets.length,
+    reps_min: maxReps,
+    reps_max: maxReps,
+    per_leg: false,
+    is_time: isTime,
+    rest_sec: 90,
+    superset_tag: null,
+    is_main: false,
+    target_rir_min: null,
+    target_rir_max: null,
+    slot: null,
+  };
+}
+
+/** A day's supersets (A1, A2…) are groups in the session too: adjacent members of one letter, resting after the round
+ *  for the longest planned rest of the members (approved default 4). */
+function dayGroups(blocks: ExerciseBlock[]) {
+  for (let i = 0; i < blocks.length; ) {
+    const tag = blocks[i].plan.superset_tag?.[0] ?? null;
+    let j = i + 1;
+    while (tag && j < blocks.length && blocks[j].plan.superset_tag?.[0] === tag) j++;
+    if (tag && j - i >= 2) {
+      const members = blocks.slice(i, j);
+      const rest = Math.max(...members.map((b) => b.plan.rest_sec));
+      members.forEach((b, k) => (b.group = { tag, index: k, size: members.length, rest }));
+    }
+    i = j;
+  }
 }
 
 export interface Guidance {
