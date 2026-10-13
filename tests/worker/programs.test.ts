@@ -103,6 +103,19 @@ describe("generate, save a draft, approve, re-activate (SPEC-v2 §8.6)", () => {
     expect((await bootstrap()).program.id).toBe("fullbody4");
   });
 
+  it("re-saving a draft with fewer days removes the extra day", async () => {
+    const id = ulid();
+    const four = await generate({ days_per_week: 4, style: "full_body" });
+    expect((await client.post("/api/programs", draftOf(id, four))).status).toBe(200);
+    const three = await generate({ days_per_week: 3, style: "full_body" });
+    const res = await client.post("/api/programs", draftOf(id, three));
+    expect(res.status).toBe(200);
+    const saved = ((await res.json()) as { program: ProgramVersion }).program;
+    expect(saved.days.map((d) => d.id)).toEqual([`${id}-d1`, `${id}-d2`, `${id}-d3`]);
+    expect(saved.days.map((d) => d.name_en)).toEqual(three.days.map((d) => d.name_en));
+    expect(saved).toMatchObject({ status: "draft", days_per_week: 3, name: "Full body · 3 days" });
+  });
+
   it("rejects unknown exercises and a day count the style does not have", async () => {
     const p = await generate();
     const bad = draftOf(ulid(), p);

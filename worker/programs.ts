@@ -151,7 +151,9 @@ programRoutes.post("/", async (c) => {
       `INSERT INTO programs (id, name, active, created_at, style, days_per_week, params, generated_by) VALUES (?, ?, 0, ?, ?, ?, ?, 'generator')
        ON CONFLICT (id) DO UPDATE SET name = excluded.name, style = excluded.style, days_per_week = excluded.days_per_week, params = excluded.params`
     ).bind(draft.id, name, now, plan.style, plan.days_per_week, JSON.stringify(draft.params)),
+    // A draft is never active, so no session refers to its days: its rows are replaced, and days beyond the new count go.
     c.env.DB.prepare("DELETE FROM day_exercises WHERE day_id IN (SELECT id FROM program_days WHERE program_id = ?)").bind(draft.id),
+    c.env.DB.prepare("DELETE FROM program_days WHERE program_id = ? AND position > ?").bind(draft.id, plan.days.length),
   ];
   plan.days.forEach((d, i) => {
     const dayId = `${draft.id}-d${i + 1}`;
