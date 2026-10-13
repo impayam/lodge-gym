@@ -32,7 +32,8 @@ export function startAiMock(port) {
       volume: trained.map((v) => ({ group: v.group, today: v.today, week: v.week, target: v.target, status: v.status })),
       extras_note_fa: extras.length ? `حرکت‌های اضافه: ${extras.join("، ")}.` : null,
       missed_note_fa: input.missed.exercises_not_done.length ? `انجام نشد: ${input.missed.exercises_not_done.join("، ")}.` : null,
-      next_time: input.exercises.filter((x) => x.app_next_time).map((x) => `${x.name}: ${x.app_next_time}`),
+      // Notes only, like the real prompt asks; one with a number, which the app must not show.
+      next_time: input.exercises.filter((x) => x.app_next_time).map((x, i) => ({ exercise_id: x.exercise_id, note_fa: i === 0 ? "همین مسیر را با فرم درست ادامه بده." : "دفعهٔ بعد ۲۰۰ پوند." })),
       warnings: [],
     };
   };

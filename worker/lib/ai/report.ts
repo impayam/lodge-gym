@@ -62,7 +62,26 @@ export interface ReportExercise {
   best_e1rm_today: number | null;
   previous_same_day: { date: string; sets: SetIn[]; best_e1rm: number | null } | null;
   /** The app's own progression for next time (SPEC §7 + RIR rules), from today's sets. */
-  app_next_time: string | null;
+  app_next_time: NextTime | null;
+}
+
+/**
+ * Next time for one exercise, computed by the app's progression function (worker/lib/progression.ts `suggest`) from
+ * today's sets; the model never sets these numbers, it may only add a note (Payam, 2026-10-13).
+ */
+export interface NextTime {
+  kind: "weight" | "bodyweight" | "time";
+  /** Weight to use (weight kind), or the top added load for bodyweight work; null when there is none. */
+  weight: number | null;
+  unit: Unit;
+  /** Target time (timed work). */
+  seconds: number | null;
+  /** Target reps. */
+  reps: string | null;
+  /** up: one increment; up2: double increment (RIR 3+ on every planned set); same: as today. */
+  change: "up" | "up2" | "same";
+  /** The increment applied, in `unit` (0 when the same). */
+  step: number;
 }
 
 export interface VolumeIn {
@@ -120,16 +139,15 @@ const setIn = (x: SetEntry, from: Unit, unit: Unit): SetIn => ({
   rir: rirText(x.rir),
 });
 
-function nextTimeText(s: Suggestion, plan: Pick<DayExercise, "reps_max" | "is_time">): string | null {
+/** The app's suggestion as numbers; null for exercises it has none for (extras, nothing logged). */
+export function nextTime(s: Suggestion, reps: string | null, unit: Unit): NextTime | null {
   switch (s.kind) {
     case "weight":
-      return s.allHit
-        ? `${s.weight} ${s.unit} (all planned sets reached ${plan.reps_max} reps${s.easy ? " at RIR 3+: double increment" : ": one increment"})`
-        : `${s.weight} ${s.unit}, same weight (not every planned set reached ${plan.reps_max} reps)`;
+      return { kind: "weight", weight: s.weight, unit: s.unit, seconds: null, reps, change: s.allHit ? (s.easy ? "up2" : "up") : "same", step: round1(s.weight - s.lastTop) };
     case "bodyweight":
-      return s.allHit ? `bodyweight: add reps or load (all planned sets reached ${plan.reps_max} reps)` : `bodyweight: same, aim for ${plan.reps_max} reps on every set`;
+      return { kind: "bodyweight", weight: s.weight, unit: s.unit, seconds: null, reps, change: s.allHit ? "up" : "same", step: 0 };
     case "time":
-      return s.allHit ? `${s.seconds} s (every planned set reached ${plan.reps_max} s)` : `${s.seconds} s, same as today`;
+      return { kind: "time", weight: null, unit, seconds: s.seconds, reps: null, change: s.allHit ? (s.easy ? "up2" : "up") : "same", step: 0 };
     default:
       return null;
   }
@@ -185,10 +203,10 @@ export function buildReportInput(d: ReportData, sessionId: string, plan: Session
     const doneSets = mine.filter((x) => x.done);
     const isExtra = mine.some((x) => x.is_extra) || !p;
     const prevSets = sameDay ? sameDay.sets.filter((x) => x.exercise_id === id && x.done).sort((a, b) => a.set_index - b.set_index) : [];
-    let next: string | null = null;
+    let next: NextTime | null = null;
     if (p && e && doneSets.length) {
       const plan = { sets: p.sets, reps_max: p.reps_max ?? 0, is_time: p.is_time };
-      next = nextTimeText(suggest(plan, e, { session_id: s.id, local_date: s.local_date, unit, sets: mine }), plan);
+      next = nextTime(suggest(plan, e, { session_id: s.id, local_date: s.local_date, unit, sets: mine }), p.is_time ? null : rangeText(p.reps_min, p.reps_max), unit);
     }
     return {
       exercise_id: id,
@@ -325,13 +343,29 @@ export const ReportOutput = z.object({
     .describe("The groups trained today and the targeted groups, copied from week_so_far.volume without changing any number."),
   extras_note_fa: fa(800, "Persian").nullable().describe("What the added (extra) exercises contributed, in Persian; null when there were none."),
   missed_note_fa: fa(800, "Persian").nullable().describe("What was skipped and its effect on the week, in Persian; null when nothing was skipped."),
-  next_time: z.array(fa(400, "Persian")).describe("Concrete suggestions per exercise for next session, in Persian, following app_next_time. At most 8."),
+  next_time: z
+    .array(
+      z.object({
+        exercise_id: z.string().max(100).describe("An exercise that has app_next_time, exactly as given"),
+        note_fa: fa(300, "One short Persian sentence, with no numbers."),
+      })
+    )
+    .describe("A short Persian note per exercise with app_next_time. No weights, reps, seconds or set counts: the app shows its own numbers next to the note."),
   warnings: z.array(fa(400, "Persian")).describe("Only real issues, in Persian: a big drop in performance, pain in the note, very many RIR 0 sets. At most 3; usually empty."),
 });
 export type ReportOutput = z.infer<typeof ReportOutput>;
 
-/** The report as stored and shown: the volume table always carries the input's own numbers and status. */
-export type SessionReport = Omit<ReportOutput, "volume"> & { volume: { group: string; today: number; week: number; target: number | null; status: BalanceStatus }[] };
+/** A "Next time" row as stored and shown: the app's numbers and the model's note (dropped if it has any number). */
+export type NextTimeRow = NextTime & { exercise_id: string; name: string; note_fa: string | null };
+
+/**
+ * The report as stored and shown: the volume table carries the input's own numbers and status, and "Next time" the
+ * app's progression, never the model's numbers.
+ */
+export type SessionReport = Omit<ReportOutput, "volume" | "next_time"> & {
+  volume: { group: string; today: number; week: number; target: number | null; status: BalanceStatus }[];
+  next_time: NextTimeRow[];
+};
 
 /** GET /api/sessions/:id/report: the latest row of session_reports. */
 export interface ReportView {
@@ -353,7 +387,10 @@ export interface ReportResponse {
 }
 
 /** Items kept per list of the report. */
-export const LIST_MAX = { highlights: 8, next_time: 12, warnings: 6 } as const;
+export const LIST_MAX = { highlights: 8, warnings: 6 } as const;
+
+/** Latin, Persian and Arabic-Indic digits: a note with any of them is not shown (the numbers are the app's). */
+const DIGITS = /[0-9\u06F0-\u06F9\u0660-\u0669]/;
 
 /**
  * Keeps the model's prose and makes its volume table exact: rows for unknown groups are dropped and every number comes
@@ -372,7 +409,12 @@ export function normalizeReport(out: ReportOutput, input: ReportInput): SessionR
   return {
     ...out,
     highlights: out.highlights.slice(0, LIST_MAX.highlights),
-    next_time: out.next_time.slice(0, LIST_MAX.next_time),
+    next_time: input.exercises
+      .filter((x) => x.app_next_time)
+      .map((x) => {
+        const note = out.next_time.find((n) => n.exercise_id === x.exercise_id)?.note_fa.trim() ?? null;
+        return { exercise_id: x.exercise_id, name: x.name, ...x.app_next_time!, note_fa: note && !DIGITS.test(note) ? note : null };
+      }),
     warnings: out.warnings.slice(0, LIST_MAX.warnings),
     volume,
   };
@@ -388,7 +430,7 @@ Rules:
 - Exercises with counts_volume false (stretching, plyometrics, cardio, strongman) are listed where relevant but marked as not counted in volume («در حجم شمرده نمی‌شود»).
 - Extra exercises (is_extra true) were added during the session; say what they contributed in extras_note_fa (null if there were none).
 - Missed exercises and sets: say in missed_note_fa what was skipped and what it means for the week's targets (null if nothing was skipped).
-- Next time: suggest weights and reps only by the app's progression rules, which app_next_time already applies: all planned sets at the top of the rep range → +5 lb upper body, +10 lb lower body, +5 lb per dumbbell (kg: +2.5, +5, +2 per dumbbell); RIR 3+ on every planned set → twice that; otherwise the same weight. Extra exercises have no progression target.
+- Next time: the app sets every weight, rep and time for next session with its progression rules (all planned sets at the top of the rep range → +5 lb upper body, +10 lb lower body, +5 lb per dumbbell; kg: +2.5, +5, +2 per dumbbell; RIR 3+ on every planned set → twice that; otherwise the same weight) and shows them itself (app_next_time). In next_time write only a short Persian note per exercise that has app_next_time (keep the weight and aim for every rep, or move up as the app shows), with no numbers at all. Never suggest a weight anywhere in the report. Extra exercises have no progression target.
 - No medical advice. If the note mentions pain or injury, suggest rest or seeing a professional, nothing more.
 - Never suggest a deload, a light week or reducing volume, unless Payam's note says he is tired. This is his stated preference.
 - Warnings only for real issues: a big drop in performance, pain in the note, or a very high number of RIR 0 sets. Usually there are none.`;

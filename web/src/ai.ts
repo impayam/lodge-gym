@@ -55,6 +55,8 @@ export function unavailableReason(code: string | null): string {
       return "The AI service is busy. Try again in a minute.";
     case "network":
       return "The AI service could not be reached.";
+    case "refusal":
+      return "The model declined to write this report.";
     default:
       return "The AI service did not return a usable report.";
   }

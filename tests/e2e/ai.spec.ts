@@ -27,8 +27,13 @@ async function startDay1(page: Page) {
 
 const report = (page: Page) => page.getByTestId("session-report");
 
-test("finish a session with an extra exercise: the report shows it and the volume table; failures show Retry; an expired key shows in Settings", async ({ page }) => {
+test("finish a session with an extra exercise: the report shows it, the volume table and the app's next-time weights; failures show Retry; an expired key shows in Settings", async ({ page }) => {
   await startDay1(page);
+  // Bench: all 4 planned sets of 5 at 140 lb.
+  for (let i = 0; i < 4; i++) {
+    await page.getByTestId(`w-bench-${i}`).locator("input").fill("140");
+    if (i > 0) await page.getByTestId(`check-bench-${i}`).click();
+  }
   // One extra exercise, added during the session.
   await page.getByTestId("add-exercise").click();
   const picker = page.getByTestId("exercise-picker");
@@ -48,8 +53,14 @@ test("finish a session with an extra exercise: the report shows it and the volum
   await expect(page.getByTestId("report-extras")).toContainText("Dumbbell Biceps Curl");
   const volume = page.getByTestId("report-volume");
   await expect(volume).toBeVisible();
-  await expect(volume.locator("tbody tr").filter({ hasText: "Chest" })).toContainText("1");
+  await expect(volume.locator("tbody tr").filter({ hasText: "Chest" }).locator("td").nth(1)).toHaveText("4");
   await expect(volume.locator("tbody tr").filter({ hasText: "Biceps" })).toBeVisible();
+  // Next time comes from the app's progression (4 × 5 at 140 lb, barbell upper body → +5 lb), not from the model.
+  const bench = page.getByTestId("next-bench");
+  await expect(bench).toContainText("145 lb × 5");
+  await expect(bench).toContainText("+5 lb");
+  await expect(bench.locator("p[dir=rtl]")).toHaveText("همین مسیر را با فرم درست ادامه بده.");
+  await expect(page.getByTestId("report-next")).not.toContainText("۲۰۰");
   const call = (await aiCalls()).last!;
   expect(call).toMatchObject({ kind: "report", model: "claude-opus-5-5", effort: "low", key_set: true });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildReportInput, normalizeReport, ReportOutput, type ReportInput } from "../../worker/lib/ai/report";
+import { buildReportInput, nextTime, normalizeReport, ReportOutput, type ReportInput } from "../../worker/lib/ai/report";
+import { suggest } from "../../worker/lib/progression";
 import type { ReportData } from "../../worker/lib/reports";
 import type { Exercise, SetEntry, WorkoutSession } from "../../worker/lib/types";
 import { reportData } from "../fixtures/report-data";
@@ -146,8 +147,12 @@ describe("buildReportInput", () => {
   });
 
   it("gives the app's own progression for next time", () => {
-    expect(input.exercises[0].app_next_time).toMatch(/^140 lb, same weight/);
-    expect(input.exercises.find((x) => x.exercise_id === "rdl")!.app_next_time).toMatch(/^170 lb \(all planned sets reached 8 reps: one increment\)/);
+    // Bench: 3 of 4 planned sets done → same weight. RDL (lower body): 3 × 8 at 160 lb, all at the top → +10 lb.
+    expect(input.exercises[0].app_next_time).toEqual({ kind: "weight", weight: 140, unit: "lb", seconds: null, reps: "5", change: "same", step: 0 });
+    expect(input.exercises.find((x) => x.exercise_id === "rdl")!.app_next_time).toEqual({ kind: "weight", weight: 170, unit: "lb", seconds: null, reps: "8", change: "up", step: 10 });
+    // Lateral raise (dumbbell): 3 × 12 at 15 lb, all at the top → +5 lb per dumbbell. Extras get none.
+    expect(input.exercises.find((x) => x.exercise_id === "lateral")!.app_next_time).toMatchObject({ weight: 20, change: "up", step: 5 });
+    expect(input.exercises.find((x) => x.exercise_id === "curl")!.app_next_time).toBeNull();
   });
 
   it("counts each set at most once per group (cable row: upper back + lats are both Back)", () => {
@@ -208,6 +213,66 @@ describe("buildReportInput", () => {
     // Not in the plan: logged exercises count as extras, and the skipped incline press is no longer "missed".
     expect(p.exercises.find((x) => x.exercise_id === "lateral")!.is_extra).toBe(true);
     expect(p.missed.exercises_not_done).toEqual([]);
+  });
+});
+
+describe("Next time comes from the progression function, never the model", () => {
+  const d = data();
+  const input = buildReportInput(d, "T1", null);
+  const day1 = d.program.days.find((x) => x.id === "D1")!;
+  const session = d.sessions.find((x) => x.id === "T1")!;
+  const ex = new Map(d.exercises.map((e) => [e.id, e]));
+  /** The progression function's own answer for an exercise of today's session, computed here independently. */
+  const expected = (id: string) => {
+    const plan = day1.exercises.find((x) => x.exercise_id === id)!;
+    const s = suggest(plan, ex.get(id)!, { session_id: "T1", local_date: session.local_date, unit: session.unit, sets: session.sets.filter((x) => x.exercise_id === id) });
+    return { s, row: nextTime(s, plan.is_time ? null : plan.reps_min === plan.reps_max ? String(plan.reps_min) : `${plan.reps_min}–${plan.reps_max}`, session.unit) };
+  };
+
+  it("the report's next-time weights equal the progression function's output, whatever the model writes", () => {
+    const out = ReportOutput.parse({
+      summary_fa: "خوب بود.",
+      highlights: [],
+      volume: [],
+      extras_note_fa: null,
+      missed_note_fa: null,
+      // The model tries numbers and an exercise the app has no progression for: both are ignored.
+      next_time: [
+        { exercise_id: "bench", note_fa: "دفعهٔ بعد ۱۵۰ پوند بزن." },
+        { exercise_id: "rdl", note_fa: "همین روند را ادامه بده و فرم را حفظ کن." },
+        { exercise_id: "curl", note_fa: "بیشتر وزنه بزن." },
+      ],
+      warnings: [],
+    });
+    const r = normalizeReport(out, input);
+    const ids = ["bench", "rdl", "cable_row", "lateral", "facepull"];
+    expect(r.next_time.map((n) => n.exercise_id)).toEqual(ids);
+    for (const n of r.next_time) {
+      const { s, row } = expected(n.exercise_id);
+      expect(s.kind).toBe("weight");
+      if (s.kind !== "weight") continue;
+      expect(n.weight).toBe(s.weight);
+      expect(n.unit).toBe(s.unit);
+      expect(n).toMatchObject(row!);
+    }
+    expect(r.next_time.map((n) => [n.exercise_id, n.weight, n.change])).toEqual([
+      ["bench", 140, "same"],
+      ["rdl", 170, "up"],
+      ["cable_row", 105, "up"],
+      ["lateral", 20, "up"],
+      ["facepull", 45, "up"],
+    ]);
+    // A note with any number (Persian digits too) is not shown; a note without numbers is.
+    expect(r.next_time.find((n) => n.exercise_id === "bench")!.note_fa).toBeNull();
+    expect(r.next_time.find((n) => n.exercise_id === "rdl")!.note_fa).toBe("همین روند را ادامه بده و فرم را حفظ کن.");
+  });
+
+  it("RIR 3+ on every planned set doubles the increment", () => {
+    const d2 = data();
+    const t = d2.sessions.find((x) => x.id === "T1")!;
+    t.sets = t.sets.map((x) => (x.exercise_id === "rdl" ? { ...x, rir: 3 } : x));
+    const n = normalizeReport(ReportOutput.parse({ summary_fa: "x", highlights: [], volume: [], extras_note_fa: null, missed_note_fa: null, next_time: [], warnings: [] }), buildReportInput(d2, "T1", null));
+    expect(n.next_time.find((x) => x.exercise_id === "rdl")).toMatchObject({ weight: 180, change: "up2", step: 20 });
   });
 });
 

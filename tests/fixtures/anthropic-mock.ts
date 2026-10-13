@@ -56,6 +56,6 @@ export const REPORT_REPLY = {
   volume: [{ group: "Chest", today: 0, week: 0, target: 0, status: "on" }],
   extras_note_fa: "جلوبازو با دمبل حجم بازو را کامل کرد.",
   missed_note_fa: null,
-  next_time: ["پرس سینه: ۱۴۵ پوند × ۵"],
+  next_time: [{ exercise_id: "bench", note_fa: "همین وزن را نگه دار و همهٔ تکرارها را کامل کن." }],
   warnings: [],
 };

@@ -3,10 +3,12 @@
 // from config (REPORT_MODEL, REPORT_EFFORT, ADVICE_EFFORT, REPORT_MAX_TOKENS). claude-opus-5-5 has no temperature
 // (it is rejected); effort is the control (approved 2026-10-13: low for the report, medium for advice).
 // The reply is JSON constrained by the output schema and validated again with Zod; an invalid or cut-off reply is
-// retried once, then reported as an error. Tests replace `aiTransport.fetch`; they never call the real API.
+// retried once, then reported as an error. Opus only: no fallback model; a refusal is stored as an error and the app
+// shows "Report unavailable" with Retry (Payam, 2026-10-13). Tests replace `aiTransport.fetch`; they never call the
+// real API.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import type { Env } from "./env";
 
@@ -83,15 +85,12 @@ export async function callModel<T>(env: Env, req: { system: string; input: unkno
   let served = model;
   let problem = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    let msg: Anthropic.Beta.BetaMessage;
+    let msg: Anthropic.Message;
     try {
-      msg = await client.beta.messages.create({
+      msg = await client.messages.create({
         model,
         max_tokens: maxTokensOf(env),
-        // A refusal (very unlikely for training data) is answered by the API's fallback model in the same call.
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
-        output_config: { effort: req.effort, format: betaZodOutputFormat(req.schema) },
+        output_config: { effort: req.effort, format: zodOutputFormat(req.schema) },
         system: req.system,
         messages: [{ role: "user", content: JSON.stringify(req.input) }],
       });

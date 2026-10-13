@@ -238,8 +238,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `wrangler.toml` `[vars]`: `REPORT_MODEL`, `REPORT_EFFORT` (low), `ADVICE_EFFORT` (medium), `REPORT_MAX_TOKENS`
   (3000; thinking counts toward it). Opus 5.5 takes no `temperature` (the API rejects it), so effort is the control
   (approved 2026-10-13). The key is the Worker secret `ANTHROPIC_API_KEY` (dashboard or `wrangler secret put`); it is
-  never sent to the phone or logged. If the model refuses (unlikely for training data) the API answers with its
-  fallback model in the same call; `model` in the row says who answered.
+  never sent to the phone or logged. Opus only, no fallback model: a refusal is stored as an error and shows "Report
+  unavailable" with Retry (Payam, 2026-10-13).
 - Reply format: JSON constrained by the output schema (structured outputs) and validated again with Zod; a reply that
   is cut off, not JSON or not valid is retried once, then stored as an error. Every call writes one row
   (`session_reports` or `plan_advice`, migration 0009) with its tokens; rows are never updated, so regenerating keeps
@@ -257,6 +257,10 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   week so far by the muscle map's rules (a set counts at most once per group) against the weekly targets, the app's own
   progression for next time, Apple Watch HR and kcal, body weight today and the last 4 weekly averages. The volume
   table always shows the input's numbers.
+- **Next time** is computed by the app's progression function (`suggest`, SPEC §7 + RIR rules: +5 lb upper, +10 lb
+  lower, +5 lb per dumbbell, double with RIR 3+ on every planned set, otherwise the same weight) and shown by the app
+  ("145 lb × 5 · +5 lb"); the model only adds a short Persian note per exercise, and a note containing any number is
+  not shown (Payam, 2026-10-13).
 - **Get advice** (planner, needs a connection; disabled offline with "Needs connection"): saves and sends the plan,
   then one model call with the plan, the original day, the last 14 days, group volume (week so far, last 7 days, what
   the plan adds) against the targets, the last heavy compound per group, the program style, Payam's preferences and a

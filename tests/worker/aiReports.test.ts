@@ -1,6 +1,8 @@
 import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { generateReport } from "../../worker/aiReports";
+import { suggest } from "../../worker/lib/progression";
+import type { Bootstrap } from "../../worker/lib/types";
 import type { ReportView } from "../../worker/lib/ai/report";
 import type { SessionPlan } from "../../worker/lib/plan";
 import type { SetEntry, WorkoutSession } from "../../worker/lib/types";
@@ -94,10 +96,12 @@ describe("session report", () => {
     // The request: REPORT_MODEL, max_tokens 3000, effort low, JSON schema output, no temperature, the API key header.
     expect(mock.calls).toHaveLength(1);
     const call = mock.calls[0];
-    expect(call.url).toBe("https://anthropic.invalid/v1/messages?beta=true");
+    expect(call.url).toBe("https://anthropic.invalid/v1/messages");
     expect(call.headers["x-api-key"]).toBe(env.ANTHROPIC_API_KEY);
-    expect(call.headers["anthropic-beta"]).toContain("server-side-fallback-2026-07-01");
-    expect(call.body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 3000, fallbacks: "default", output_config: { effort: "low", format: { type: "json_schema" } } });
+    // Opus only: no fallback model (Payam, 2026-10-13).
+    expect(call.headers["anthropic-beta"]).toBeUndefined();
+    expect(call.body).not.toHaveProperty("fallbacks");
+    expect(call.body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 3000, output_config: { effort: "low", format: { type: "json_schema" } } });
     expect(call.body).not.toHaveProperty("temperature");
     expect(String(call.body.system)).toMatch(/Persian/);
     // The input includes the extra exercise.
@@ -106,6 +110,30 @@ describe("session report", () => {
     // Synced again as done: no second report.
     expect((await put({ ...s, note: "edited", updated_at: "2026-10-13T00:00:02.000Z" })).status).toBe(200);
     expect((await getReport(s.id)).pending).toBe(false);
+  });
+
+  it("stores the progression function's next-time weights, not the model's numbers", async () => {
+    // Bench: all 4 planned sets of 5 at 135 lb → the app's rule gives 140 lb (+5 lb, barbell upper body).
+    const s = { ...session(ulid()), sets: [0, 1, 2, 3].map((i) => set(`${ulid()}-${i}`, "bench", i, 135, 5)) };
+    await put(s);
+    await settled(s.id);
+    await env.DB.prepare("DELETE FROM session_reports").run();
+    mock = mockAnthropic([{ json: { ...REPORT_REPLY, next_time: [{ exercise_id: "bench", note_fa: "دفعهٔ بعد ۱۵۵ پوند." }] } }]);
+    const v = (await generateReport(env, s.id))!;
+    const boot = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
+    const plan = boot.program.days.find((d) => d.id === "D1")!.exercises.find((x) => x.exercise_id === "bench")!;
+    const app = suggest(plan, boot.exercises.find((e) => e.id === "bench")!, { session_id: s.id, local_date: s.local_date, unit: "lb", sets: s.sets });
+    expect(app).toMatchObject({ kind: "weight", weight: 140 });
+    expect(v.report!.next_time).toEqual([{ exercise_id: "bench", name: "Barbell Bench Press", kind: "weight", weight: app.kind === "weight" ? app.weight : null, unit: "lb", seconds: null, reps: "5", change: "up", step: 5, note_fa: null }]);
+  });
+
+  it("a refusal is stored as an error at once (no fallback model, no retry)", async () => {
+    const s = session(ulid());
+    await put(s);
+    await settled(s.id);
+    mock = mockAnthropic([{ json: {}, stop_reason: "refusal" }]);
+    expect(await generateReport(env, s.id)).toMatchObject({ status: "error", error_code: "refusal", model: "claude-opus-5-5" });
+    expect(mock.calls).toHaveLength(1);
   });
 
   it("retries bad model JSON once, then stores the error", async () => {

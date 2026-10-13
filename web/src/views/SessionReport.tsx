@@ -4,7 +4,7 @@
 // "Report unavailable" comes with Retry; Regenerate writes a new report and the older ones are kept.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ReportView } from "../../../worker/lib/ai/report";
+import type { NextTimeRow, ReportView } from "../../../worker/lib/ai/report";
 import type { BalanceStatus } from "../../../worker/lib/reports";
 import { fetchReport, lastReport, requestReport, sessionUnsynced, unavailableReason, type ReportResponse } from "../ai";
 import { ApiError, errorText, NetworkError } from "../api";
@@ -149,6 +149,22 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
   );
 }
 
+/** The app's target for next time ("145 lb × 5", "Bodyweight × 6–8", "60 s"). */
+function nextTarget(n: NextTimeRow): string {
+  if (n.kind === "time") return `${fmtNum(n.seconds)} s`;
+  const reps = n.reps ? ` × ${n.reps}` : "";
+  if (n.kind === "bodyweight") return `Bodyweight${n.weight ? ` +${fmtNum(n.weight)} ${n.unit}` : ""}${reps}`;
+  return `${fmtNum(n.weight)} ${n.unit}${reps}`;
+}
+
+/** What the app's progression rule did. */
+function nextChange(n: NextTimeRow): string {
+  if (n.change === "same") return n.kind === "weight" ? "same weight" : "same";
+  if (n.kind === "weight") return `+${fmtNum(n.step)} ${n.unit}${n.change === "up2" ? " (RIR 3+)" : ""}`;
+  if (n.kind === "time") return "longer";
+  return "add reps or load";
+}
+
 function ReportBody({ view }: { view: ReportView }) {
   const r = view.report!;
   const list = (title: string, items: string[], mark: string, cls = "") =>
@@ -212,7 +228,28 @@ function ReportBody({ view }: { view: ReportView }) {
       ) : null}
       {para("Extra exercises", r.extras_note_fa, "report-extras")}
       {para("Skipped", r.missed_note_fa, "report-missed")}
-      {list("Next time", r.next_time, "←")}
+      {r.next_time.length ? (
+        <div data-testid="report-next">
+          <b class="rv-title">Next time</b>
+          <ul class="rp-next">
+            {r.next_time.map((n) => (
+              <li data-testid={`next-${n.exercise_id}`} data-change={n.change}>
+                <div class="kv">
+                  <span>{n.name}</span>
+                  <span class="num">
+                    <b>{nextTarget(n)}</b> <small class="muted">{nextChange(n)}</small>
+                  </span>
+                </div>
+                {n.note_fa ? (
+                  <p class="rp-note" dir="rtl" lang="fa">
+                    {n.note_fa}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {list("Watch out", r.warnings, "!", "warn")}
     </>
   );
