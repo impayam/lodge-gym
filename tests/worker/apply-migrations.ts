@@ -33,8 +33,11 @@ if (!seeded?.n) {
   await env.DB.batch(lines.map((l) => env.DB.prepare(l)));
 }
 
-// Tests never reach the Anthropic API: reports queued by other tests' sessions fail fast as a network error, and the AI
-// tests install a mock (tests/fixtures/anthropic-mock.ts).
-aiTransport.fetch = async () => {
-  throw new TypeError("The Anthropic API is not reachable from tests.");
-};
+// Tests never reach the Anthropic API: the AI tests install a mock (tests/fixtures/anthropic-mock.ts), and the reports
+// and overviews queued by other tests' sessions fail at once with an API error. (A thrown network error would be
+// retried by the SDK with backoff, about 1–3 s per job, which made those tests slow and flaky under load.)
+aiTransport.fetch = async () =>
+  new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "No Anthropic mock is installed in this test." } }), {
+    status: 400,
+    headers: { "content-type": "application/json", "request-id": "req_no_mock" },
+  });
