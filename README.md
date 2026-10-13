@@ -167,17 +167,34 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
   ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
 
-## Body-map exercise picker (SPEC-v3 M9b)
+## Body-map exercise picker (SPEC-v3 M9b, 3D model SPEC-v6)
 
-- In a session, "+ Add exercise" opens on the **Body** tab (Search is the second tab): tap an area on the front or
-  back figure (the muscle map's drawing, no status colours) or its chip, then a muscle in the enlarged area or its
-  chip, then an exercise. It is added as an extra with 3 empty sets, as in M7.
-- Areas → muscles (`worker/lib/bodyAreas.ts`, unit-tested): Chest; Shoulders (front, side, rear delts); Arms (biceps,
-  triceps, forearms); Back (lats, upper back, traps, lower back); Core; Glutes & hips (glutes, adductors,
-  abductors); Thighs (quads, hamstrings); Calves.
+- In a session, "+ Add exercise" opens on the **Body** tab (Search is the second tab) with a 3D anatomy model on a dark
+  stage: drag turns it around the vertical axis, pinch zooms (never inside the body, no panning), Front / Back turn it
+  round in 380 ms. A tap lights up the app muscle under the finger on both sides, with "Show exercises"; a tap within
+  24 px of a muscle still finds it; empty space and unmapped muscles (face, neck, deep spine, hands, feet, shins…)
+  clear it. The area chips under the model zoom to a close-up where only that area's muscles are tappable and show its
+  muscle chips, which open the list directly. The chips do everything the model does (VoiceOver never needs the
+  canvas). The exercise is added as an extra with 3 empty sets, as in M7.
+- Areas → muscles (`worker/lib/bodyAreas.ts`): Chest; Shoulders (front, side, rear delts); Arms (biceps, triceps,
+  forearms); Back (lats, upper back, traps, lower back); Core; Glutes & hips (glutes, adductors, abductors); Thighs
+  (quads, hamstrings); Calves. Model muscle → app muscle and M10 coverage region: `web/src/lib/anatomy-map.ts`
+  (approved table; 78 of the model's 222 muscle names), tested against the GLB's own node list.
 - The list: primary-muscle exercises, then "Also works this muscle"; inside each, done before (most recent first),
   then the current program, then compound, then name. Filters: equipment and category (default: strength, the
   counted categories). The picker remembers its place per session while the app is open.
+- Loading: three.js 0.186.1 and the 3D code are a separate chunk (`anatomy3d-*.js`, about 165 kB gzip) loaded when the
+  Body tab opens; nothing of it is in the main bundle. The model (`web/public/models/body.glb`, 8.2 MB, pinned by
+  SHA-256; `npm run build` fails if it differs) is decoded once per app run with three's Draco decoder (WebAssembly),
+  which Vite copies into `/assets/`. None of these is precached: the service worker caches them on first use
+  (cache-first, cache `anatomy-<sha>`), so after one online open the picker works offline. Each open gets its own
+  renderer and WebGL context and releases them, its materials and GPU buffers when it closes.
+- CSP (approved for SPEC-v6): `script-src 'self' 'wasm-unsafe-eval'` for the decoder's WebAssembly and
+  `worker-src 'self' blob:` for its worker; eval stays blocked.
+- Without WebGL 2, when the model fails, or after 10 s, the picker shows the chips only with a "3D unavailable" note.
+- `window.__anatomy` (the 3D view's hook) gives `stats` (load and first-frame ms of the last open, warm or cold) and
+  `view.spin(ms)` (frames per second while turning), for the tests and for measuring on the iPhone through Safari's
+  Web Inspector.
 
 ## Artwork and credits
 
@@ -185,6 +202,9 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   drawn and mirrored in code, so the figures are symmetric by construction. No third-party artwork or icon set is
   used, so no external licence applies.
 - Exercise images: free-exercise-db (Unlicense), copied into the private R2 bucket (see "Exercise library").
+- 3D anatomy model of the exercise picker: Body Anatomy 3D Viewer by hpfrei (github.com/hpfrei/body-anatomy-3d-viewer,
+  commit 0fc76a9), based on Z-Anatomy, CC BY-SA 4.0, used unmodified (`web/public/models/ANATOMY-SOURCE.md`); credited
+  in Settings → About.
 
 ## Approved additions beyond SPEC §5/§11
 

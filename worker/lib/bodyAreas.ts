@@ -1,6 +1,7 @@
-// Body areas of the body-map exercise picker (SPEC-v3 M9b): the eight areas Payam taps on the figure, and the canonical
-// muscle keys (./muscles.ts) each one opens. Every drawn muscle belongs to exactly one area; abductors are not drawn
-// and are reached through their area's chips. Neck has no area (no exercise in the library trains it as primary).
+// Body areas of the body-map exercise picker (SPEC-v3 M9b, 3D model SPEC-v6): the eight areas of the picker's chips and
+// close-ups, and the canonical muscle keys (./muscles.ts) each one opens. Every muscle the 3D model maps
+// (web/src/lib/anatomy-map.ts) belongs to exactly one area. Neck has no area (no exercise in the library trains it as
+// primary), so the model's neck muscles are not tappable.
 
 import { countsVolume, type Category } from "./category";
 import type { Muscle } from "./muscles";
@@ -14,7 +15,7 @@ export interface AreaDef {
   label: string;
   /** Muscles in chip order. */
   muscles: readonly Muscle[];
-  /** Figures that show the area's muscles; the first one opens first. */
+  /** Sides of the body that show the area's muscles; its close-up opens on the first. */
   views: readonly FigureView[];
 }
 

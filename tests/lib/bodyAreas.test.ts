@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { BACK, FRONT } from "../../web/src/components/bodyMap";
 import { BODY_AREAS, areaDef, areaOfMuscle, musclePicks } from "../../worker/lib/bodyAreas";
 import { CANONICAL_MUSCLES } from "../../worker/lib/muscles";
 import type { Exercise } from "../../worker/lib/types";
 import { exercises } from "../fixtures/report-data";
 
 describe("body areas (SPEC-v3 M9b)", () => {
-  const drawn = [...new Set([...FRONT, ...BACK].map((r) => r.key))];
-
-  it("cover all 17 drawn muscle keys, each in exactly one area", () => {
-    expect(drawn).toHaveLength(17);
-    for (const key of drawn) expect(BODY_AREAS.filter((a) => a.muscles.includes(key)).map((a) => a.key), key).toHaveLength(1);
+  it("cover all 18 picker muscles (every canonical key but neck), each in exactly one area", () => {
+    const picker = CANONICAL_MUSCLES.filter((m) => m !== "neck");
+    expect(picker).toHaveLength(18);
+    for (const key of picker) expect(BODY_AREAS.filter((a) => a.muscles.includes(key)).map((a) => a.key), key).toHaveLength(1);
   });
 
   it("are the spec's eight areas with the spec's muscles", () => {
@@ -24,19 +22,24 @@ describe("body areas (SPEC-v3 M9b)", () => {
       Thighs: ["quads", "hamstrings"],
       Calves: ["calves"],
     });
-    // Abductors are not drawn but are reachable through their chip; neck has no area.
+    // Abductors (gluteus medius and minimus on the 3D model) are in Glutes & hips; neck has no area.
     expect(areaOfMuscle("abductors")).toBe("glutes_hips");
     expect(areaOfMuscle("neck")).toBeNull();
     for (const a of BODY_AREAS) for (const m of a.muscles) expect(CANONICAL_MUSCLES).toContain(m);
   });
 
-  it("open on a figure that shows them, with a toggle where the area has two sides", () => {
-    for (const a of BODY_AREAS) {
-      const first = a.views[0] === "front" ? FRONT : BACK;
-      expect(first.some((r) => a.muscles.includes(r.key)), a.key).toBe(true);
-    }
+  it("open their close-up on the side that shows them", () => {
+    expect(Object.fromEntries(BODY_AREAS.map((a) => [a.key, a.views[0]]))).toEqual({
+      chest: "front",
+      shoulders: "front",
+      arms: "front",
+      back: "back",
+      core: "front",
+      glutes_hips: "back",
+      thighs: "front",
+      calves: "back",
+    });
     expect(areaDef("arms").views).toEqual(["front", "back"]);
-    expect(FRONT.some((r) => r.key === "biceps") && BACK.some((r) => r.key === "triceps")).toBe(true);
   });
 });
 

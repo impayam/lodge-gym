@@ -1,159 +1,187 @@
-// Body-map exercise picker (SPEC-v3 M9b), the "Body" tab of "+ Add exercise":
-//   1. the front and back figures (the muscle map's drawing, no status colours): tap an area, or its chip;
-//   2. the area enlarged, each muscle its own tap target, with large muscle chips and a front/back toggle;
-//   3. the exercises for the chosen muscle: primary first, then "Also works this muscle", with filters;
-//   4. tapping an exercise adds it to the session (the caller's onPick). Back goes list → area → body, and the place
-//      is remembered while the app is open, per session.
+// Body-map exercise picker (SPEC-v3 M9b with the SPEC-v6 3D model), the "Body" tab of "+ Add exercise":
+//   1. the 3D body (lazily loaded, see ../lib/anatomy3d.ts): drag turns it, Front / Back turn it round, a tap lights
+//      up the muscle group on both sides with "Show exercises"; the area chips under it zoom to an area and show its
+//      muscle chips, which open the list directly (the chips do everything the model does, and work without it);
+//   2. the exercises for the chosen muscle: primary first, then "Also works this muscle", with filters;
+//   3. tapping an exercise adds it to the session (the caller's onPick). Back goes list → body, and the place is
+//      remembered while the app is open, per session.
+// Without WebGL 2, or when the model fails or takes over 10 s, only the chips show, with a "3D unavailable" note.
 
-import { useEffect, useState } from "preact/hooks";
-import { BODY_AREAS, areaDef, areaOfMuscle, musclePicks, type BodyArea, type CategoryFilter, type FigureView } from "../../../worker/lib/bodyAreas";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { BODY_AREAS, areaDef, musclePicks, type BodyArea, type CategoryFilter, type FigureView } from "../../../worker/lib/bodyAreas";
 import { CATEGORIES, countsVolume } from "../../../worker/lib/category";
+import type { Muscle } from "../../../worker/lib/muscles";
 import type { Equipment, Exercise, WorkoutSession } from "../../../worker/lib/types";
 import { dayMonth, fmtNum, ytLink } from "../format";
+import type { AnatomyView } from "../lib/anatomy3d";
 import { loadLibrary, useStore } from "../store";
 import { CATEGORY_LABEL, ExerciseThumb, equipmentLabel, muscleLabel } from "../views/Library";
-import { BACK, FRONT, SILHOUETTE, VIEW_H, VIEW_W, mirrorPath, type HalfRegion } from "./bodyMap";
 
 interface Place {
-  step: "body" | "area" | "list";
+  step: "body" | "list";
+  /** Area the model is zoomed to (null: the whole body). */
   area: BodyArea | null;
+  /** Side facing the viewer. */
   view: FigureView;
+  /** Muscle lit up on the model. */
+  selected: Muscle | null;
+  /** Muscle whose exercises the list shows. */
   muscle: string | null;
   equipment: Equipment | "";
   category: CategoryFilter;
 }
 
-const START: Place = { step: "body", area: null, view: "front", muscle: null, equipment: "", category: "counted" };
+const START: Place = { step: "body", area: null, view: "front", selected: null, muscle: null, equipment: "", category: "counted" };
 /** Where the picker was left, per session, while the app stays open. */
 const memory = new Map<string, Place>();
 
-const HALVES: Record<FigureView, HalfRegion[]> = { front: FRONT, back: BACK };
 const EQUIPMENT: Equipment[] = ["barbell", "dumbbell", "cable", "machine", "bodyweight"];
-/** Height of the enlarged area, in CSS pixels. */
-const ZOOM_H = 340;
+/** SPEC-v6 §5: a model that has not loaded after 10 s gives way to the chips. */
+const LOAD_TIMEOUT_MS = 10_000;
 
-/** Bounding box of absolute path data (control points included, so it never cuts a curve). */
-function bbox(ds: string[]) {
-  const n = ds.flatMap((d) => d.match(/-?\d+(\.\d+)?/g)!.map(Number));
-  const xs = n.filter((_, i) => i % 2 === 0);
-  const ys = n.filter((_, i) => i % 2 === 1);
-  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
-}
-
-/** The area's muscles in one view: left-half paths, plus the mirror when the muscle reaches the body's midline. */
-function areaShapes(area: BodyArea, view: FigureView) {
-  const muscles = new Set<string>(areaDef(area).muscles);
-  const half = HALVES[view].filter((r) => muscles.has(r.key));
-  const central = half.length > 0 && bbox(half.map((r) => r.d)).x1 >= 95;
-  return { shapes: central ? half.flatMap((r) => [r, { key: r.key, d: mirrorPath(r.d) }]) : half };
-}
+type Go = (patch: Partial<Place>, scroll?: boolean) => void;
 
 export function BodyPicker({ sessionId, onPick }: { sessionId: string; onPick: (ex: Exercise) => void }) {
   const [place, setPlace] = useState<Place>(() => memory.get(sessionId) ?? START);
-  const go = (patch: Partial<Place>) => {
-    const next = { ...place, ...patch };
-    memory.set(sessionId, next);
-    setPlace(next);
-    window.scrollTo(0, 0);
+  const go: Go = (patch, scroll = true) => {
+    setPlace((prev) => {
+      const next = { ...prev, ...patch };
+      memory.set(sessionId, next);
+      return next;
+    });
+    if (scroll) window.scrollTo(0, 0);
   };
   useEffect(() => {
     void loadLibrary();
   }, []);
 
-  if (place.step === "list" && place.muscle && place.area)
-    return <MuscleList place={place} go={go} onPick={onPick} />;
-  if (place.step === "area" && place.area) return <AreaView place={place} go={go} />;
-  return <BodyStep go={go} />;
+  if (place.step === "list" && place.muscle) return <MuscleList place={place} go={go} onPick={onPick} />;
+  return <BodyStep place={place} go={go} />;
 }
 
-function BodyStep({ go }: { go: (p: Partial<Place>) => void }) {
-  const open = (area: BodyArea, view: FigureView) => go({ step: "area", area, view: areaDef(area).views.includes(view) ? view : areaDef(area).views[0] });
-  const figure = (view: FigureView, title: string) => {
-    const regions = HALVES[view].flatMap((r) => [r, { key: r.key, d: mirrorPath(r.d) }]);
-    return (
-      <figure class="figure">
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label={`${title}: tap a body area`}>
-          <path d={SILHOUETTE} class="body" />
-          {/* A wide invisible stroke under each muscle makes small areas easier to hit. */}
-          {regions.map((r) => (
-            <path d={r.d} class="pick-hit" onClick={() => open(areaOfMuscle(r.key)!, view)} />
-          ))}
-          {regions.map((r) => (
-            <path d={r.d} class="pick-muscle" data-muscle={r.key} data-area={areaOfMuscle(r.key)!} onClick={() => open(areaOfMuscle(r.key)!, view)}>
-              <title>{areaDef(areaOfMuscle(r.key)!).label}</title>
-            </path>
-          ))}
-        </svg>
-        <figcaption>{title}</figcaption>
-      </figure>
-    );
+const accentColor = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0f6e5f";
+
+function BodyStep({ place, go }: { place: Place; go: Go }) {
+  const host = useRef<HTMLDivElement>(null);
+  const view3d = useRef<AnatomyView | null>(null);
+  const [mode, setMode] = useState<"loading" | "3d" | "fallback">("loading");
+  const placeRef = useRef(place);
+  placeRef.current = place;
+
+  useEffect(() => {
+    const openedAt = performance.now();
+    let view: AnatomyView | null = null;
+    let gone = false;
+    const timer = window.setTimeout(() => {
+      gone = true;
+      setMode("fallback");
+    }, LOAD_TIMEOUT_MS);
+    import("../lib/anatomy3d")
+      .then((m) =>
+        m.AnatomyView.create(host.current!, {
+          onSelect: (muscle) => go({ selected: muscle }, false),
+          onFacing: (v) => go({ view: v }, false),
+          accent: accentColor(),
+          openedAt,
+        })
+      )
+      .then((v) => {
+        view = v;
+        if (gone) return v.dispose();
+        clearTimeout(timer);
+        const p = placeRef.current;
+        v.setArea(p.area, p.view, false);
+        v.select(p.selected);
+        view3d.current = v;
+        setMode("3d");
+      })
+      .catch(() => {
+        if (gone) return;
+        gone = true;
+        clearTimeout(timer);
+        setMode("fallback");
+      });
+    return () => {
+      gone = true;
+      clearTimeout(timer);
+      view?.dispose();
+      view3d.current = null;
+    };
+  }, []);
+
+  const chooseArea = (area: BodyArea | null) => {
+    // An area's close-up opens on its first side (the camera preset's side, ../lib/anatomy-camera.ts).
+    const view = area ? areaDef(area).views[0] : place.view;
+    const selected = area && place.selected && !areaDef(area).muscles.includes(place.selected) ? null : place.selected;
+    go({ area, view, selected }, false);
+    view3d.current?.setArea(area, view);
+    view3d.current?.select(selected);
   };
+  const turn = (view: FigureView) => {
+    go({ view }, false);
+    view3d.current?.setView(view);
+  };
+  const def = place.area ? areaDef(place.area) : null;
+
+  const sides =
+    mode === "3d" ? (
+      <span class="seg anatomy-sides" role="group" aria-label="Side">
+        {(["front", "back"] as const).map((v) => (
+          <button type="button" aria-pressed={place.view === v} data-testid={`view-${v}`} onClick={() => turn(v)}>
+            {v === "front" ? "Front" : "Back"}
+          </button>
+        ))}
+      </span>
+    ) : null;
+  const back = def ? (
+    <button type="button" class="btn btn-small anatomy-back" data-testid="pick-back" onClick={() => chooseArea(null)}>
+      ← Body
+    </button>
+  ) : null;
+
   return (
-    <div class="stack bodypick" data-testid="body-step">
-      <div class="why">Tap a body area, or pick one below.</div>
-      <div class="figures">
-        {figure("front", "Front")}
-        {figure("back", "Back")}
-      </div>
-      <div class="bigchips" role="group" aria-label="Body areas">
+    <div class="stack bodypick" data-testid="body-step" data-area={place.area ?? ""} data-mode={mode}>
+      {mode === "fallback" ? (
+        <>
+          <div class="anatomy-off" data-testid="anatomy-fallback">
+            3D unavailable. Pick an area, then a muscle.
+          </div>
+          {back ? <div class="kv navrow">{back}</div> : null}
+        </>
+      ) : (
+        <div class="anatomy" data-testid="anatomy">
+          <div class="anatomy-canvas" ref={host} />
+          {mode === "loading" ? <div class="anatomy-msg">Loading the 3D body…</div> : null}
+          <div class="anatomy-top">
+            {back ?? (mode === "3d" ? <span class="anatomy-hint">Drag to turn. Tap a muscle.</span> : <span />)}
+            {sides}
+          </div>
+          {mode === "3d" && place.selected ? (
+            <div class="anatomy-pick" data-testid="anatomy-selection" data-muscle={place.selected}>
+              <b>{muscleLabel(place.selected)}</b>
+              <button type="button" class="btn btn-primary btn-small" data-testid="show-exercises" onClick={() => go({ step: "list", muscle: place.selected })}>
+                Show exercises
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
+      <div class="chiprow" role="group" aria-label="Body areas">
         {BODY_AREAS.map((a) => (
-          <button type="button" class="bigchip" data-testid={`area-${a.key}`} onClick={() => go({ step: "area", area: a.key, view: a.views[0] })}>
+          <button type="button" class="bigchip" aria-pressed={place.area === a.key} data-testid={`area-${a.key}`} onClick={() => chooseArea(place.area === a.key ? null : a.key)}>
             {a.label}
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-function AreaView({ place, go }: { place: Place; go: (p: Partial<Place>) => void }) {
-  const def = areaDef(place.area!);
-  const view = place.view;
-  const { shapes } = areaShapes(def.key, view);
-  const box = bbox(shapes.map((r) => r.d));
-  const pad = 8;
-  const vb = { x: Math.max(0, box.x0 - pad), y: Math.max(0, box.y0 - pad), w: 0, h: 0 };
-  vb.w = Math.min(VIEW_W, box.x1 + pad) - vb.x;
-  vb.h = Math.min(VIEW_H, box.y1 + pad) - vb.y;
-  // The rest of the figure stays as faint context.
-  const context = HALVES[view].flatMap((r) => [r, { key: r.key, d: mirrorPath(r.d) }]).filter((r) => !def.muscles.includes(r.key));
-  const pickMuscle = (m: string) => go({ step: "list", muscle: m });
-  return (
-    <div class="stack bodypick" data-testid="area-step" data-area={def.key}>
-      <div class="kv navrow">
-        <button type="button" class="btn btn-ghost btn-small" data-testid="pick-back" onClick={() => go({ step: "body" })}>
-          ← Body
-        </button>
-        {def.views.length > 1 ? (
-          <span class="seg" role="group" aria-label="Side">
-            {def.views.map((v) => (
-              <button type="button" aria-pressed={view === v} data-testid={`view-${v}`} onClick={() => go({ view: v })}>
-                {v === "front" ? "Front" : "Back"}
-              </button>
-            ))}
-          </span>
-        ) : null}
-      </div>
-      <h2 style={{ margin: 0 }}>{def.label}</h2>
-      {/* The drawing box has the zoomed area's own proportions, at most 340 px tall, so nothing else shows beside it. */}
-      <svg class="zoom" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{ width: `min(100%, ${Math.round((ZOOM_H * vb.w) / vb.h)}px)`, aspectRatio: `${vb.w} / ${vb.h}` }} role="img" aria-label={`${def.label}, ${view === "front" ? "front" : "back"}: tap a muscle`}>
-        <path d={SILHOUETTE} class="body" />
-        {context.map((r) => (
-          <path d={r.d} class="pick-context" />
-        ))}
-        {shapes.map((r) => (
-          <path d={r.d} class="pick-muscle on" data-muscle={r.key} onClick={() => pickMuscle(r.key)}>
-            <title>{muscleLabel(r.key)}</title>
-          </path>
-        ))}
-      </svg>
-      <div class="bigchips" role="group" aria-label={`${def.label} muscles`}>
-        {def.muscles.map((m) => (
-          <button type="button" class="bigchip" data-testid={`muscle-${m}`} onClick={() => pickMuscle(m)}>
-            {muscleLabel(m)}
-          </button>
-        ))}
-      </div>
+      {def ? (
+        <div class="bigchips" role="group" aria-label={`${def.label} muscles`}>
+          {def.muscles.map((m) => (
+            <button type="button" class="bigchip" data-testid={`muscle-${m}`} onClick={() => go({ step: "list", muscle: m, selected: m })}>
+              {muscleLabel(m)}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -182,12 +210,11 @@ function lastDone(sessions: Record<string, WorkoutSession>) {
   return out;
 }
 
-function MuscleList({ place, go, onPick }: { place: Place; go: (p: Partial<Place>) => void; onPick: (ex: Exercise) => void }) {
+function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: Exercise) => void }) {
   const boot = useStore((s) => s.boot)!;
   const library = useStore((s) => s.library);
   const sessions = useStore((s) => s.sessions);
   const muscle = place.muscle!;
-  const def = areaDef(place.area!);
   const last = lastDone(sessions);
   const programIds = new Set(boot.program.days.flatMap((d) => d.exercises.map((x) => x.exercise_id)));
   const all = library ?? boot.exercises;
@@ -221,8 +248,8 @@ function MuscleList({ place, go, onPick }: { place: Place; go: (p: Partial<Place
   return (
     <div class="stack bodypick" data-testid="muscle-step" data-muscle={muscle}>
       <div class="kv navrow">
-        <button type="button" class="btn btn-ghost btn-small" data-testid="pick-back" onClick={() => go({ step: "area" })}>
-          ← {def.label}
+        <button type="button" class="btn btn-ghost btn-small" data-testid="pick-back" onClick={() => go({ step: "body" })}>
+          ← {place.area ? areaDef(place.area).label : "Body"}
         </button>
       </div>
       <h2 style={{ margin: 0 }}>{muscleLabel(muscle)}</h2>
