@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { isValidTimeZone } from "../../../worker/lib/time";
 import type { ProgramInfo, Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
-import { dateLong, dateShort, fmtNum } from "../format";
+import { dateLong, fmtNum, instantShort } from "../format";
 import { activeProgramInfo, programName, styleLabel } from "../model";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
@@ -147,7 +147,7 @@ function ProgramSettings() {
         <span>Current program</span>
         <span>
           {programName(info, boot.program.name)}
-          {since ? ` · since ${dateShort(since.slice(0, 10))}` : ""}
+          {since ? ` · since ${instantShort(since, boot.settings.timezone)}` : ""}
         </span>
       </div>
       <div class="kv">
@@ -165,7 +165,7 @@ function ProgramSettings() {
               <span>
                 {d.name}
                 <br />
-                <small>Saved {dateShort(d.created_at.slice(0, 10))}</small>
+                <small>Saved {instantShort(d.created_at, boot.settings.timezone)}</small>
               </span>
               <span aria-hidden="true">→</span>
             </button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ProgramInfo, WorkoutSession } from "../../../worker/lib/types";
 import { errorText } from "../api";
-import { dateShort, monthLabel, plural } from "../format";
+import { instantShort, monthLabel, plural } from "../format";
 import { activeSession, programName, recentSwitch, sortedSessions, styleLabel } from "../model";
 import { flash, loadAllHistory, switchProgram, useStore } from "../store";
 import { HistoryItem } from "./HistoryItem";
@@ -80,7 +80,7 @@ function Timeline({ programs }: { programs: ProgramInfo[] }) {
   const switchedAt = recentSwitch(boot);
   const open = activeSession(sessions);
   const tz = boot.settings.timezone;
-  const day = (iso: string) => dateShort(new Date(iso).toLocaleDateString("en-CA", { timeZone: tz }));
+  const day = (iso: string) => instantShort(iso, tz);
 
   const activate = async (p: ProgramInfo) => {
     setBusy(true);
@@ -114,13 +114,13 @@ function Timeline({ programs }: { programs: ProgramInfo[] }) {
               </span>
               {p.status === "archived" && armed !== p.id ? (
                 <button type="button" class="btn btn-ghost btn-small" data-testid="reactivate" onClick={() => setArmed(p.id)}>
-                  Switch back
+                  {p.activations.length ? "Switch back" : "Use this program"}
                 </button>
               ) : null}
             </div>
             {armed === p.id ? (
               <div class="stack tl-confirm" data-testid="reactivate-confirm">
-                <div class="why">“{programName(p)}” becomes your program again from the next session. Your history stays as it is.</div>
+                <div class="why">“{programName(p)}” becomes your program{p.activations.length ? " again" : ""} from the next session. Your history stays as it is.</div>
                 {switchedAt ? (
                   <div class="ss-note" data-testid="switch-notice">
                     You last switched programs on {day(switchedAt)}. Switching more than once in 3 weeks makes progress hard to judge.
@@ -129,7 +129,7 @@ function Timeline({ programs }: { programs: ProgramInfo[] }) {
                 {open ? <div class="ss-note">Finish or delete the open session first.</div> : null}
                 <div class="row">
                   <button type="button" class="btn btn-primary" data-testid="reactivate-yes" disabled={busy || !!open} onClick={() => void activate(p)}>
-                    {busy ? "Working…" : "Yes, switch back"}
+                    {busy ? "Working…" : p.activations.length ? "Yes, switch back" : "Yes, use it"}
                   </button>
                   <button type="button" class="btn btn-ghost" onClick={() => setArmed(null)}>
                     Cancel

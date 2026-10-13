@@ -47,7 +47,7 @@ const EQUIPMENT: [Exercise["equipment"], string][] = [
   ["machine", "Machine"],
   ["bodyweight", "Bodyweight"],
 ];
-const equipmentLabel = (e: string) => EQUIPMENT.find(([k]) => k === e)?.[1] ?? e;
+export const equipmentLabel = (e: string) => EQUIPMENT.find(([k]) => k === e)?.[1] ?? e;
 
 export const PATTERN_LABEL: Record<Pattern, string> = {
   squat: "Squat",

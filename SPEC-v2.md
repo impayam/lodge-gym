@@ -178,7 +178,7 @@ UPDATE exercises SET category = 'strength'
    - RIR-based progression.
    - Increments: upper +5 lb, lower +10 lb, dumbbell +5 lb.
    - No more than 2 training days in a row for full-body styles.
-   - A light week every 6–8 weeks.
+   - **[DECIDED 2026-10-12]** The automatic light week every 6–8 weeks is dropped: no tracker, no reminder. Payam reduces sets himself when tired, by editing sets in the session.
 
 ### 8.2 Generator inputs (Settings → Program → "New program")
 
@@ -194,7 +194,7 @@ UPDATE exercises SET category = 'strength'
 - `session_minutes`: 45 | 60 | 75 | 90
 - `priority_muscles`: multi-select. The default comes from the current program: chest.
 - `avoid`: exercises to exclude, for example after an injury.
-- `equipment`: full gym (default), dumbbells only, or bodyweight.
+- `equipment`: full gym (default) or dumbbells only. **[DECIDED 2026-10-12]** No bodyweight-only choice: the library has no bodyweight rear-delt exercise and no bodyweight compound hinge, so such a week could never meet the hard rules.
 
 ### 8.3 Style rules
 
@@ -210,26 +210,27 @@ UPDATE exercises SET category = 'strength'
 
 ### 8.4 Prescription rules (pure functions, unit-tested)
 
-**Weekly volume per muscle**
+**Weekly volume per muscle [DECIDED 2026-10-12]**
 
-- Start from the approved targets in SPEC §6:
+- Base: the current program's own fractional volume (the T2 targets of §7.4). For the seed program:
 
   | Muscle | Sets per week |
   |---|---|
   | Chest | 13 |
-  | Back | 13 |
-  | Quads | 10 |
-  | Hamstrings/glutes | 9 |
-  | Shoulders | 9 |
-  | Rear delts | 6 |
+  | Back | 17.5 |
+  | Quads | 11.5 |
+  | Hamstrings/glutes | 14 |
+  | Shoulders | 15.5 |
+  | Rear delts | 11 |
   | Calves | 6 |
   | Core | 6 |
-  | Biceps | 3 |
-  | Triceps | 3 |
+  | Biceps | 9.5 |
+  | Triceps | 9.5 |
 
-- Each priority muscle gets +3 sets.
+- A priority muscle gets +3 sets only when it is added beyond the current program's priorities (the seed program's chest priority is already in its volume).
 - Floor: 10 sets for chest, back, quads and hamstrings/glutes.
-- Volume is counted fractionally, per §7.4.
+- Volume is counted fractionally, per §7.4. Only strength, powerlifting and olympic weightlifting work counts.
+- Snapshot check: with Payam's inputs the generated volume per muscle is within ±2 sets of the current program.
 
 **Per-session cap [DECIDED]**
 
@@ -257,6 +258,12 @@ Supersets only pair non-competing muscles, for example lateral raise with face p
 | Secondary compound | 3 × 6–10 | 1–3 |
 | Accessory | 2–3 × 8–12 | 1–2 |
 | Isolation | 2–3 × 10–15 | 0–2 |
+
+**Hard rules and warnings [DECIDED 2026-10-12]**
+
+- Hard rules block approval: the recovery constraints below, the per-session cap, pull ≥ push, rear delts ≥ 6, at least one hinge and one squat, one role per exercise, and every set count inside its slot's range.
+- Soft warnings do not: a floor not reached, a muscle under 80 % or over 120 % of its target, a session longer than `session_minutes`, and the frequency warnings.
+- Floors are reachable at 60 minutes or longer for full body 3 and 4 days, upper/lower 4, PPL 6, PPL + upper/lower 5 and strength 3 and 4. Styles that train a muscle once a week (bro split, PPL 3, upper/lower 2), full body 2 days and most 45-minute weeks can end under a floor (the per-session cap of 10 and whole sets); the proposal then shows the floor warning.
 
 **Recovery constraints (hard rules)**
 
@@ -287,14 +294,29 @@ Supersets only pair non-competing muscles, for example lateral raise with face p
   3. Compound movements
   4. Library exercises at `level` beginner or intermediate
 - Deterministic tie-break by seed.
+- **[DECIDED 2026-10-12]** One role per exercise in a week: an exercise repeats across days only in the same slot and rep range, so its progression stays one.
+- **[DECIDED 2026-10-12]** Explosive Olympic-style lifts (cleans, snatches, jerks, push press and their variants, and the olympic weightlifting category) are never picked automatically. Payam can still swap them in; they still count toward volume.
 
-### 8.5 Safe transition (injury prevention)
+**Weekly layouts**
 
-- **Week 1 of any new program is the intro week.** Sets are about 30% lower and RIR is 3–4.
+Each style has a fixed week: which days train and which main and secondary lifts each day carries (`worker/lib/generator/model.ts`). The layouts meet the recovery constraints by construction. Days of a 7-day week, 0 = the first training day:
+
+| Style | Days | Training days |
+|---|---|---|
+| full_body | 2 / 3 / 4 | 0, 3 / 0, 2, 4 / 0, 1, 3, 4 |
+| upper_lower | 2 / 4 | 0, 3 / 0, 1, 3, 4 |
+| ppl | 3 / 6 | 0, 2, 4 / 0–5 |
+| ppl_ul | 5 | 0, 1, 2, 4, 5 |
+| bro_split | 5 | 0–4 |
+| strength | 3 / 4 | 0, 2, 4 / 0, 1, 3, 4 |
+
+### 8.5 Safe transition (injury prevention) [DECIDED 2026-10-12]
+
+- **No intro week.** New programs start at full planned volume and the normal target RIR from the first session.
 - **Starting loads:**
-  - Exercises with history: 90% of the last working weight, rounded to the plate increment.
-  - Exercises without history: no number suggested. The first session asks for an easy weight at RIR 3–4, and progression starts from there.
-- **Deload:** a light week every 6–8 weeks continues across program switches. The counter does not reset on a switch.
+  - Exercises with history: 100 % of the last working weight, then the normal progression. An exercise that keeps its id across programs (for example bench press) simply continues.
+  - Exercises without history: no weight is suggested; Payam chooses it.
+- **No light week.** No tracker, no reminder; Payam reduces sets himself when tired.
 - **Too many switches:** if Payam switches more than once in 3 weeks, the app shows a notice. It does not block the switch.
 
 ### 8.6 Flow
@@ -308,8 +330,10 @@ Supersets only pair non-competing muscles, for example lateral raise with face p
    - Swap any exercise for one with the same pattern and primary muscle, picked from the library.
    - Change sets within the allowed range.
    - Validation re-runs after every edit. Hard-rule violations block approval; soft warnings do not.
-4. **Approve program:**
-   - The new program becomes active and the old one is archived.
+4. **Approve program** (or save it as a draft under Settings → Program and approve later):
+   - The server checks the hard rules again before approving.
+   - The new program becomes active and the old one is archived; its activation ends and a new one starts.
+   - No session may be open when approving: finish or delete it first.
    - Starting points for weekly targets, adherence and the muscle map:
      - The new program's targets apply from the next session.
      - Past weeks stay scored against the program that was active then.
@@ -336,6 +360,10 @@ ALTER TABLE day_exercises ADD COLUMN slot TEXT;       -- 'main'|'secondary'|'acc
 ```
 
 - The current program is backfilled with `style = 'seed_full_body'`, `generated_by = 'seed'`, and one activation starting at its `created_at`.
+- As applied: `program_activations.program_id` references `programs (id)` with an index on `(program_id, started_at)`; the archived upper/lower seed program gets `style = 'seed_upper_lower'` and `archived_at`.
+- **[DECIDED 2026-10-12]** The seed loader is insert-only (`INSERT OR IGNORE`): a deploy adds missing seed rows and never changes `programs.active`, `archived_at`, `approved_at`, activations or any row the app can change. The active program is owned by the app.
+- A generated program's day names, kinds and suggested days come from its style's layout; reps, rest, target RIR and set ranges come from each exercise's slot. The draft API takes only the exercise, slot, sets and superset tag per exercise.
+- Reports score each week against the program active at the week's end (adherence uses its days per week); old sessions keep their day names through the archived program's days. The backup export includes every program with its days and activations.
 - **API additions:**
   - `POST /api/programs/generate`: returns a proposal and stores nothing.
   - `POST /api/programs`: saves an edited proposal as a draft.
@@ -346,11 +374,12 @@ ALTER TABLE day_exercises ADD COLUMN slot TEXT;       -- 'main'|'secondary'|'acc
 
 ### 8.8 Tests (minimum)
 
-- **Property tests**, for every allowed style × day combination and 50 random seeds, check that:
+- **Property tests**, for every allowed style × day combination, both equipment choices, every session length and 50 seeds, check that:
   - No hard rule is violated.
-  - Every major muscle is ≥ its floor.
+  - Every major muscle is ≥ its floor where the floor is reachable (§8.4); elsewhere a floor miss shows as a warning.
   - Pull sets are ≥ push sets.
   - Each day fits `session_minutes`.
+  - No Olympic-style lift is picked and no exercise has two roles.
 - **Snapshot test:** the generator with Payam's inputs (4 days, full_body, 60 min, priority chest) produces a program within ±2 sets per muscle of the current approved program.
 - **E2E:**
   1. Generate a program, swap an exercise, approve it.
@@ -374,3 +403,4 @@ ALTER TABLE day_exercises ADD COLUMN slot TEXT;       -- 'main'|'secondary'|'acc
 9. Claude Code merges each milestone to `main` once it is green, then verifies the production deploy and migrations.
 4. Secondary muscles count as 0.5 set (fractional).
 5. Per-session cap: 10 fractional sets per muscle.
+10. M8 (2026-10-12): migration 0006 approved; insert-only seed loader; no light week; no intro week; starting loads at 100 % of the last working weight and no suggestion without history; weekly targets from the current program's T2 volume with +3 only for added priorities and floors of 10; floors are warnings where unreachable; no bodyweight-only equipment; one role per exercise; Olympic-style lifts never auto-picked.

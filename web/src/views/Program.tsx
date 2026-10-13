@@ -1,5 +1,5 @@
 import type { DayExercise } from "../../../worker/lib/types";
-import { dateShort, fmtNum, ytLink } from "../format";
+import { fmtNum, instantShort, ytLink } from "../format";
 import { activeProgramInfo, exerciseMap, programName, styleLabel } from "../model";
 import { openProgramEditor, useStore } from "../store";
 
@@ -61,7 +61,11 @@ export function Program() {
   return (
     <>
       <h2 data-testid="program-name">
-        {programName(info, boot.program.name)} <small>· {styleLabel(info?.style ?? null)}{since ? ` · since ${dateShort(since.slice(0, 10))}` : ""}</small>
+        {programName(info, boot.program.name)}{" "}
+        <small>
+          {info?.generated_by === "generator" ? "" : "· original program "}
+          {since ? `· since ${instantShort(since, boot.settings.timezone)}` : ""}
+        </small>
       </h2>
       <div class="card">
         <ul class="rules" data-testid="program-rules">

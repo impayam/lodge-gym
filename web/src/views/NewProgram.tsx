@@ -34,10 +34,10 @@ import { TARGET_GROUPS } from "../../../worker/lib/muscles";
 import type { Exercise } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
-import { dateShort, fmtNum, plural } from "../format";
+import { fmtNum, instantShort, plural } from "../format";
 import { activeProgramInfo, activeSession, programName, recentSwitch } from "../model";
 import { allExercises, flash, generateProposal, loadLibrary, loadProgramVersions, navigate, saveProgramDraft, switchProgram, useStore } from "../store";
-import { ExerciseThumb } from "./Library";
+import { ExerciseThumb, equipmentLabel } from "./Library";
 import { rirText, targetText } from "./Program";
 
 const SLOT_LABEL: Readonly<Record<Slot, string>> = { main: "Main", secondary: "Secondary", accessory: "Accessory", isolation: "Isolation", core: "Core" };
@@ -318,7 +318,7 @@ export function NewProgram() {
                             <span class="meta">
                               <b>{a.name_en}</b>
                               <small>
-                                {a.equipment}
+                                {equipmentLabel(a.equipment)}
                                 {historyIds.has(a.id) ? " · you have done this" : ""}
                               </small>
                             </span>
@@ -375,7 +375,7 @@ export function NewProgram() {
           </div>
           {switchedAt ? (
             <div class="ss-note" data-testid="np-switch-notice">
-              You last switched programs on {dateShort(switchedAt.slice(0, 10))}. Switching more than once in 3 weeks makes progress hard to judge.
+              You last switched programs on {instantShort(switchedAt, boot.settings.timezone)}. Switching more than once in 3 weeks makes progress hard to judge.
             </div>
           ) : null}
           {openSession ? <div class="ss-note">Finish or delete the open session first.</div> : null}

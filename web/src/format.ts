@@ -1,7 +1,7 @@
 // Display helpers: Gregorian dates, Latin digits, clocks.
 
 import { fmtNum } from "../../worker/lib/digits";
-import { localHM } from "../../worker/lib/time";
+import { localDate, localHM } from "../../worker/lib/time";
 
 const atNoon = (date: string) => {
   const [y, m, d] = date.split("-").map(Number);
@@ -18,6 +18,8 @@ const monthFmt = fmt({ month: "long", year: "numeric" });
 export const dateLong = (date: string) => longFmt.format(atNoon(date));
 /** "Mon, Oct 12" */
 export const dateShort = (date: string) => shortFmt.format(atNoon(date));
+/** "Mon, Oct 12" for an ISO instant, on the local calendar of `tz`. */
+export const instantShort = (iso: string, tz: string) => shortFmt.format(atNoon(localDate(tz, iso)));
 /** "Oct 12" */
 export const dayMonth = (date: string) => dayMonthFmt.format(atNoon(date));
 /** "October 2026" */
