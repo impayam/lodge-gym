@@ -468,7 +468,23 @@ export function Library() {
 const pickerTab = new Map<string, "body" | "search">();
 
 /** Full-screen picker for "+ Add exercise" inside a session: the body map (default) or search. */
-export function ExercisePicker({ sessionId, onPick, onCancel }: { sessionId: string; onPick: (ex: Exercise) => void; onCancel: () => void }) {
+/**
+ * "+ Add exercise" in a session, and Add / Replace in the session planner (SPEC-v3 M9c).
+ * @param sessionId keys the remembered tab and body-picker place (a session or a plan id).
+ */
+export function ExercisePicker({
+  sessionId,
+  onPick,
+  onCancel,
+  title = "Add an exercise",
+  note = "It is added to this session only, with 3 empty sets. Your program does not change.",
+}: {
+  sessionId: string;
+  onPick: (ex: Exercise) => void;
+  onCancel: () => void;
+  title?: string;
+  note?: string;
+}) {
   const [tab, setTab] = useState<"body" | "search">(() => pickerTab.get(sessionId) ?? "body");
   const choose = (t: "body" | "search") => {
     pickerTab.set(sessionId, t);
@@ -479,7 +495,7 @@ export function ExercisePicker({ sessionId, onPick, onCancel }: { sessionId: str
   return (
     <section class="stack" data-testid="exercise-picker">
       <div class="kv navrow">
-        <h2 style={{ margin: 0 }}>Add an exercise</h2>
+        <h2 style={{ margin: 0 }}>{title}</h2>
         <button type="button" class="linkbtn" onClick={onCancel}>
           Cancel
         </button>
@@ -497,7 +513,7 @@ export function ExercisePicker({ sessionId, onPick, onCancel }: { sessionId: str
         ))}
       </span>
       <p class="why" style={{ margin: 0 }}>
-        It is added to this session only, with 3 empty sets. Your program does not change.
+        {note}
       </p>
       {tab === "body" ? <BodyPicker sessionId={sessionId} onPick={onPick} /> : <ExerciseList onOpen={onPick} />}
     </section>

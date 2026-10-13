@@ -1,9 +1,11 @@
-// IndexedDB: offline copy of bootstrap data and sessions, plus the outbox of pending writes.
+// IndexedDB: offline copy of bootstrap data, sessions and session plans, plus the outbox of pending writes.
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { SessionPlan } from "../../worker/lib/plan";
 import type { Bootstrap, Photo, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 
-export type BootData = Omit<Bootstrap, "sessions" | "server_time">;
+/** The cached bootstrap; plans live in their own store (a bootstrap cached before M9c has none). */
+export type BootData = Omit<Bootstrap, "sessions" | "server_time" | "plans">;
 
 export type OutboxEntry =
   | { key: string; op: "put_session"; id: string; rev: number; queued_at: string }
@@ -11,23 +13,29 @@ export type OutboxEntry =
   | { key: string; op: "settings"; patch: Partial<Settings>; rev: number; queued_at: string }
   | { key: string; op: "body_mass"; date: string; value: number | null; unit: Unit; rev: number; queued_at: string }
   | { key: string; op: "photo"; photo: Photo; full: Blob; thumb: Blob; rev: number; queued_at: string }
-  | { key: string; op: "delete_photo"; id: string; rev: number; queued_at: string };
+  | { key: string; op: "delete_photo"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "put_plan"; id: string; rev: number; queued_at: string };
 
 interface Schema extends DBSchema {
   kv: { key: string; value: unknown };
   sessions: { key: string; value: WorkoutSession };
   outbox: { key: string; value: OutboxEntry };
+  plans: { key: string; value: SessionPlan };
 }
 
 let dbp: Promise<IDBPDatabase<Schema>> | null = null;
 
 export function db() {
   if (!dbp) {
-    dbp = openDB<Schema>("lodge-gym", 1, {
-      upgrade(d) {
-        d.createObjectStore("kv");
-        d.createObjectStore("sessions", { keyPath: "id" });
-        d.createObjectStore("outbox", { keyPath: "key" });
+    dbp = openDB<Schema>("lodge-gym", 2, {
+      upgrade(d, oldVersion) {
+        if (oldVersion < 1) {
+          d.createObjectStore("kv");
+          d.createObjectStore("sessions", { keyPath: "id" });
+          d.createObjectStore("outbox", { keyPath: "key" });
+        }
+        // Version 2 (SPEC-v3 M9c): session plans.
+        if (oldVersion < 2) d.createObjectStore("plans", { keyPath: "id" });
       },
     });
   }
@@ -56,6 +64,17 @@ export async function putSessions(list: WorkoutSession[], remove: string[]) {
 }
 export async function deleteSession(id: string) {
   await (await db()).delete("sessions", id);
+}
+
+export async function allPlans(): Promise<SessionPlan[]> {
+  return (await db()).getAll("plans");
+}
+export async function putPlan(p: SessionPlan) {
+  await (await db()).put("plans", p);
+}
+export async function putPlans(list: SessionPlan[], remove: string[]) {
+  const tx = (await db()).transaction("plans", "readwrite");
+  await Promise.all([...list.map((p) => tx.store.put(p)), ...remove.map((id) => tx.store.delete(id)), tx.done]);
 }
 
 export async function outboxAll(): Promise<OutboxEntry[]> {

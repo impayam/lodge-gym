@@ -1,20 +1,24 @@
 import { daysBetween } from "../../../worker/lib/time";
 import type { ProgramDay } from "../../../worker/lib/types";
 import { dateShort, fmtNum, hm, plural } from "../format";
-import { activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession } from "../model";
-import { navigate, saveSession, today, useStore } from "../store";
+import { liveItems, planMinutes } from "../../../worker/lib/plan";
+import { activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession, openPlanFor, plannedLabel } from "../model";
+import { navigate, openPlan, saveSession, today, useStore } from "../store";
+import { planDay } from "./Planner";
 import { HistoryItem } from "./HistoryItem";
 import { WeeklyReviewCard } from "./Review";
 
 export function Home() {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
+  const plans = useStore((s) => s.plans);
   const t = today();
   const m = homeModel(boot, sessions, t);
   const act = activeSession(sessions);
   const days = boot.program.days;
   const next = days.find((d) => d.id === m.next.dayId) ?? days[0];
   const exMap = exerciseMap(boot);
+  const nextPlan = openPlanFor(plans, next.id);
 
   const start = async (day: ProgramDay) => {
     if (act) return navigate("session", act.id);
@@ -49,14 +53,31 @@ export function Home() {
       ) : (
         <section class="card next" data-testid="next-card">
           <div class="why">{why}</div>
-          <div class="big">Next session: {next.name_en}</div>
+          {nextPlan ? (
+            <div class="big" data-testid="planned-label">
+              {plannedLabel(boot, nextPlan)}
+            </div>
+          ) : (
+            <div class="big">Next session: {next.name_en}</div>
+          )}
           <div class="why">
-            {plural(next.exercises.length, "exercise")} · about {fmtNum(next.est_minutes)} min
+            {plural(nextPlan ? liveItems(nextPlan).length : next.exercises.length, "exercise")} · about {fmtNum(nextPlan ? planMinutes(nextPlan, next) : next.est_minutes)} min
           </div>
           {m.rest ? <div class="ss-note">Rest is better today. You trained yesterday and the day before; the program allows at most two training days in a row.</div> : null}
-          <button class="btn btn-primary btn-block" type="button" onClick={() => void start(next)}>
-            Start
-          </button>
+          {nextPlan ? (
+            <button class="btn btn-primary btn-block" type="button" data-testid="open-plan" onClick={() => openPlan(nextPlan.id)}>
+              Open plan
+            </button>
+          ) : (
+            <>
+              <button class="btn btn-primary btn-block" type="button" onClick={() => void start(next)}>
+                Start
+              </button>
+              <button class="btn btn-ghost btn-block" type="button" data-testid="plan-session" onClick={() => planDay(next)}>
+                Plan session
+              </button>
+            </>
+          )}
         </section>
       )}
 
@@ -85,12 +106,16 @@ export function Home() {
         <>
           <h2>Or pick another day</h2>
           <div class="daygrid">
-            {days.map((d) => (
-              <button type="button" class={`dayopt${d.id === next.id ? " is-next" : ""}`} onClick={() => void start(d)}>
-                <b>{d.name_en}</b>
-                <small>{exMap.get(d.exercises[0]?.exercise_id)?.name_en}</small>
-              </button>
-            ))}
+            {days.map((d) => {
+              // A planned day opens its plan (SPEC-v3 M9c); the others start as before.
+              const p = openPlanFor(plans, d.id);
+              return (
+                <button type="button" class={`dayopt${d.id === next.id ? " is-next" : ""}`} onClick={() => (p ? openPlan(p.id) : void start(d))}>
+                  <b>{d.name_en}</b>
+                  <small>{p ? plannedLabel(boot, p, false) : exMap.get(d.exercises[0]?.exercise_id)?.name_en}</small>
+                </button>
+              );
+            })}
           </div>
         </>
       ) : null}

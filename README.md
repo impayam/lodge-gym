@@ -201,6 +201,35 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Without WebGL 2, when the model fails, or after 10 s, the picker shows the chips only with a "3D unavailable" note.
 - `window.__anatomy` is the 3D view's test hook (points on a muscle, picks, lit meshes, GPU memory, load times).
 
+## Session planner, supersets and tri-sets (SPEC-v3 M9c, without AI)
+
+- Home → next-day card → **Plan session** opens a plan copied from the program day (exercises, order, sets, reps,
+  per-leg, RIR target, rest; the day's supersets become groups). In the planner: Replace (body picker or search; the
+  slot keeps its sets, reps, rest and RIR), Add (3 × 8–12, 90 s, no RIR target), Remove (soft delete), reorder (drag
+  handle, plus Move up / Move down), sets/reps/rest. An exercise appears once per plan. **Save** stores it (offline
+  through the outbox); Home shows "Planned: Day 1 · Chest (edited)" and a planned day in "Or pick another day" opens
+  its plan. **Start session** turns the plan into the session (same id; timed from that tap, dated today).
+  **Discard plan** keeps the plan as `discarded` and the day goes back to the program default. **Apply to program**
+  (after a confirm) makes a new program version with this day as planned (M8 versioning; groups stored as
+  `superset_tag`); the old version is archived, and the open plan follows its day into the new version.
+- Time estimate ("6 exercises · about 60 min" on Home and in the planner): the program day's own estimate, moved by
+  what the plan's edits add or save under the SPEC-v2 §8.4 rule (rest + 40 s per set); in a group, 40 s per set and the
+  group's rest once per round, a longer member's extra sets with their own rest. An unedited plan shows the day's
+  estimate; Apply to program stores the plan's estimate on the new version's day.
+- Groups: select 2 or 3 exercises and tap Group (any exercises, same muscle included; no warning). Members stay
+  adjacent, labelled A1/A2/A3, then B1/B2…; a group moves as a whole and its members reorder inside it; Ungroup keeps
+  the order. Rest after a round defaults to the longest member rest and can be edited per group.
+- In a session: groups (the plan's, or the day's own A1/A2 supersets) show with a bracket; a round is set N of each
+  member: no timer inside the round (the next member's set comes into view), the group's rest after its last set;
+  extra sets of a longer member are done alone with their own rest. "Reorder / group" reorders, groups and removes
+  exercises; an exercise with a done set can't be removed (uncheck it first), and "− Remove set" only removes undone
+  sets. A session started without a plan gets a started plan with its own id on the first such edit.
+- Sync: a plan the server has not seen yet is created from the day and then takes the phone's item list, even when
+  that list was edited offline earlier; after that the last writer wins on `updated_at`. Reports, the weekly review and
+  the muscle map read only workout sessions, so a plan counts nowhere until it is started.
+- Code: plan operations `worker/lib/plan.ts` (pure, unit-tested), API `worker/plans.ts`, planner `web/src/views/Planner.tsx`,
+  shared list `web/src/components/PlanList.tsx`.
+
 ## Artwork and credits
 
 - Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
@@ -230,3 +259,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `POST /api/programs/:id/approve`, `POST /api/programs/:id/activate`, `GET /api/programs`; migration
   `0006_program_styles.sql`; `programs` in `/api/bootstrap` and in the backup export; the weekly report names the
   program it is scored against.
+- Session planner (SPEC-v3 M9c, data option A approved 2026-10-13): migration `0008_planned_sessions.sql` (tables
+  `planned_sessions` and `session_plan_items`, with `per_leg` and `target_rir_min/max` added to the SPEC draft);
+  `POST /api/sessions/plan`, `PUT /api/sessions/:id/plan-items`, `POST /api/sessions/:id/start`,
+  `POST /api/sessions/:id/apply-to-program`; `plans` in `/api/bootstrap` and in the backup export; programs may have
+  `generated_by = 'session'`.

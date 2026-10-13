@@ -4,13 +4,14 @@ import { Hono } from "hono";
 import { mapExercise, readBodyMetrics, readProgramVersions, readSessions, readSettings } from "./data";
 import type { AppBindings, Env } from "./env";
 import { fail, nowISO } from "./http";
+import { readAllPlans } from "./plans";
 import { localDate } from "./lib/time";
 
 export const BACKUP_PREFIX = "backups/";
 export const BACKUPS_KEPT = 12;
 
 export async function buildExport(env: Env) {
-  const [settings, sessions, health, body, photos, custom, programs] = await Promise.all([
+  const [settings, sessions, health, body, photos, custom, programs, plans] = await Promise.all([
     readSettings(env),
     readSessions(env, "0000-01-01", "9999-12-31"),
     env.DB.prepare(
@@ -20,6 +21,7 @@ export async function buildExport(env: Env) {
     env.DB.prepare("SELECT id, session_id, local_date, pose, width, height, bytes, created_at FROM photos ORDER BY local_date, created_at").all(),
     env.DB.prepare("SELECT * FROM exercises WHERE source = 'custom' ORDER BY id").all<Record<string, unknown>>(),
     readProgramVersions(env),
+    readAllPlans(env),
   ]);
   return {
     app: "lodge-gym",
@@ -34,6 +36,8 @@ export async function buildExport(env: Env) {
     custom_exercises: custom.results.map(mapExercise),
     /** Every program with its days, exercises and activations (SPEC-v2 M8): sessions refer to their days. */
     programs,
+    /** Session plans with their items, removed and discarded ones included (SPEC-v3 M9c). */
+    plans,
   };
 }
 

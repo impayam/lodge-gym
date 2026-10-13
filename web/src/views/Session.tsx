@@ -7,8 +7,26 @@ import { ulid } from "../../../worker/lib/ulid";
 import { IconCheck } from "../components/Icons";
 import { Stepper } from "../components/Stepper";
 import { clock, dateLong, fmtNum, hm, ytLink } from "../format";
-import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
-import { addExtraExercise, allExercises, flash, getState, navigate, photoSrc, removeExtraExercise, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
+import { restAfterGroupSet } from "../../../worker/lib/plan";
+import { groupKind, PlanList } from "../components/PlanList";
+import { dayInfo, guidance, planForSession, retime, sessionBlocks, sessionPlan, type ExerciseBlock, type Guidance } from "../model";
+import {
+  addExtraExercise,
+  allExercises,
+  flash,
+  getState,
+  navigate,
+  photoSrc,
+  removeExtraExercise,
+  removeSession,
+  removeSessionExercise,
+  saveBodyMass,
+  savePlan,
+  saveSession,
+  startRest,
+  stopRest,
+  useStore,
+} from "../store";
 import { ExercisePicker, ExerciseThumb } from "./Library";
 import { rirText, targetText } from "./Program";
 import { WatchStats, workoutTypeName } from "./Watch";
@@ -61,7 +79,9 @@ export function Session({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [arranging, setArranging] = useState(false);
   useStore((st) => st.library);
+  const plans = useStore((st) => st.plans);
   const photos = useStore((st) => st.photos);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [note, setNote] = useState(s?.note ?? "");
@@ -75,8 +95,10 @@ export function Session({ id }: { id: string }) {
   const tz = boot.settings.timezone;
   const day = dayInfo(boot, s.program_day_id);
   const watch = (boot.watch ?? []).filter((w) => w.matched_session_id === s.id).sort((a, b) => a.started_at.localeCompare(b.started_at));
-  const blocks = sessionBlocks(boot, s, allExercises());
-  const hasSuperset = blocks.some((b) => b.plan.superset_tag);
+  const exMap = allExercises();
+  const plan = sessionPlan(plans, s.id);
+  const blocks = sessionBlocks(boot, s, exMap, plan);
+  const hasGroup = blocks.some((b) => b.group);
   const sessionPhotos = photos.filter((p) => p.session_id === s.id);
   const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
   const bodyToday = manualBody.find((m) => m.local_date === s.local_date) ?? null;
@@ -102,6 +124,31 @@ export function Session({ id }: { id: string }) {
       });
       return { ...x, sets: [...others, ...stamped] };
     });
+
+  /**
+   * Rest after a checked set (SPEC-v3 M9c). In a superset or tri-set a round is set i of each member: no timer inside
+   * the round (the next member's set comes into view), the group's rest after its last set; a member's extra sets
+   * beyond the others' counts are done alone with their own rest.
+   */
+  const restAfterSet = (b: ExerciseBlock, i: number) => {
+    const g = b.group;
+    if (!g) return startRest(b.plan.rest_sec, `Rest after ${b.ex.name_en}`);
+    const members = blocks.filter((x) => x.group?.tag === g.tag);
+    const done = members.map((m) => m.sets.map((x, j) => (m.ex.id === b.ex.id && j === i ? true : x.done)));
+    const rest = restAfterGroupSet(done, i, g.rest, b.plan.rest_sec);
+    if (rest === null) {
+      const k = members.findIndex((m) => m.ex.id === b.ex.id);
+      const next = [...members.slice(k + 1), ...members.slice(0, k)].find((m) => m.sets[i] && !m.sets[i].done);
+      if (next) requestAnimationFrame(() => document.querySelector(`[data-set="${CSS.escape(`${next.ex.id}-${i}`)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+      return;
+    }
+    const round = done.filter((d) => d.length > i).length >= 2;
+    startRest(rest, round ? `Rest after ${groupKind(g.size)} ${g.tag}` : `Rest after ${b.ex.name_en}`);
+  };
+
+  const removeExercise = async (exerciseId: string, name: string) => {
+    if (!(await removeSessionExercise(s.id, exerciseId))) flash(`${name} has done sets. Uncheck them first; history is never removed silently.`);
+  };
 
   const finish = () => {
     stopRest();
@@ -193,7 +240,7 @@ export function Session({ id }: { id: string }) {
             ))}
           </span>
         </div>
-        {hasSuperset ? <div class="ss-note">A1/A2 and B1/B2 are supersets: alternate them and rest 60–90 s after each round.</div> : null}
+        {hasGroup ? <div class="ss-note">A1/A2 (and A3) are grouped: do one set of each in turn; the rest timer starts after each round.</div> : null}
       </section>
 
       {justFinished ? (
@@ -239,15 +286,59 @@ export function Session({ id }: { id: string }) {
         </section>
       ) : null}
 
-      <h2>Exercises</h2>
-      <div class="stack">
-        {blocks.map((b) => (
-          <ExerciseCard key={b.ex.id} block={b} session={s} g={guidance(b, s, sessions)} updateSets={(fn) => updateSets(b.ex.id, fn)} />
-        ))}
-        <button type="button" class="btn btn-ghost btn-block" data-testid="add-exercise" onClick={() => setPicking(true)}>
-          + Add exercise
-        </button>
+      <div class="kv navrow h2row">
+        <h2>Exercises</h2>
+        {s.status === "active" && blocks.length ? (
+          <button type="button" class="linkbtn" data-testid="arrange" aria-pressed={arranging} onClick={() => setArranging(!arranging)}>
+            {arranging ? "Done" : "Reorder / group"}
+          </button>
+        ) : null}
       </div>
+      {arranging && s.status === "active" ? (
+        <div class="stack" data-testid="arrange-panel">
+          <div class="why">Drag or use the arrows to reorder. Select 2 or 3 exercises to group them. An exercise with done sets can't be removed.</div>
+          <PlanList
+            plan={planForSession(boot, s, plan, exMap, new Date().toISOString())}
+            exMap={exMap}
+            mode="session"
+            onChange={(next) => void savePlan(next)}
+            progress={(id) => {
+              const mine = s.sets.filter((x) => x.exercise_id === id);
+              return `${mine.filter((x) => x.done).length} of ${mine.length} sets done`;
+            }}
+            onRemove={(it) => void removeExercise(it.exercise_id, exMap.get(it.exercise_id)?.name_en ?? it.exercise_id)}
+          />
+          <button type="button" class="btn btn-ghost btn-block" onClick={() => setArranging(false)}>
+            Done
+          </button>
+        </div>
+      ) : (
+        <div class="stack">
+          {blocks.map((b, k) => {
+            const card = <ExerciseCard key={b.ex.id} block={b} session={s} g={guidance(b, s, sessions)} updateSets={(fn) => updateSets(b.ex.id, fn)} onSetDone={(i) => restAfterSet(b, i)} />;
+            if (!b.group) return card;
+            if (b.group.index > 0) return null;
+            const g = b.group;
+            const members = blocks.slice(k, k + g.size);
+            return (
+              <section class="sgroup" key={`group-${g.tag}`} data-testid={`sgroup-${g.tag}`} aria-label={`${groupKind(g.size)} ${g.tag}`}>
+                <div class="sghead">
+                  <b>
+                    {groupKind(g.size)} {g.tag}
+                  </b>
+                  <span class="num">rest {g.rest} s after each round</span>
+                </div>
+                {members.map((m) => (
+                  <ExerciseCard key={m.ex.id} block={m} session={s} g={guidance(m, s, sessions)} updateSets={(fn) => updateSets(m.ex.id, fn)} onSetDone={(i) => restAfterSet(m, i)} />
+                ))}
+              </section>
+            );
+          })}
+          <button type="button" class="btn btn-ghost btn-block" data-testid="add-exercise" onClick={() => setPicking(true)}>
+            + Add exercise
+          </button>
+        </div>
+      )}
 
       <h2>Note</h2>
       <textarea
@@ -347,7 +438,20 @@ const RIR_CHOICES: [number, string][] = [
   [3, "3+"],
 ];
 
-function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock; session: WorkoutSession; g: Guidance; updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void }) {
+function ExerciseCard({
+  block,
+  session,
+  g,
+  updateSets,
+  onSetDone,
+}: {
+  block: ExerciseBlock;
+  session: WorkoutSession;
+  g: Guidance;
+  updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void;
+  /** A set was checked in an active session: starts the rest timer (or, inside a group's round, does not). */
+  onSetDone: (setIndex: number) => void;
+}) {
   const { ex, plan, sets, extra } = block;
   const unit = session.unit;
   const isTime = plan.is_time;
@@ -373,7 +477,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       }
     }
     setField(i, patch);
-    if (done && session.status === "active") startRest(plan.rest_sec, `Rest after ${ex.name_en}`);
+    if (done && session.status === "active") onSetDone(i);
   };
 
   const addSet = () =>
@@ -395,7 +499,13 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
         },
       ];
     });
-  const removeSet = () => updateSets((list) => list.slice(0, -1));
+  // Only an undone set is removed: a done set is history and must be unchecked first (SPEC-v3 M9c).
+  const lastUndone = sets.map((x) => x.done).lastIndexOf(false);
+  const removeSet = () =>
+    updateSets((list) => {
+      const k = list.map((x) => x.done).lastIndexOf(false);
+      return k < 0 ? list : list.filter((_, j) => j !== k);
+    });
   const copyLast = () => {
     if (!g.last) return;
     const sameUnit = g.last.unit === unit;
@@ -465,7 +575,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
       </div>
       <div class="sets">
         {sets.map((x, i) => (
-          <div class="setwrap" key={x.id}>
+          <div class="setwrap" key={x.id} data-set={`${ex.id}-${i}`}>
           <div class={`setrow${isTime ? " timed" : ""}${x.done ? " ok" : ""}`}>
             <span class="n num">{i + 1}</span>
             {isTime ? null : (
@@ -527,7 +637,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
           <button type="button" onClick={addSet}>
             + Add set
           </button>
-          {sets.length > 0 ? (
+          {lastUndone >= 0 ? (
             <button type="button" onClick={removeSet} style={{ marginInlineStart: "14px" }}>
               − Remove set
             </button>

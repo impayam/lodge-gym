@@ -2,6 +2,7 @@
 
 import type { Category } from "./category";
 import type { GeneratorInput } from "./generator/model";
+import type { SessionPlan } from "./plan";
 
 export type Unit = "lb" | "kg";
 export type WeekStart = "sat" | "sun" | "mon";
@@ -104,7 +105,8 @@ export interface ProgramInfo {
   days_per_week: number | null;
   /** Generator inputs and seed (generated programs). */
   params: GeneratorInput | null;
-  generated_by: "seed" | "generator" | null;
+  /** "session": a new version made by "Apply to program" from a session plan (SPEC-v3 M9c). */
+  generated_by: "seed" | "generator" | "session" | null;
   created_at: string;
   approved_at: string | null;
   archived_at: string | null;
@@ -211,6 +213,8 @@ export interface Bootstrap {
   body: BodyMetric[];
   /** Latest weekly review, if any. */
   review: WeeklyReview | null;
+  /** Session plans (SPEC-v3 M9c): every open plan, and the plans of the sessions above. */
+  plans: SessionPlan[];
   server_time: string;
 }
 

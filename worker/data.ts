@@ -23,6 +23,7 @@ import {
   type WorkoutSession,
 } from "./lib/types";
 import { isCategory } from "./lib/category";
+import { readPlans } from "./plans";
 import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
@@ -114,7 +115,7 @@ export async function readProgramInfos(env: Env): Promise<ProgramInfo[]> {
     style: p.style,
     days_per_week: p.days_per_week,
     params: parseParams(p.params),
-    generated_by: p.generated_by === "seed" || p.generated_by === "generator" ? p.generated_by : null,
+    generated_by: p.generated_by === "seed" || p.generated_by === "generator" || p.generated_by === "session" ? p.generated_by : null,
     created_at: p.created_at,
     approved_at: p.approved_at,
     archived_at: p.archived_at,
@@ -287,7 +288,7 @@ dataRoutes.get("/bootstrap", async (c) => {
   const today = localDate(settings.timezone);
   const from = addDays(today, -60);
   const to = addDays(today, 1);
-  const [{ program, other_days }, programs, exercises, sessions, watch, body, review] = await Promise.all([
+  const [{ program, other_days }, programs, exercises, sessions, watch, body, review, plans] = await Promise.all([
     readProgram(c.env),
     readProgramInfos(c.env),
     readExercises(c.env),
@@ -295,8 +296,9 @@ dataRoutes.get("/bootstrap", async (c) => {
     readWatchForSessions(c.env, from, to),
     readBodyMetrics(c.env, from, to),
     readLatestReview(c.env),
+    readPlans(c.env, from, to),
   ]);
-  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, server_time: nowISO() };
+  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, server_time: nowISO() };
   return c.json(payload);
 });
 
