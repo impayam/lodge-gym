@@ -1,7 +1,7 @@
 import { daysBetween } from "../../../worker/lib/time";
 import type { ProgramDay } from "../../../worker/lib/types";
 import { dateShort, fmtNum, hm, plural } from "../format";
-import { liveItems } from "../../../worker/lib/plan";
+import { liveItems, planMinutes } from "../../../worker/lib/plan";
 import { activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession, openPlanFor, plannedLabel } from "../model";
 import { navigate, openPlan, saveSession, today, useStore } from "../store";
 import { planDay } from "./Planner";
@@ -61,7 +61,7 @@ export function Home() {
             <div class="big">Next session: {next.name_en}</div>
           )}
           <div class="why">
-            {plural(nextPlan ? liveItems(nextPlan).length : next.exercises.length, "exercise")} · about {fmtNum(next.est_minutes)} min
+            {plural(nextPlan ? liveItems(nextPlan).length : next.exercises.length, "exercise")} · about {fmtNum(nextPlan ? planMinutes(nextPlan, next) : next.est_minutes)} min
           </div>
           {m.rest ? <div class="ss-note">Rest is better today. You trained yesterday and the day before; the program allows at most two training days in a row.</div> : null}
           {nextPlan ? (

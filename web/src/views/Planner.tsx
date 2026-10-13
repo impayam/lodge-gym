@@ -3,11 +3,12 @@
 // Apply to program (a new program version, after a confirm). Changes apply to this session only by default.
 
 import { useEffect, useState } from "preact/hooks";
-import { addItem, inPlan, isEdited, liveItems, planFromDay, removeItem, replaceItem, seqIds, type SessionPlan } from "../../../worker/lib/plan";
+import { addItem, inPlan, isEdited, liveItems, planFromDay, planMinutes, removeItem, replaceItem, seqIds, type SessionPlan } from "../../../worker/lib/plan";
 import type { ProgramDay } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { PlanList } from "../components/PlanList";
 import { ApiError, NetworkError } from "../api";
+import { fmtNum, plural } from "../format";
 import { activeSession, dayInfo, openPlanFor } from "../model";
 import { allExercises, applyPlanToProgram, discardPlan, flash, getState, navigate, openPlan, rememberExercise, savePlan, startPlan, useStore } from "../store";
 import { ExercisePicker } from "./Library";
@@ -127,6 +128,11 @@ export function Planner({ id }: { id: string }) {
             {!saved ? "Not saved" : dirty ? "Unsaved changes" : edited ? "Planned · edited" : "Planned"}
           </span>
         </div>
+        {day ? (
+          <div class="why num" data-testid="plan-estimate">
+            {plural(liveItems(plan).length, "exercise")} · about {fmtNum(planMinutes(plan, day))} min
+          </div>
+        ) : null}
         <div class="why">Changes apply to this session only. Nothing is timed until you start.</div>
       </section>
 

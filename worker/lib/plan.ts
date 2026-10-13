@@ -4,6 +4,7 @@
 // Groups are 2–3 adjacent items with the same group_tag (a superset or a tri-set), lettered A, B, C… in order; any
 // exercises can be grouped, with no warning (Payam, 2026-10-13).
 
+import { SET_WORK_SEC } from "./generator/model";
 import type { DayExercise, ProgramDay } from "./types";
 
 export type PlanStatus = "planned" | "started" | "discarded";
@@ -336,6 +337,40 @@ export function isEdited(p: SessionPlan, day: ProgramDay): boolean {
       (it.group_tag != null && it.group_rest_sec !== r.group_rest_sec)
     );
   });
+}
+
+/**
+ * Seconds of work and rest in a plan, by the session-length rule of SPEC-v2 §8.4 (rest + 40 s per set). In a group a
+ * round is set i of each member that has one: 40 s per set and the group's rest once after the round, no rest inside
+ * it; sets beyond the other members' counts are done alone with their own rest (approved default 4).
+ */
+export function planSeconds(p: Pick<SessionPlan, "items">): number {
+  let total = 0;
+  for (const b of planBlocks(p)) {
+    if (!b.tag) {
+      const it = b.items[0];
+      total += ((it.rest_sec ?? ADD_DEFAULTS.rest_sec) + SET_WORK_SEC) * it.sets;
+      continue;
+    }
+    const groupRest = b.items[0].group_rest_sec ?? Math.max(...b.items.map((it) => it.rest_sec ?? 0));
+    for (let i = 0; i < Math.max(...b.items.map((it) => it.sets)); i++) {
+      const inRound = b.items.filter((it) => it.sets > i);
+      total += inRound.length >= 2 ? inRound.length * SET_WORK_SEC + groupRest : (inRound[0].rest_sec ?? ADD_DEFAULTS.rest_sec) + SET_WORK_SEC;
+    }
+  }
+  return total;
+}
+
+/**
+ * "About N min" for a plan: the program day's own estimate, moved by what the plan's edits add or save (sets, rest,
+ * groups and their rest) under the same rule. A plan that still matches its day shows the day's estimate.
+ */
+export function planMinutes(p: SessionPlan, day: ProgramDay): number {
+  const asDay = planFromDay(day, p.id, p.created_at, (() => {
+    let n = 0;
+    return () => `x${n++}`;
+  })());
+  return Math.max(1, Math.round(day.est_minutes + (planSeconds(p) - planSeconds(asDay)) / 60));
 }
 
 /** The day-exercise view of a plan item, as the session screen and progression read it. */

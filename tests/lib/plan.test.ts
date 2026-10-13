@@ -14,6 +14,8 @@ import {
   moveItem,
   planBlocks,
   planFromDay,
+  planMinutes,
+  planSeconds,
   removeItem,
   replaceItem,
   restAfterGroupSet,
@@ -181,6 +183,32 @@ describe("groups (supersets and tri-sets)", () => {
     const u = ungroup(g, "A", T1);
     expect(order(u)).toEqual(order(g));
     expect(labels(u)).toEqual(["", "", "", "", "A1", "A2"]);
+  });
+});
+
+describe("time estimate (SPEC-v2 §8.4 rule: rest + 40 s per set; groups rest once per round)", () => {
+  it("an unedited plan shows its day's estimate; edits move it by their seconds", () => {
+    expect(planMinutes(fresh(), DAY)).toBe(60);
+    // + dips, 3 × (90 s + 40 s) = 390 s.
+    expect(planMinutes(addItem(fresh(), "dips", T1, "N1"), DAY)).toBe(67);
+    // − RDL, 3 × (150 s + 40 s) = 570 s.
+    expect(planMinutes(removeItem(fresh(), "I2", T1), DAY)).toBe(51);
+    // + one set of cable row, 90 s + 40 s.
+    expect(planMinutes(updateItem(fresh(), "I3", { sets: 4 }, T1), DAY)).toBe(62);
+  });
+
+  it("a group rests once per round; a longer member's extra sets rest on their own", () => {
+    // The day's own superset: 3 rounds of 2 × 40 s + 75 s.
+    expect(planSeconds({ items: liveItems(fresh()).slice(4) })).toBe(3 * (80 + 75));
+    // Chest tri-set: bench 4 sets (180 s), incline 3 (120 s), fly 3 (90 s); round rest 180 s.
+    let p = addItem(fresh(), "cable_fly", T1, "N1");
+    const apart = planSeconds(p);
+    p = groupItems(p, ["I0", "I1", "N1"], T1);
+    // Before: 4 × 220 + 3 × 160 + 3 × 130 = 1750 s. After: 3 rounds × (3 × 40 + 180) + bench's 4th set alone (180 + 40).
+    expect(apart - planSeconds(p)).toBe(1750 - (3 * 300 + 220));
+    expect(planMinutes(p, DAY)).toBe(Math.round(60 + (planSeconds(p) - planSeconds(fresh())) / 60));
+    // A shorter round rest saves time too.
+    expect(planSeconds(setGroupRest(p, "A", 120, T1))).toBe(planSeconds(p) - 3 * 60);
   });
 });
 

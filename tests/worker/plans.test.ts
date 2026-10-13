@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { addItem, groupItems, liveItems, moveItem, planFromDay, removeItem, replaceItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
+import { addItem, groupItems, liveItems, moveItem, planFromDay, planMinutes, removeItem, replaceItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
 import type { Bootstrap, ProgramVersion, WorkoutSession } from "../../worker/lib/types";
 import { localDate } from "../../worker/lib/time";
 import { ulid } from "../../worker/lib/ulid";
@@ -226,6 +226,29 @@ describe("apply to program", () => {
     expect(moved.items.filter((it) => it.removed_at)).toHaveLength(p.items.filter((it) => it.removed_at).length);
     const versions = (await (await client.fetch("/api/programs")).json()) as { programs: ProgramVersion[] };
     expect(versions.programs.find((x) => x.id === before.program.id)!.days[0].exercises.map((x) => x.exercise_id)).toEqual(before.program.days[0].exercises.map((x) => x.exercise_id));
+  });
+});
+
+describe("apply to program keeps the plan on its own day", () => {
+  it("a Day 3 plan stays on Day 3 of the new version, whose estimate follows the plan; Day 1 is untouched", async () => {
+    const before = await bootstrap();
+    const day3 = before.program.days.find((d) => d.position === 3)!;
+    let p = await freshPlan(day3.id);
+    p = removeItem(p, liveItems(p)[2].id, tick(p));
+    expect((await putItems(p)).status).toBe(200);
+    const res = await client.post(`/api/sessions/${p.id}/apply-to-program`, {});
+    expect(res.status).toBe(200);
+    const after = await bootstrap();
+    const newDay3 = after.program.days.find((d) => d.position === 3)!;
+    expect(newDay3.name_en).toBe(day3.name_en);
+    expect(after.plans.find((x) => x.id === p.id)).toMatchObject({ status: "planned", program_day_id: newDay3.id });
+    expect(newDay3.exercises.map((x) => x.exercise_id)).toEqual(liveItems(p).map((it) => it.exercise_id));
+    expect(newDay3.est_minutes).toBe(planMinutes(p, day3));
+    expect(newDay3.est_minutes).toBeLessThan(day3.est_minutes);
+    // The other days are copies, estimate included.
+    const day1 = (d: typeof after.program) => d.days.find((x) => x.position === 1)!;
+    expect(day1(after.program).exercises.map((x) => x.exercise_id)).toEqual(day1(before.program).exercises.map((x) => x.exercise_id));
+    expect(day1(after.program).est_minutes).toBe(day1(before.program).est_minutes);
   });
 });
 

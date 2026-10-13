@@ -65,6 +65,8 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await page.getByTestId("plan-session").click();
   await expect(page.getByTestId("planner")).toContainText("Day 1 · Chest");
   await expect(page.getByTestId("plan-state")).toHaveText("Not saved");
+  // An unedited plan shows its day's estimate.
+  await expect(page.getByTestId("plan-estimate")).toHaveText("6 exercises · about 60 min");
   expect(await planOrder(page)).toEqual(["bench", "incline_db", "rdl", "cable_row", "lateral", "facepull"]);
   await expect(page.getByTestId("pgroup-A")).toContainText("Superset A");
 
@@ -92,8 +94,11 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await page.getByRole("button", { name: "Increase Sets, Seated Cable Row" }).click();
   await expect(item(page, "cable_row")).toContainText("4 × 10");
 
+  // The estimate follows the edits: − RDL 3 × (150 + 40) s, + 1 cable-row set (90 + 40) s: 60 min − 7⅓ ≈ 53.
+  await expect(page.getByTestId("plan-estimate")).toHaveText("5 exercises · about 53 min");
   await page.getByTestId("plan-save").click();
   await expect(page.getByTestId("planned-label")).toHaveText("Planned: Day 1 · Chest (edited)");
+  await expect(page.getByTestId("next-card")).toContainText("5 exercises · about 53 min");
   await expect(page.getByTestId("sync-chip")).toContainText("Offline");
 
   await setOffline(context, page, false);

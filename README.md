@@ -207,6 +207,10 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   **Discard plan** keeps the plan as `discarded` and the day goes back to the program default. **Apply to program**
   (after a confirm) makes a new program version with this day as planned (M8 versioning; groups stored as
   `superset_tag`); the old version is archived, and the open plan follows its day into the new version.
+- Time estimate ("6 exercises · about 60 min" on Home and in the planner): the program day's own estimate, moved by
+  what the plan's edits add or save under the SPEC-v2 §8.4 rule (rest + 40 s per set); in a group, 40 s per set and the
+  group's rest once per round, a longer member's extra sets with their own rest. An unedited plan shows the day's
+  estimate; Apply to program stores the plan's estimate on the new version's day.
 - Groups: select 2 or 3 exercises and tap Group (any exercises, same muscle included; no warning). Members stay
   adjacent, labelled A1/A2/A3, then B1/B2…; a group moves as a whole and its members reorder inside it; Ungroup keeps
   the order. Rest after a round defaults to the longest member rest and can be edited per group.

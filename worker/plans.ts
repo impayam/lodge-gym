@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { AppBindings, Env } from "./env";
 import { fail, nowISO, readJson } from "./http";
 import { readProgram, readProgramInfos, readProgramVersions } from "./data";
-import { groupLabels, liveItems, planBlocks, planFromDay, seqIds, type PlanItem, type SessionPlan } from "./lib/plan";
+import { groupLabels, liveItems, planBlocks, planFromDay, planMinutes, seqIds, type PlanItem, type SessionPlan } from "./lib/plan";
 import type { ProgramDay } from "./lib/types";
 import { ID_RE, ulid } from "./lib/ulid";
 
@@ -290,7 +290,8 @@ planRoutes.post("/:id/apply-to-program", async (c) => {
         d.name_fa,
         d.name_en,
         d.focus_fa,
-        d.est_minutes
+        // The applied day's estimate follows the plan (sets, rest, groups); the other days keep theirs.
+        d.id === day.id ? planMinutes(plan, day) : d.est_minutes
       )
     );
     const rows =
