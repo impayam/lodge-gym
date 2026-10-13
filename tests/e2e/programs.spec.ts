@@ -133,6 +133,9 @@ test("bench press progression continues from the old weights (SPEC-v2 §8.8 E2E 
   await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "135");
   await page.getByRole("button", { name: "Delete session" }).click();
   await page.getByRole("button", { name: "Yes, delete" }).click();
+  // The delete goes through the outbox: wait until the server has it, not only for the sync chip (it can still read
+  // "Synced" before the delete is queued), so the next test starts with no open session.
+  await expect.poll(() => (sql("SELECT COUNT(*) AS n FROM workout_sessions WHERE status = 'active'") as { n: number }[])[0].n, { timeout: 20_000 }).toBe(0);
   await waitForSynced(page);
 });
 
