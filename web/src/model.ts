@@ -1,6 +1,6 @@
 // Session helpers built on the bootstrap data.
 
-import { nextDay, restAdvised, weekRange } from "../../worker/lib/cycle";
+import { nextDay, restAdvised, versionAliases, weekRange } from "../../worker/lib/cycle";
 import { lastPerformance, stepperIncrement, suggest, type Suggestion } from "../../worker/lib/progression";
 import { zonedToUtcISO } from "../../worker/lib/time";
 import type { DayExercise, Exercise, ProgramDay, ProgramInfo, SetEntry, WorkoutSession } from "../../worker/lib/types";
@@ -61,7 +61,8 @@ export function homeModel(boot: BootData, sessions: Record<string, WorkoutSessio
   const all = Object.values(sessions);
   const next = nextDay(
     boot.program.days.map((d) => d.id),
-    all
+    all,
+    versionAliases(boot.programs ?? [], boot.other_days, boot.program.days)
   );
   const week = weekRange(today, boot.settings.week_start);
   const weekDone = all.filter((s) => s.status === "done" && s.local_date >= week.start && s.local_date <= week.end).length;
