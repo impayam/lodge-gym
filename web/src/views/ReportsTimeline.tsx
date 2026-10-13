@@ -161,7 +161,7 @@ export function ReportsTimeline() {
                       <span class="c">{has("session") ? <Marker kind="session" /> : null}</span>
                       <span class="c">{has("review") ? <Marker kind="review" /> : null}</span>
                       <span class="d">
-                        {has("overview") && !has("session") ? <Marker kind="overview" /> : null}
+                        <span class="o">{has("overview") && !has("session") ? <Marker kind="overview" /> : null}</span>
                         <b>{rest.split(" ")[1]}</b>
                         <small>{wd}</small>
                       </span>
@@ -172,7 +172,8 @@ export function ReportsTimeline() {
             </div>
           </div>
           <div class="rt-hint">
-            <Marker kind="overview" /> Overview on a day without a session. Tap a date to open its report.
+            <Marker kind="overview" />
+            <span>Overview on a day without a session. Tap a date to open its report.</span>
           </div>
           {chosen ? (
             <div class="rt-pick" role="group" aria-label={`Reports on ${dateLong(chosen.date)}`} data-testid="rt-chooser">

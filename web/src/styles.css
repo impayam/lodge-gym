@@ -558,11 +558,14 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .rt-col.month-start { border-left: 1px solid var(--line); border-radius: 0 10px 10px 0; }
 .rt-col .m { font-size: 11px; font-weight: 700; color: var(--muted); text-align: left; padding-left: 6px; }
 .rt-col .c { display: grid; place-items: center; border-bottom: 1px dashed var(--line); }
-.rt-col .d { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.1; }
+.rt-col .d { display: grid; grid-template-rows: 12px auto auto; justify-items: center; align-content: center; line-height: 1.1; }
+.rt-col .d .o { display: grid; place-items: center; }
 .rt-col .d b { font-size: 14px; }
 .rt-col .d small { font-size: 10.5px; color: var(--muted); }
 .rt-col .d .mk { width: 8px; height: 8px; }
-.rt-hint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin: 8px 12px 0 0; }
+.rt-hint { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--muted); margin: 8px 12px 0 0; }
+.rt-hint .mk { width: 8px; height: 8px; transform: translateY(-1px) rotate(45deg); }
+.rt-hint span { flex: 1; }
 .rt-pick { margin: 12px 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 .rt-pick > b { font-size: 13.5px; }
 .rt-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 2px; background: none; border: 0; border-top: 1px solid var(--line); color: inherit; text-align: left; }
