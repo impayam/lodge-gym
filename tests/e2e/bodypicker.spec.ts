@@ -29,6 +29,24 @@ const hook = <T,>(page: Page, fn: (h: Hook) => T) => page.evaluate(`(${fn.toStri
 /** Waits for a Front / Back turn to end: cos(yaw) is 1 facing the front, -1 facing the back. */
 const facing = (page: Page, cos: 1 | -1) => expect.poll(() => hook(page, (h) => Math.cos(h.view!.yaw())), { timeout: 5_000 }).toBeCloseTo(cos, 3);
 
+const AREAS = ["chest", "shoulders", "arms", "back", "core", "glutes_hips", "thighs", "calves"];
+
+/** All eight area chips are on screen at once: inside the width, above the tab bar, in at most two rows. */
+async function allAreasVisible(page: Page) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const width = page.viewportSize()!.width;
+  const navTop = (await page.getByRole("navigation").boundingBox())!.y;
+  const rows = new Set<number>();
+  for (const a of AREAS) {
+    const b = (await page.getByTestId(`area-${a}`).boundingBox())!;
+    expect(b.height, a).toBeGreaterThanOrEqual(44);
+    expect(b.x + b.width, a).toBeLessThanOrEqual(width);
+    expect(b.y + b.height, a).toBeLessThanOrEqual(navTop);
+    rows.add(Math.round(b.y));
+  }
+  expect(rows.size).toBeLessThanOrEqual(2);
+}
+
 async function startSession(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -46,6 +64,17 @@ test("chips: Arms → Triceps lists triceps-primary exercises first; picking one
   const step = await openPicker(page);
   await expect(page.getByTestId("exercise-picker").getByTestId("picker-tab-body")).toHaveAttribute("aria-selected", "true");
   await expect(step.getByTestId("anatomy-canvas")).toBeVisible();
+  await allAreasVisible(page);
+  // The hint sits beside the body, never over it, front or back.
+  const hint = step.getByTestId("anatomy-hint");
+  await expect(hint).toBeVisible();
+  const covered = async () => page.evaluate((r) => (window as unknown as { __anatomy: { view: { modelPixels(r: object): number } } }).__anatomy.view.modelPixels(r), (await hint.boundingBox())!);
+  expect(await covered()).toBe(0);
+  await step.getByTestId("view-back").click();
+  await facing(page, -1);
+  expect(await covered()).toBe(0);
+  await step.getByTestId("view-front").click();
+  await facing(page, 1);
 
   await step.getByTestId("area-arms").click();
   await expect(step).toHaveAttribute("data-area", "arms");
@@ -97,6 +126,7 @@ test("3D: a tap on the triceps lights the group on both sides; near misses count
 
   const tri = (await hook(page, (h) => h.view!.pointOn("Long head of triceps brachii")))!;
   expect(tri).not.toBeNull();
+  await expect(step.getByTestId("anatomy-hint")).not.toHaveClass(/gone/);
   await page.touchscreen.tap(tri.x, tri.y);
   const chip = step.getByTestId("anatomy-selection");
   await expect(chip).toHaveAttribute("data-muscle", "triceps");
@@ -114,6 +144,8 @@ test("3D: a tap on the triceps lights the group on both sides; near misses count
   const box = (await step.getByTestId("anatomy-canvas").boundingBox())!;
   await page.touchscreen.tap(box.x + 10, box.y + box.height / 2);
   await expect(chip).toHaveCount(0);
+  // The hint faded out at the first touch and stays out.
+  await expect(step.getByTestId("anatomy-hint")).toHaveClass(/gone/);
 
   // A tap just off the body's outline still finds the nearest muscle (within 24 px).
   const miss = await hook(page, (h) => {
@@ -176,6 +208,7 @@ test("fallback: without WebGL the chips alone pick the exercise, with a 3D unava
   const step = await openPicker(page, "fallback");
   await expect(step.getByTestId("anatomy-fallback")).toContainText("3D unavailable");
   await expect(step.locator("canvas")).toHaveCount(0);
+  await allAreasVisible(page);
   await step.getByTestId("area-arms").click();
   await step.getByTestId("muscle-triceps").click();
   await expect(page.getByTestId("muscle-step")).toHaveAttribute("data-muscle", "triceps");

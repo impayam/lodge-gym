@@ -31,6 +31,9 @@ interface Place {
   category: CategoryFilter;
 }
 
+/** The "Drag to turn" hint shows until the first touch on the model, once per app run. */
+let hintDone = false;
+
 const START: Place = { step: "body", area: null, view: "front", selected: null, muscle: null, equipment: "", category: "counted" };
 /** Where the picker was left, per session, while the app stays open. */
 const memory = new Map<string, Place>();
@@ -65,6 +68,7 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
   const host = useRef<HTMLDivElement>(null);
   const view3d = useRef<AnatomyView | null>(null);
   const [mode, setMode] = useState<"loading" | "3d" | "fallback">("loading");
+  const [hint, setHint] = useState(!hintDone);
   const placeRef = useRef(place);
   placeRef.current = place;
 
@@ -134,7 +138,7 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
       </span>
     ) : null;
   const back = def ? (
-    <button type="button" class="btn btn-small anatomy-back" data-testid="pick-back" onClick={() => chooseArea(null)}>
+    <button type="button" class={mode === "fallback" ? "btn btn-ghost btn-small" : "btn btn-small anatomy-back"} data-testid="pick-back" onClick={() => chooseArea(null)}>
       ← Body
     </button>
   ) : null;
@@ -149,13 +153,29 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
           {back ? <div class="kv navrow">{back}</div> : null}
         </>
       ) : (
-        <div class="anatomy" data-testid="anatomy">
+        <div
+          class="anatomy"
+          data-testid="anatomy"
+          onPointerDown={(e) => {
+            // A touch on the model itself (not on Front / Back or ← Body) retires the hint.
+            if ((e.target as Element).tagName !== "CANVAS") return;
+            hintDone = true;
+            setHint(false);
+          }}
+        >
           <div class="anatomy-canvas" ref={host} />
           {mode === "loading" ? <div class="anatomy-msg">Loading the 3D body…</div> : null}
           <div class="anatomy-top">
-            {back ?? (mode === "3d" ? <span class="anatomy-hint">Drag to turn. Tap a muscle.</span> : <span />)}
+            {back ?? <span />}
             {sides}
           </div>
+          {mode === "3d" && !place.selected ? (
+            <span class={hint ? "anatomy-hint" : "anatomy-hint gone"} data-testid="anatomy-hint" aria-hidden="true">
+              Drag to turn.
+              <br />
+              Tap a muscle.
+            </span>
+          ) : null}
           {mode === "3d" && place.selected ? (
             <div class="anatomy-pick" data-testid="anatomy-selection" data-muscle={place.selected}>
               <b>{muscleLabel(place.selected)}</b>

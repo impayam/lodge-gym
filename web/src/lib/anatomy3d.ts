@@ -16,7 +16,7 @@ import {
   LinearSRGBColorSpace,
   Mesh,
   MeshBasicMaterial,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
   NoColorSpace,
   PerspectiveCamera,
   Scene,
@@ -54,7 +54,13 @@ interface Model {
 
 const PICK_RADIUS = 24;
 const PICK_SIZE = 2 * PICK_RADIUS + 1;
-const COLORS = { background: "#101413", muscle: "#a65f57", context: "#4b3431", bone: "#5d5a54" };
+/** Id drawn by every model mesh that cannot be tapped: it hides what is behind it but is never picked. */
+const SOLID = 255;
+// Muscles in a muted red, a little dark so the key light shapes them; bones and other tissue close to the stage colour
+// so they recede; the selected muscle in a lightened app accent that glows (emissive), clearly the brightest thing.
+const COLORS = { background: "#101413", muscle: "#8c4841", context: "#3b2725", bone: "#262422" };
+/** Light from the upper front (camera-relative, so it follows the turn), a soft fill from the other side, low ambient. */
+const LIGHTS = { ambient: 0.35, key: 3.6, fill: 0.6 };
 
 let model: Promise<Model> | null = null;
 
@@ -162,7 +168,7 @@ export class AnatomyView {
   private controls: OrbitControls;
   private pickTarget = new WebGLRenderTarget(PICK_SIZE, PICK_SIZE);
   private pickBuffer = new Uint8Array(PICK_SIZE * PICK_SIZE * 4);
-  private mats: { muscle: MeshLambertMaterial; context: MeshLambertMaterial; bone: MeshLambertMaterial; highlight: MeshLambertMaterial; hidden: MeshBasicMaterial; ids: Map<Muscle, MeshBasicMaterial> };
+  private mats: { muscle: MeshStandardMaterial; context: MeshStandardMaterial; bone: MeshStandardMaterial; highlight: MeshStandardMaterial; hidden: MeshBasicMaterial; ids: Map<Muscle, MeshBasicMaterial> };
   private model!: Model;
   private area: BodyArea | null = null;
   private selected: Muscle | null = null;
@@ -218,21 +224,33 @@ export class AnatomyView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.pickTarget.texture.colorSpace = NoColorSpace;
     this.scene.background = new Color(COLORS.background);
-    const accent = new Color(o.accent);
+    // The stage is always dark: lift a dark accent (the light theme's) so the selection stays the brightest thing.
+    const glow = new Color(o.accent);
+    const hsl = { h: 0, s: 0, l: 0 };
+    glow.getHSL(hsl);
+    glow.setHSL(hsl.h, hsl.s, Math.max(hsl.l, 0.5));
+    const surface = (color: string | Color) => new MeshStandardMaterial({ color, roughness: 0.62, metalness: 0 });
     this.mats = {
-      muscle: new MeshLambertMaterial({ color: COLORS.muscle }),
-      context: new MeshLambertMaterial({ color: COLORS.context }),
-      bone: new MeshLambertMaterial({ color: COLORS.bone }),
-      highlight: new MeshLambertMaterial({ color: accent, emissive: accent.clone().multiplyScalar(0.55) }),
-      hidden: new MeshBasicMaterial({ color: 0x000000, toneMapped: false }),
+      muscle: surface(COLORS.muscle),
+      context: surface(COLORS.context),
+      bone: new MeshStandardMaterial({ color: COLORS.bone, roughness: 0.9, metalness: 0 }),
+      highlight: new MeshStandardMaterial({ color: glow, emissive: glow.clone().multiplyScalar(0.35), roughness: 0.5, metalness: 0 }),
+      hidden: new MeshBasicMaterial({ color: new Color().setRGB(SOLID / 255, 0, 0, LinearSRGBColorSpace), toneMapped: false }),
       ids: new Map(
         CANONICAL_MUSCLES.map((m, i) => [m, new MeshBasicMaterial({ color: new Color().setRGB((i + 1) / 255, 0, 0, LinearSRGBColorSpace), toneMapped: false })])
       ),
     };
-    this.scene.add(new HemisphereLight(0xffffff, 0x2a2a2a, 2.1));
-    const key = new DirectionalLight(0xffffff, 1.5);
-    key.position.set(0.4, 0.6, 1);
-    this.camera.add(key);
+    this.scene.add(new HemisphereLight(0xffffff, 0x1c1c1c, LIGHTS.ambient));
+    for (const [intensity, x, y, z] of [
+      [LIGHTS.key, 0.7, 1.4, 1.1],
+      [LIGHTS.fill, -1, 0.15, 0.7],
+    ]) {
+      const light = new DirectionalLight(0xffffff, intensity);
+      light.position.set(x, y, z);
+      // Aim along the view: the light keeps its place relative to the camera whatever the turn or close-up.
+      light.target.position.set(0, 0, -1);
+      this.camera.add(light, light.target);
+    }
     this.scene.add(this.camera);
 
     this.controls = new OrbitControls(this.camera, this.canvas);
@@ -356,34 +374,44 @@ export class AnatomyView {
 
   /* ---------------- picking ---------------- */
 
-  /** The tappable muscle at (or within `radius` px, at most 24, of) a point in client coordinates. */
-  pickAt(clientX: number, clientY: number, radius = PICK_RADIUS): Muscle | null {
+  /**
+   * Draws ids instead of colours for a rectangle of the canvas (CSS px from its top-left) into `target` and reads them
+   * into `buffer`: each tappable mesh its app muscle's index + 1, every other mesh SOLID, empty space 0.
+   */
+  private renderIds(target: WebGLRenderTarget, buffer: Uint8Array, x: number, y: number, w: number, h: number) {
     const r = this.canvas.getBoundingClientRect();
-    const x = Math.round(clientX - r.left);
-    const y = Math.round(clientY - r.top);
-    const ids = [...this.mats.ids.keys()];
     for (const p of this.model.parts) p.mesh.material = this.tappable(p.muscle) ? this.mats.ids.get(p.muscle)! : this.mats.hidden;
     const background = this.scene.background;
     this.scene.background = null;
-    this.camera.setViewOffset(r.width, r.height, x - PICK_RADIUS, y - PICK_RADIUS, PICK_SIZE, PICK_SIZE);
+    this.camera.setViewOffset(r.width, r.height, x, y, w, h);
     const clear = this.renderer.getClearColor(new Color());
     const alpha = this.renderer.getClearAlpha();
     this.renderer.setClearColor(0x000000, 1);
-    this.renderer.setRenderTarget(this.pickTarget);
+    this.renderer.setRenderTarget(target);
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
-    this.renderer.readRenderTargetPixels(this.pickTarget, 0, 0, PICK_SIZE, PICK_SIZE, this.pickBuffer);
+    this.renderer.readRenderTargetPixels(target, 0, 0, w, h, buffer);
     this.renderer.setRenderTarget(null);
     this.renderer.setClearColor(clear, alpha);
     this.camera.clearViewOffset();
     this.scene.background = background;
     this.paint();
+    this.wake();
+  }
+
+  /** The tappable muscle at (or within `radius` px, at most 24, of) a point in client coordinates. */
+  pickAt(clientX: number, clientY: number, radius = PICK_RADIUS): Muscle | null {
+    const r = this.canvas.getBoundingClientRect();
+    const x = Math.round(clientX - r.left);
+    const y = Math.round(clientY - r.top);
+    this.renderIds(this.pickTarget, this.pickBuffer, x - PICK_RADIUS, y - PICK_RADIUS, PICK_SIZE, PICK_SIZE);
+    const ids = [...this.mats.ids.keys()];
     let best: Muscle | null = null;
     let bestD = Infinity;
     for (let row = 0; row < PICK_SIZE; row++)
       for (let col = 0; col < PICK_SIZE; col++) {
         const id = this.pickBuffer[(row * PICK_SIZE + col) * 4];
-        if (!id) continue;
+        if (!id || id === SOLID) continue;
         // Pixel rows are read bottom-up.
         const d = Math.hypot(col - PICK_RADIUS, PICK_SIZE - 1 - row - PICK_RADIUS);
         if (d <= Math.min(radius, PICK_RADIUS) && d < bestD) {
@@ -391,8 +419,22 @@ export class AnatomyView {
           best = ids[id - 1] ?? null;
         }
       }
-    this.wake();
     return best;
+  }
+
+  /** Test hook: how many pixels of a client rectangle the model covers (any mesh, tappable or not). */
+  modelPixels(rect: { x: number; y: number; width: number; height: number }): number {
+    const r = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    const target = new WebGLRenderTarget(w, h);
+    target.texture.colorSpace = NoColorSpace;
+    const buffer = new Uint8Array(w * h * 4);
+    this.renderIds(target, buffer, Math.round(rect.x - r.left), Math.round(rect.y - r.top), w, h);
+    target.dispose();
+    let n = 0;
+    for (let i = 0; i < buffer.length; i += 4) if (buffer[i]) n++;
+    return n;
   }
 
   private tap(clientX: number, clientY: number) {
@@ -508,14 +550,27 @@ export class AnatomyView {
       for (let i = 0; i < pos.count; i += step) {
         v.fromBufferAttribute(pos, i).applyMatrix4(p.mesh.matrixWorld).project(this.camera);
         if (Math.abs(v.x) > 0.9 || Math.abs(v.y) > 0.9 || v.z > 1) continue;
-        const x = r.left + ((v.x + 1) / 2) * r.width;
-        const y = r.top + ((1 - v.y) / 2) * r.height;
-        // Skip points under the controls drawn over the stage (Front / Back, the selection bar).
-        if (document.elementFromPoint(x, y) !== this.canvas) continue;
-        if (!pickable || (want && this.pickAt(x, y, 0) === want)) return { x, y };
+        // Whole pixels, as touch events report them.
+        const x = Math.round(r.left + ((v.x + 1) / 2) * r.width);
+        const y = Math.round(r.top + ((1 - v.y) / 2) * r.height);
+        // Skip points under or next to the controls over the stage (Front / Back, ← Body, the selection bar): a finger
+        // there counts as a tap on the control.
+        if ([-16, 0, 16].some((dx) => [-16, 0, 16].some((dy) => document.elementFromPoint(x + dx, y + dy) !== this.canvas))) continue;
+        if (!pickable) return { x, y };
+        // A point at least 2 px inside the muscle, so a tap there picks it even a pixel off.
+        if (want && this.interior(x - r.left, y - r.top, want)) return { x, y };
       }
     }
     return null;
+  }
+
+  /** Whether the canvas pixel (x, y) and the pixels 2 px around it all show `muscle` (one id render). */
+  private interior(x: number, y: number, muscle: Muscle): boolean {
+    const id = CANONICAL_MUSCLES.indexOf(muscle) + 1;
+    this.renderIds(this.pickTarget, this.pickBuffer, Math.round(x) - PICK_RADIUS, Math.round(y) - PICK_RADIUS, PICK_SIZE, PICK_SIZE);
+    // Pixel rows are read bottom-up.
+    const at = (dx: number, dy: number) => this.pickBuffer[((PICK_SIZE - 1 - (PICK_RADIUS + dy)) * PICK_SIZE + PICK_RADIUS + dx) * 4];
+    return [-2, 0, 2].every((dx) => [-2, 0, 2].every((dy) => at(dx, dy) === id));
   }
 
   /** Test hook: model names (without the left/right suffix, so a muscle lit on both sides is listed twice) of the meshes drawn highlighted. */
