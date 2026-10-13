@@ -7,7 +7,7 @@ import type { ReportView } from "../../worker/lib/ai/report";
 import type { SessionPlan } from "../../worker/lib/plan";
 import type { SetEntry, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
-import { mockAnthropic, REPORT_REPLY } from "../fixtures/anthropic-mock";
+import { mockAnthropic, OVERVIEW_REPLY, REPORT_REPLY } from "../fixtures/anthropic-mock";
 import { Client, resetAuth, setupOwner } from "./helpers";
 
 // SPEC-v3 M9a (AI session report) and M9c (Get advice) on the Worker. The Anthropic API is mocked in every test.
@@ -20,7 +20,9 @@ beforeAll(async () => {
   ({ client } = await setupOwner("192.0.2.81"));
 });
 beforeEach(async () => {
+  await settled();
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM training_overviews"),
     env.DB.prepare("DELETE FROM plan_advice"),
     env.DB.prepare("DELETE FROM session_reports"),
     env.DB.prepare("DELETE FROM set_entries"),
@@ -69,15 +71,31 @@ const put = (s: WorkoutSession) => client.fetch(`/api/sessions/${s.id}`, { metho
 const getReport = async (id: string) => (await (await client.fetch(`/api/sessions/${id}/report`)).json()) as { report: ReportView | null; pending: boolean; session_status: string };
 const rows = async (id: string) => (await env.DB.prepare("SELECT * FROM session_reports WHERE session_id = ? ORDER BY created_at, id").bind(id).all<Record<string, unknown>>()).results;
 
-/** Runs the report job (unless the runtime already started its alarm) and waits until the session's job is done. */
-async function settled(id: string) {
-  await runDurableObjectAlarm(jobs());
-  await expect.poll(() => jobs().pending(id), { timeout: 20_000, interval: 100 }).toBe(false);
+/**
+ * Runs the queued jobs (unless the runtime already started its alarm) until the queue is empty. A session that reached
+ * the server as done queues its report, then the training overview (SPEC-v7 M9d), in the background after the response
+ * (waitUntil): with `sessionId`, first wait until that has happened.
+ */
+async function settled(sessionId?: string) {
+  if (sessionId)
+    await expect
+      .poll(
+        async () =>
+          (await jobs().queued()).some((j) => j.kind === "overview" && j.session_id === sessionId) ||
+          !!(await env.DB.prepare("SELECT 1 AS x FROM training_overviews WHERE trigger_session_id = ?").bind(sessionId).first()),
+        { timeout: 20_000, interval: 50 }
+      )
+      .toBe(true);
+  for (let i = 0; i < 10 && (await jobs().queued()).length; i++) {
+    await runDurableObjectAlarm(jobs());
+    await expect.poll(async () => (await jobs().queued()).length <= 1, { timeout: 20_000, interval: 100 }).toBe(true);
+  }
+  await expect.poll(async () => (await jobs().queued()).length, { timeout: 20_000, interval: 100 }).toBe(0);
 }
 
 describe("session report", () => {
   it("a session that syncs as done is queued, and the job writes a validated report", async () => {
-    mock = mockAnthropic([{ json: REPORT_REPLY, usage: { input_tokens: 4100, output_tokens: 850 } }]);
+    mock = mockAnthropic([{ json: REPORT_REPLY, usage: { input_tokens: 4100, output_tokens: 850 } }, { json: OVERVIEW_REPLY }]);
     const s = session(ulid());
     expect((await put({ ...s, status: "active", ended_at: null })).status).toBe(200);
     // Still active: nothing queued.
@@ -94,7 +112,8 @@ describe("session report", () => {
     expect((await rows(s.id))[0]).toMatchObject({ input_tokens: 4100, output_tokens: 850 });
 
     // The request: REPORT_MODEL, max_tokens 3000, effort low, JSON schema output, no temperature, the API key header.
-    expect(mock.calls).toHaveLength(1);
+    // The training overview follows (SPEC-v7 M9d).
+    expect(mock.calls.map((c) => (String(c.body.system).includes("overview of Payam") ? "overview" : "report"))).toEqual(["report", "overview"]);
     const call = mock.calls[0];
     expect(call.url).toBe("https://anthropic.invalid/v1/messages");
     expect(call.headers["x-api-key"]).toBe(env.ANTHROPIC_API_KEY);
@@ -205,7 +224,7 @@ describe("session report", () => {
       // Being written, or already written (the runtime may run the job at once): never neither.
       const g = await getReport(s.id);
       expect(g.pending || (g.report?.status === "ok" && (await rows(s.id)).length === i + 1)).toBe(true);
-      await settled(s.id);
+      await settled();
       expect(await rows(s.id)).toHaveLength(i + 1);
     }
     expect((await getReport(s.id)).pending).toBe(false);
@@ -257,7 +276,7 @@ describe("session report", () => {
     // $4 / $20 per million tokens: 5000 × 4 + 1000 × 20 = 40,000 µ$ = $0.04. The failed call used no tokens.
     expect(u.month).toMatchObject({ reports: 1, advice: 0, input_tokens: 5000, cost_usd: 0.04 });
     expect(u.today.reports).toBe(1);
-    expect(u.limits).toEqual({ report: 10, advice: 20 });
+    expect(u.limits).toEqual({ report: 10, advice: 20, overview: 10 });
     const backup = (await (await client.fetch("/api/export")).json()) as { session_reports: { status: string; report_json: unknown }[]; plan_advice: unknown[] };
     expect(backup.session_reports.map((r) => r.status)).toEqual(["ok", "error"]);
     expect(backup.session_reports[0].report_json).toMatchObject({ summary_fa: REPORT_REPLY.summary_fa });

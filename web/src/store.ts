@@ -15,7 +15,7 @@ import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./mod
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report" | "reviews";
 
 export interface SyncState {
   pending: number;

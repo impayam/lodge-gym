@@ -15,6 +15,8 @@ declare global {
       REPORT_EFFORT: string;
       ADVICE_EFFORT: string;
       REPORT_MAX_TOKENS: string;
+      OVERVIEW_EFFORT: string;
+      OVERVIEW_MAX_TOKENS: string;
       SETUP_TOKEN: string;
       TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
       TEST_SEED_SQL: string;

@@ -11,7 +11,7 @@ export const BACKUP_PREFIX = "backups/";
 export const BACKUPS_KEPT = 12;
 
 export async function buildExport(env: Env) {
-  const [settings, sessions, health, body, photos, custom, programs, plans, reports, advice] = await Promise.all([
+  const [settings, sessions, health, body, photos, custom, programs, plans, reports, advice, overviews] = await Promise.all([
     readSettings(env),
     readSessions(env, "0000-01-01", "9999-12-31"),
     env.DB.prepare(
@@ -24,6 +24,7 @@ export async function buildExport(env: Env) {
     readAllPlans(env),
     env.DB.prepare("SELECT * FROM session_reports ORDER BY created_at, id").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT * FROM plan_advice ORDER BY created_at, id").all<Record<string, unknown>>(),
+    env.DB.prepare("SELECT * FROM training_overviews ORDER BY created_at, id").all<Record<string, unknown>>(),
   ]);
   const unjson = (rows: Record<string, unknown>[], col: string) => rows.map((r) => ({ ...r, [col]: typeof r[col] === "string" ? JSON.parse(r[col] as string) : null }));
   return {
@@ -44,6 +45,8 @@ export async function buildExport(env: Env) {
     /** AI session reports and plan advice, every row (SPEC-v3 M9a, M9c). */
     session_reports: unjson(reports.results, "report_json"),
     plan_advice: unjson(advice.results, "advice_json"),
+    /** Training overviews, every row (SPEC-v7 M9d). */
+    training_overviews: unjson(overviews.results, "overview_json"),
   };
 }
 

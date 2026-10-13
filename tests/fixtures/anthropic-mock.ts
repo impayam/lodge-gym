@@ -59,3 +59,13 @@ export const REPORT_REPLY = {
   next_time: [{ exercise_id: "bench", note_fa: "همین وزن را نگه دار و همهٔ تکرارها را کامل کن." }],
   warnings: [],
 };
+
+/** A valid training overview reply (SPEC-v7 M9d output format), with no numbers. */
+export const OVERVIEW_REPLY = {
+  summary_fa: "روند تمرین خوب است و جلسه‌ها منظم انجام شده‌اند.",
+  trends: ["پرس سینه رو به بالاست."],
+  volume_fa: "سینه این هفته هنوز زیر هدف است.",
+  consistency_fa: "جلسه‌ها طبق برنامه انجام شده‌اند.",
+  focus_next: ["روی حرکت‌های سینه تمرکز کن."],
+  warnings: [],
+};

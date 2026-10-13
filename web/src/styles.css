@@ -527,3 +527,13 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .rp-next li { padding: 6px 0; border-top: 1px solid var(--line); }
 .rp-next li:first-child { border-top: 0; }
 .rp-next .kv { gap: 8px; }
+
+/* Training overview and session reports in Reports (SPEC-v7 M9d). */
+.overview .ov-when { font-size: 12px; text-align: right; }
+.overview .ov-window { font-size: 12px; margin-top: -4px; }
+.overview .ov-failed { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: var(--plate-soft); }
+.overview .ov-failed .linkbtn { flex: none; }
+.sr-row .meta { display: flex; flex-direction: column; gap: 2px; }
+.sr-row .sr-line { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.sr-row .sr-line.bad { color: var(--warn); text-align: left; }
+.sr-row .side { font-size: 18px; color: var(--muted); }

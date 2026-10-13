@@ -14,6 +14,7 @@ import { exerciseRoutes, mediaRoutes } from "./exercises";
 import { programRoutes } from "./programs";
 import { planRoutes } from "./plans";
 import { aiRoutes, aiSessionRoutes } from "./aiReports";
+import { overviewRoutes } from "./aiOverview";
 
 export { RestPush } from "./push";
 export { AiJobs } from "./aiReports";
@@ -58,6 +59,7 @@ api.route("/", dataRoutes);
 api.route("/sessions", planRoutes);
 api.route("/sessions", aiSessionRoutes);
 api.route("/ai", aiRoutes);
+api.route("/", overviewRoutes);
 api.route("/tokens", tokenRoutes);
 api.route("/health", healthRoutes);
 api.route("/photos", photoRoutes);

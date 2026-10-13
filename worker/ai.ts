@@ -51,9 +51,10 @@ export function effortOf(value: string | undefined, fallback: Effort): Effort {
   return (EFFORTS as readonly string[]).includes(v ?? "") ? (v as Effort) : fallback;
 }
 
-export function maxTokensOf(env: Env): number {
-  const n = Number(env.REPORT_MAX_TOKENS);
-  return Number.isInteger(n) && n >= 256 && n <= 64_000 ? n : DEFAULT_MAX_TOKENS;
+/** A max_tokens setting from config (REPORT_MAX_TOKENS, OVERVIEW_MAX_TOKENS), or the default. */
+export function maxTokensOf(value: string | undefined, fallback = DEFAULT_MAX_TOKENS): number {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 256 && n <= 64_000 ? n : fallback;
 }
 
 /** Maps an SDK error to a stored code; the key never appears in the message. */
@@ -69,7 +70,14 @@ function failure(e: unknown, key: string): { code: AiErrorCode; message: string 
  * One model call with a JSON reply checked against `schema`. A reply that is cut off (max_tokens), not JSON, or not
  * valid against the schema is retried once; tokens of both attempts are counted.
  */
-export async function callModel<T>(env: Env, req: { system: string; input: unknown; schema: z.ZodType<T>; effort: Effort }): Promise<AiOk<T> | AiFail> {
+/**
+ * @param req.maxTokens the reply's max_tokens (default: REPORT_MAX_TOKENS)
+ * @param req.check a further check of a schema-valid reply; a message makes it invalid (retried once like the rest)
+ */
+export async function callModel<T>(
+  env: Env,
+  req: { system: string; input: unknown; schema: z.ZodType<T>; effort: Effort; maxTokens?: number; check?: (data: T) => string | null }
+): Promise<AiOk<T> | AiFail> {
   const model = modelOf(env);
   const key = env.ANTHROPIC_API_KEY?.trim();
   if (!key) return { ok: false, code: "missing", message: "ANTHROPIC_API_KEY is not set.", model, input_tokens: null, output_tokens: null };
@@ -89,7 +97,7 @@ export async function callModel<T>(env: Env, req: { system: string; input: unkno
     try {
       msg = await client.messages.create({
         model,
-        max_tokens: maxTokensOf(env),
+        max_tokens: req.maxTokens ?? maxTokensOf(env.REPORT_MAX_TOKENS),
         output_config: { effort: req.effort, format: zodOutputFormat(req.schema) },
         system: req.system,
         messages: [{ role: "user", content: JSON.stringify(req.input) }],
@@ -116,7 +124,12 @@ export async function callModel<T>(env: Env, req: { system: string; input: unkno
       continue;
     }
     const parsed = req.schema.safeParse(json);
-    if (parsed.success) return { ok: true, data: parsed.data, model: served, input_tokens: input, output_tokens: output };
+    if (parsed.success) {
+      const rejected = req.check?.(parsed.data) ?? null;
+      if (!rejected) return { ok: true, data: parsed.data, model: served, input_tokens: input, output_tokens: output };
+      problem = rejected.slice(0, 300);
+      continue;
+    }
     problem = `The answer did not match the format: ${parsed.error.issues
       .slice(0, 3)
       .map((i) => `${i.path.join(".") || "(root)"} ${i.message}`)

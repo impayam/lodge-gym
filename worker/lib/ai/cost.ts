@@ -12,8 +12,8 @@ export const PRICES: Readonly<Record<string, { input: number; output: number }>>
   "claude-fable-5-1": { input: 10, output: 50 },
 };
 
-/** SPEC-v3: 10 session reports and 20 plan advice per day. */
-export const DAILY_LIMIT = { report: 10, advice: 20 } as const;
+/** SPEC-v3: 10 session reports and 20 plan advice per day; SPEC-v7: 10 training overviews per day. */
+export const DAILY_LIMIT = { report: 10, advice: 20, overview: 10 } as const;
 
 export type AiKind = keyof typeof DAILY_LIMIT;
 
@@ -33,7 +33,7 @@ export interface AiUsage {
   key: "set" | "missing";
   key_status: "ok" | "invalid" | "unknown";
   month: MonthUsage;
-  today: { reports: number; advice: number };
+  today: { reports: number; advice: number; overviews: number };
   limits: typeof DAILY_LIMIT;
 }
 
@@ -59,6 +59,7 @@ export interface MonthUsage {
   month: string;
   reports: number;
   advice: number;
+  overviews: number;
   input_tokens: number;
   output_tokens: number;
   /** Rounded to the cent; calls of a model without a known price are left out (see `unpriced`). */
@@ -66,7 +67,7 @@ export interface MonthUsage {
   unpriced: number;
 }
 
-/** "This month" on the local calendar of `tz`: successful reports and advice, tokens and cost of every call. */
+/** "This month" on the local calendar of `tz`: successful reports, advice and overviews, tokens and cost of every call. */
 export function monthUsage(rows: AiRow[], tz: string, month: string): MonthUsage {
   const mine = rows.filter((r) => localDate(tz, r.created_at).slice(0, 7) === month);
   let cost = 0;
@@ -81,6 +82,7 @@ export function monthUsage(rows: AiRow[], tz: string, month: string): MonthUsage
     month,
     reports: mine.filter((r) => r.kind === "report" && r.status === "ok").length,
     advice: mine.filter((r) => r.kind === "advice" && r.status === "ok").length,
+    overviews: mine.filter((r) => r.kind === "overview" && r.status === "ok").length,
     input_tokens: mine.reduce((a, r) => a + (r.input_tokens ?? 0), 0),
     output_tokens: mine.reduce((a, r) => a + (r.output_tokens ?? 0), 0),
     cost_usd: Math.round(cost * 100) / 100,

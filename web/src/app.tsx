@@ -13,6 +13,7 @@ import { Photos } from "./views/Photos";
 import { Planner } from "./views/Planner";
 import { Program } from "./views/Program";
 import { Reports } from "./views/Reports";
+import { WeeklyReviews } from "./views/Review";
 import { Session } from "./views/Session";
 import { SessionReportScreen } from "./views/SessionReport";
 import { Settings } from "./views/Settings";
@@ -62,7 +63,7 @@ export function App() {
   if (auth === "first-offline" || !hasBoot) return <FirstOffline />;
 
   const t = today();
-  const current = view.name === "session" || view.name === "plan" || view.name === "report" ? "home" : view.name === "watch" || view.name === "newprogram" ? "settings" : view.name;
+  const current = view.name === "session" || view.name === "plan" || view.name === "report" ? "home" : view.name === "watch" || view.name === "newprogram" ? "settings" : view.name === "reviews" ? "history" : view.name;
   return (
     <>
       <div class="wrap">
@@ -87,6 +88,8 @@ export function App() {
             <Planner key={view.planId} id={view.planId} />
           ) : view.name === "history" ? (
             <History />
+          ) : view.name === "reviews" ? (
+            <WeeklyReviews />
           ) : view.name === "reports" ? (
             <Reports />
           ) : view.name === "library" ? (

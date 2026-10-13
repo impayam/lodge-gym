@@ -6,7 +6,6 @@ import { activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession
 import { navigate, openPlan, saveSession, today, useStore } from "../store";
 import { planDay } from "./Planner";
 import { HistoryItem } from "./HistoryItem";
-import { WeeklyReviewCard } from "./Review";
 
 export function Home() {
   const boot = useStore((s) => s.boot)!;
@@ -80,10 +79,6 @@ export function Home() {
           )}
         </section>
       )}
-
-      <div style={{ marginTop: "12px" }}>
-        <WeeklyReviewCard />
-      </div>
 
       <h2>This week</h2>
       <div class="card weekcard" data-testid="week-strip">

@@ -24,7 +24,7 @@ import {
 } from "./lib/types";
 import { isCategory } from "./lib/category";
 import { readPlans } from "./plans";
-import { queueReport } from "./aiReports";
+import { queueAfterSession } from "./aiReports";
 import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
@@ -379,8 +379,10 @@ dataRoutes.put("/sessions/:id", async (c) => {
   await db.batch(stmts);
   // A watch workout may have arrived before this session was synced (SPEC §9.1 matching).
   await rematchAround(c.env, doc.started_at);
-  // SPEC-v3 M9a: a session that reaches the server as done gets its AI report, written in the background.
-  if (doc.status === "done" && doc.source === "app" && existing?.status !== "done") c.executionCtx.waitUntil(queueReport(c.env, doc.id).catch((e) => console.error(`report queue: ${e instanceof Error ? e.message : String(e)}`)));
+  // SPEC-v3 M9a / SPEC-v7 M9d: a session that reaches the server as done gets its AI report, then the training overview
+  // is rewritten, both in the background.
+  if (doc.status === "done" && doc.source === "app" && existing?.status !== "done")
+    c.executionCtx.waitUntil(queueAfterSession(c.env, doc.id).catch((e: unknown) => console.error(`AI queue: ${e instanceof Error ? e.message : String(e)}`)));
   return c.json({ ok: true, applied: true });
 });
 
@@ -425,6 +427,20 @@ export async function readLatestReview(env: Env): Promise<WeeklyReview | null> {
 }
 
 dataRoutes.get("/reviews/latest", async (c) => c.json({ review: await readLatestReview(c.env) }));
+
+/** Every weekly review, newest week first (SPEC-v7 M9d: History → Weekly reviews; the rows are never deleted). */
+dataRoutes.get("/reviews", async (c) => {
+  const rows = await c.env.DB.prepare("SELECT * FROM weekly_reviews ORDER BY week_start DESC, created_at DESC").all<Record<string, string>>();
+  const reviews: WeeklyReview[] = rows.results.map((r) => ({
+    id: r.id,
+    week_start: r.week_start,
+    created_at: r.created_at,
+    summary_fa: r.summary_fa ?? "",
+    highlights: toStringList(r.highlights),
+    suggestions: toStringList(r.suggestions),
+  }));
+  return c.json({ reviews });
+});
 
 /* ---------------- body metrics (manual body weight) ---------------- */
 

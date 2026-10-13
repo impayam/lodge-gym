@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`, `SPEC-v2.md` and `SPEC-v3.md` (M9, M10); working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library), **M8** (training styles and program generator).
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library), **M8** (training styles and program generator), **M9a–M9d** (body-map picker, session planner, AI session report and Get advice, training overview).
 
 ## Stack
 
@@ -69,8 +69,9 @@ works only in the Home Screen app on iOS 16.4+.
 ## Weekly AI review (written by Claude into D1)
 
 The app only reads this table; Claude writes one row per week directly into D1
-(`lodge-gym-db`, id `f8ba012b-9970-423c-83f3-8c32111695e7`, migration `0003_weekly_reviews.sql`). The newest row
-(highest `week_start`, then latest `created_at`) is shown in the Weekly review card on the home and reports pages.
+(`lodge-gym-db`, id `f8ba012b-9970-423c-83f3-8c32111695e7`, migration `0003_weekly_reviews.sql`). Every row is shown
+under History → **Weekly reviews**, newest week first (`GET /api/reviews`). Since SPEC-v7 M9d the training overview
+replaces the card on the home and reports pages (approved 2026-10-13); the rows are kept.
 The review stays in Persian (SPEC-v2 M6): the card renders `summary_fa`, `highlights` and `suggestions` right-to-left
 (`dir="rtl" lang="fa"`) inside the English UI, with the iOS system font.
 
@@ -275,6 +276,31 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Code: client `worker/ai.ts`, routes and the job `worker/aiReports.ts`, cost and limits `worker/lib/ai/cost.ts`,
   screens `web/src/views/SessionReport.tsx`, `web/src/views/Planner.tsx`, `web/src/views/Settings.tsx`.
 
+## Training overview and session reports (SPEC-v7 M9d)
+
+- **Training overview** at the top of Reports: a short Persian (RTL) overview of this week and the previous 4 (approved
+  2026-10-13), rewritten automatically after every finished session, right after that session's report, by the same
+  `AiJobs` Durable Object (one queue: report, then overview; a waiting overview is replaced by the newer one). It shows
+  "Updated after: Day N · <date>" (or the time of a manual update), the model and **Regenerate**. A failed update never
+  hides the previous overview: it shows "Update failed — <reason>" with **Retry**. Offline, the last saved copy.
+- Built from raw data only (`worker/lib/ai/overview.ts`): sets with weight, reps and RIR per session, Payam's session
+  notes, the main lifts' e1RM per session (Epley) with the % change over the window, stalls (3 exposures without
+  beating the best before), drops (10% or more below the best), sessions per week against the program's days, weekly
+  volume against the targets (fractional sets) and skipped planned exercises. The text of session reports and earlier
+  overviews is never sent, so model mistakes do not compound.
+- Numbers come from the app: the lift table (1RM, change) is the app's; the model only phrases. A sentence with a number
+  the input does not have (percentages: only the app's `*_pct` values, as given or rounded) is dropped; a summary with
+  one makes the reply invalid (retried once, then an error row). Same rules as the report: chest first, no deload or
+  light week unless a note says he is tired, no medical advice.
+- Config in `wrangler.toml` `[vars]`: `OVERVIEW_EFFORT` (low), `OVERVIEW_MAX_TOKENS` (4000; thinking counts toward
+  it). Limit: 10 overviews per local day. Settings: "This month: N reports, M overviews, ~$X" and today's counts.
+- Every update inserts a row in `training_overviews` (migration 0010); the latest `ok` row is shown and older rows are
+  kept. Deleting the triggering session keeps the overview (its trigger becomes null). Backups include the table.
+- **Session reports** in Reports: every session's latest report, newest session first (day, date, one-line summary;
+  the latest 5, then "Show all"); a row opens the full report screen. Reports also stay under History → session.
+- Code: job and routes `worker/aiOverview.ts` (`GET`/`POST /api/overview`, `GET /api/session-reports`), limits
+  `worker/aiLimits.ts`, screens `web/src/views/Overview.tsx` and `web/src/views/Review.tsx` (History → Weekly reviews).
+
 ## Artwork and credits
 
 - Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
@@ -313,3 +339,7 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   (`session_reports`, `plan_advice` referencing `planned_sessions`); `GET /api/ai/usage` (Settings cost line and key
   status, never the key); Durable Object `AiJobs` (report writer); `[vars]` `REPORT_MODEL`, `REPORT_EFFORT`,
   `ADVICE_EFFORT`, `REPORT_MAX_TOKENS`; `DELETE /api/sessions/:id` also deletes the session's reports.
+- Training overview (SPEC-v7 M9d, window, card replacement and SQL approved 2026-10-13): migration
+  `0010_training_overviews.sql`; `GET /api/overview`, `POST /api/overview`, `GET /api/session-reports`,
+  `GET /api/reviews` (History → Weekly reviews); `[vars]` `OVERVIEW_EFFORT`, `OVERVIEW_MAX_TOKENS`; the backup export
+  adds `training_overviews`.

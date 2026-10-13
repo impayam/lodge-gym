@@ -16,7 +16,9 @@ import { fail, nowISO } from "./http";
 import { readPlan } from "./plans";
 import { loadReportData } from "./reports";
 import { ADVICE_SYSTEM, AdviceOutput, buildAdviceInput, validateAdvice, type PlanAdvice } from "./lib/ai/advice";
-import { DAILY_LIMIT, errorCode, keyStatus, monthUsage, usedToday, type AiKind, type AiRow, type AiUsage } from "./lib/ai/cost";
+import { DAILY_LIMIT, errorCode, keyStatus, monthUsage, usedToday, type AiUsage } from "./lib/ai/cost";
+import { aiRows, errorText, overLimit } from "./aiLimits";
+import { generateOverview } from "./aiOverview";
 import { buildReportInput, normalizeReport, REPORT_SYSTEM, ReportOutput, type ReportView, type SessionReport } from "./lib/ai/report";
 import { localDate } from "./lib/time";
 import { ID_RE, ulid } from "./lib/ulid";
@@ -44,24 +46,6 @@ const reportView = (r: ReportRow): ReportView => ({
   error_code: errorCode(r.error),
   error: r.error,
 });
-
-/** The AI calls of the last few days and this month (both tables), for limits, cost and the key's status. */
-async function aiRows(env: Env, sinceIso: string): Promise<AiRow[]> {
-  const [reports, advice] = await env.DB.batch<Omit<AiRow, "kind">>([
-    env.DB.prepare("SELECT created_at, model, status, error, input_tokens, output_tokens FROM session_reports WHERE created_at >= ?").bind(sinceIso),
-    env.DB.prepare("SELECT created_at, model, status, error, input_tokens, output_tokens FROM plan_advice WHERE created_at >= ?").bind(sinceIso),
-  ]);
-  return [...reports.results.map((r) => ({ ...r, kind: "report" as const })), ...advice.results.map((r) => ({ ...r, kind: "advice" as const }))];
-}
-
-/** Whether today's (local day) calls of this kind reached the daily limit. */
-async function overLimit(env: Env, kind: AiKind): Promise<boolean> {
-  const { timezone } = await readSettings(env);
-  const rows = await aiRows(env, new Date(Date.now() - 3 * 86_400_000).toISOString());
-  return usedToday(rows, kind, timezone, localDate(timezone)) >= DAILY_LIMIT[kind];
-}
-
-const errorText = (r: AiFail) => `${r.code}: ${r.message}`;
 
 /* ---------------- session report ---------------- */
 
@@ -94,35 +78,67 @@ export async function generateReport(env: Env, sessionId: string): Promise<Repor
   return reportView(row);
 }
 
+/** A queued job: a session's report, or the training overview after a finished session (or a manual Regenerate). */
 interface Job {
-  session_id: string;
+  /** Jobs queued before SPEC-v7 have no kind: they are reports. */
+  kind?: "report" | "overview";
+  /** report: its session; overview: the finished session that triggered it, or null. */
+  session_id: string | null;
   queued_at: number;
   attempts: number;
 }
+
+const kindOf = (j: Job) => j.kind ?? "report";
+const sameJob = (a: Job, b: Job) => kindOf(a) === kindOf(b) && a.session_id === b.session_id && a.queued_at === b.queued_at;
 
 /** Retries of a job whose run threw (D1 or runtime trouble; model errors are stored as rows, not retried here). */
 const JOB_ATTEMPTS = 3;
 
 /**
- * The background report writer: one object for the single user, a queue of session ids in its storage, and an alarm
- * that writes the reports one by one (an alarm may run 15 minutes and is retried by the platform).
+ * The background writer of session reports and the training overview: one object for the single user, a queue in its
+ * storage, and an alarm that runs the jobs one by one in order (an alarm may run 15 minutes and is retried by the
+ * platform). A finished session queues its report, then the overview, so the overview comes right after the report.
  */
 export class AiJobs extends DurableObject<Env> {
   private async jobs(): Promise<Job[]> {
     return (await this.ctx.storage.get<Job[]>("jobs")) ?? [];
   }
 
-  async enqueue(sessionId: string): Promise<void> {
-    const jobs = await this.jobs();
-    if (!jobs.some((j) => j.session_id === sessionId)) {
-      jobs.push({ session_id: sessionId, queued_at: Date.now(), attempts: 0 });
-      await this.ctx.storage.put("jobs", jobs);
-    }
+  private async wake(): Promise<void> {
     if ((await this.ctx.storage.getAlarm()) == null) await this.ctx.storage.setAlarm(Date.now());
   }
 
+  async enqueue(sessionId: string): Promise<void> {
+    const jobs = await this.jobs();
+    if (!jobs.some((j) => kindOf(j) === "report" && j.session_id === sessionId)) {
+      jobs.push({ kind: "report", session_id: sessionId, queued_at: Date.now(), attempts: 0 });
+      await this.ctx.storage.put("jobs", jobs);
+    }
+    await this.wake();
+  }
+
+  /**
+   * Queues an overview at the end of the queue. One that is waiting (not first, so not running) is moved to the end
+   * and takes the newer trigger: one overview after the latest data is enough.
+   */
+  async enqueueOverview(triggerSessionId: string | null): Promise<void> {
+    const jobs = (await this.jobs()).filter((j, i) => !(kindOf(j) === "overview" && i > 0));
+    jobs.push({ kind: "overview", session_id: triggerSessionId, queued_at: Date.now(), attempts: 0 });
+    await this.ctx.storage.put("jobs", jobs);
+    await this.wake();
+  }
+
   async pending(sessionId: string): Promise<boolean> {
-    return (await this.jobs()).some((j) => j.session_id === sessionId);
+    return (await this.jobs()).some((j) => kindOf(j) === "report" && j.session_id === sessionId);
+  }
+
+  async overviewPending(): Promise<boolean> {
+    return (await this.jobs()).some((j) => kindOf(j) === "overview");
+  }
+
+  /** The queue, for tests and diagnostics. */
+  async queued(): Promise<{ kind: "report" | "overview"; session_id: string | null }[]> {
+    return (await this.jobs()).map((j) => ({ kind: kindOf(j), session_id: j.session_id }));
   }
 
   async alarm(): Promise<void> {
@@ -130,13 +146,14 @@ export class AiJobs extends DurableObject<Env> {
     if (!job) return;
     let done = true;
     try {
-      await generateReport(this.env, job.session_id);
+      if (kindOf(job) === "overview") await generateOverview(this.env, job.session_id);
+      else if (job.session_id) await generateReport(this.env, job.session_id);
     } catch (e) {
-      console.error(`report ${job.session_id} failed: ${e instanceof Error ? e.message : String(e)}`);
+      console.error(`${kindOf(job)} ${job.session_id ?? "-"} failed: ${e instanceof Error ? e.message : String(e)}`);
       done = job.attempts + 1 >= JOB_ATTEMPTS;
     }
-    // Re-read: sessions may have been queued while this one was written.
-    const jobs = (await this.jobs()).flatMap((j) => (j.session_id !== job.session_id ? [j] : done ? [] : [{ ...j, attempts: j.attempts + 1 }]));
+    // Re-read: jobs may have been queued while this one ran.
+    const jobs = (await this.jobs()).flatMap((j) => (!sameJob(j, job) ? [j] : done ? [] : [{ ...j, attempts: j.attempts + 1 }]));
     await this.ctx.storage.put("jobs", jobs);
     if (jobs.length) await this.ctx.storage.setAlarm(Date.now() + (done ? 0 : 30_000 * (job.attempts + 1)));
   }
@@ -144,10 +161,15 @@ export class AiJobs extends DurableObject<Env> {
 
 const jobs = (env: Env) => env.AI_JOBS.get(env.AI_JOBS.idFromName("owner"));
 
-/** Queues the report of a session that just synced as done, unless it already has one. */
-export async function queueReport(env: Env, sessionId: string): Promise<void> {
+/**
+ * A session that just synced as done: its report (unless it already has one), then the training overview (SPEC-v7
+ * M9d: rewritten after every finished session).
+ */
+export async function queueAfterSession(env: Env, sessionId: string): Promise<void> {
   const has = await env.DB.prepare("SELECT 1 AS x FROM session_reports WHERE session_id = ? LIMIT 1").bind(sessionId).first();
-  if (!has) await jobs(env).enqueue(sessionId);
+  const stub = jobs(env);
+  if (!has) await stub.enqueue(sessionId);
+  await stub.enqueueOverview(sessionId);
 }
 
 /* ---------------- routes ---------------- */
@@ -222,7 +244,11 @@ aiRoutes.get("/usage", async (c) => {
     key: c.env.ANTHROPIC_API_KEY?.trim() ? "set" : "missing",
     key_status: keyStatus(rows),
     month: monthUsage(rows, timezone, today.slice(0, 7)),
-    today: { reports: usedToday(rows, "report", timezone, today), advice: usedToday(rows, "advice", timezone, today) },
+    today: {
+      reports: usedToday(rows, "report", timezone, today),
+      advice: usedToday(rows, "advice", timezone, today),
+      overviews: usedToday(rows, "overview", timezone, today),
+    },
     limits: DAILY_LIMIT,
   });
 });
