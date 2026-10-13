@@ -73,7 +73,7 @@ export async function generateOverview(env: Env, triggerSessionId: string | null
       system: OVERVIEW_SYSTEM,
       input,
       schema: OverviewOutput,
-      effort: effortOf(env.OVERVIEW_EFFORT, "low"),
+      effort: effortOf(env.OVERVIEW_EFFORT, "medium"),
       maxTokens: maxTokensOf(env.OVERVIEW_MAX_TOKENS, OVERVIEW_DEFAULT_MAX_TOKENS),
       check: (out) => checkOverview(out, input),
     });

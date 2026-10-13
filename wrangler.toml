@@ -43,7 +43,7 @@ REPORT_EFFORT = "low"
 ADVICE_EFFORT = "medium"
 REPORT_MAX_TOKENS = "3000"
 # Training overview (SPEC-v7 M9d), rewritten after every finished session.
-OVERVIEW_EFFORT = "low"
+OVERVIEW_EFFORT = "medium"
 OVERVIEW_MAX_TOKENS = "4000"
 
 # Weekly backup (Monday 10:17 UTC).

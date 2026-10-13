@@ -9,7 +9,7 @@ import { countsVolume } from "../category";
 import { weekRange } from "../cycle";
 import { toLatinDigits } from "../digits";
 import { liveItems, type SessionPlan } from "../plan";
-import { balanceStatus, bestSet, convertWeight, epley, mainLifts, muscleTargets, programOn, setsPerMuscle, type BalanceStatus, type ReportData } from "../reports";
+import { activeSince, balanceStatus, bestSet, convertWeight, epley, mainLifts, muscleTargets, plannedSessions, programOn, setsPerMuscle, type BalanceStatus, type ReportData } from "../reports";
 import { TARGET_GROUPS } from "../muscles";
 import { addDays } from "../time";
 import type { Exercise, SetEntry, Unit, WorkoutSession } from "../types";
@@ -47,9 +47,11 @@ export interface LiftTrend {
 
 export interface OverviewInput {
   window: { start: string; end: string; today: string; weeks: number; unit: Unit };
-  program: { name: string; style: string | null; days_per_week: number };
+  /** `started`: the local date the active program was (last) activated. */
+  program: { name: string; style: string | null; days_per_week: number; started: string | null };
   weeks: OverviewWeek[];
-  totals: { sessions_done: number; sessions_planned: number };
+  /** Done and planned sessions from `since`: the active program's start or the window's start, whichever is later. */
+  totals: { since: string; sessions_done: number; sessions_planned: number };
   sessions: {
     date: string;
     day: string;
@@ -97,6 +99,10 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
   const done = d.sessions.filter((s) => s.status === "done").sort((a, b) => order(a).localeCompare(order(b)));
   const inWindow = done.filter((s) => s.local_date >= start && s.local_date <= end);
   const dayName = (id: string) => sessionDay(d, id)?.name_en ?? id;
+  // Planned sessions count only from the active program's start, or the window's start if later (Payam, 2026-10-13):
+  // weeks before it plan none, and the week it started plans only its days since then.
+  const started = activeSince(d, today);
+  const since = started && started > start ? started : start;
 
   const weeks: OverviewWeek[] = [];
   for (let k = OVERVIEW_WEEKS - 1; k >= 0; k--) {
@@ -110,7 +116,7 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
       end: w.end,
       this_week: k === 0,
       sessions_done: list.length,
-      sessions_planned: scored.days_per_week,
+      sessions_planned: w.end < since ? 0 : round1(plannedSessions(d, w.start > since ? w.start : since, w.end)),
       volume: TARGET_GROUPS.map((g) => ({ group: GROUP_NAME[g], sets: round1(sets[g].fractional), target: round1(targets[g] ?? 0), status: balanceStatus(sets[g].fractional, targets[g] ?? 0) })),
     });
   }
@@ -190,9 +196,9 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
   const program = programOn(d, end);
   return {
     window: { start, end, today, weeks: OVERVIEW_WEEKS, unit },
-    program: { name: program.program.name, style, days_per_week: program.days_per_week },
+    program: { name: program.program.name, style, days_per_week: program.days_per_week, started },
     weeks,
-    totals: { sessions_done: inWindow.length, sessions_planned: weeks.reduce((a, w) => a + w.sessions_planned, 0) },
+    totals: { since, sessions_done: inWindow.filter((s) => s.local_date >= since).length, sessions_planned: round1(weeks.reduce((a, w) => a + w.sessions_planned, 0)) },
     sessions,
     lifts,
     stalls,
@@ -348,7 +354,7 @@ Rules:
 - Numbers: write only numbers that appear in the input, exactly or rounded (for example a change_pct of 3.8 may be written as 4%). Prefer words over numbers. Any sentence with another number is removed by the app.
 - trends: one item per main lift in lifts that has a change_pct (direction and size over the window).
 - volume_fa: groups on, under or over target this week (weeks with this_week true) and over the window. Chest is Payam's priority.
-- consistency_fa: sessions done per week against sessions_planned, and any pattern in skipped.
+- consistency_fa: sessions done per week against sessions_planned, and any pattern in skipped. Planned sessions count only from the active program's start (program.started) or the window's start, whichever is later: weeks before it plan none, and totals compare the sessions done and planned since totals.since.
 - focus_next: 1–3 concrete priorities for the coming sessions, for strength and balance.
 - warnings: only real issues: stalls, drops, pain or injury in a note. Usually none.
 - Never suggest a deload, a light week or less volume, unless a session note says he is tired. This is his stated preference.

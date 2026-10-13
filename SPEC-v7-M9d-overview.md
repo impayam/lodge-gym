@@ -68,11 +68,14 @@ CREATE INDEX training_overviews_created ON training_overviews(created_at);
   The §5 SQL was approved as shown (migration `0010_training_overviews.sql`).
 - Same Durable Object queue as the report: a finished session queues its report (if none yet), then the overview. A
   waiting overview is replaced by a newer one, so a burst of syncs costs one call.
-- Defaults: `OVERVIEW_EFFORT = "low"`, `OVERVIEW_MAX_TOKENS = "4000"` (thinking counts toward it); Opus only, no
+- Defaults: `OVERVIEW_EFFORT = "medium"` (Payam, PR review), `OVERVIEW_MAX_TOKENS = "4000"` (thinking counts toward it); Opus only, no
   fallback. Limit 10 per local day (calls that used tokens).
 - Number filter: prose items with a number not in the input are dropped (percentages must match an app `*_pct` value,
   as given or rounded); a summary with one makes the reply invalid (retried once, then an error row). The lift table
   (1RM, % change) is the app's.
 - Routes: `GET /api/overview` (latest ok overview, `failed` when a newer attempt failed, `pending`), `POST /api/overview`
   (Regenerate/Retry, 202), `GET /api/session-reports` (latest report per session, newest session first).
-- Reports → Session reports shows the latest 5, then "Show all".
+- Reports → Session reports shows the latest 5, then "Show all" (kept after review).
+- Planned sessions (PR review): counted only from the later of the active program's start date (its last activation)
+  and the window's start; weeks before plan none, the start week plans only its days since then. The totals compare
+  done and planned sessions from that same date (`totals.since`).

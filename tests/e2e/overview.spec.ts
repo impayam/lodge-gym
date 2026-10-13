@@ -66,7 +66,7 @@ test("the overview updates after a finished session, keeps the old one on failur
   await expect(card(page)).not.toContainText("۹۹۹۹");
   await expect(card(page)).toContainText("claude-opus-5-5");
   const calls = await aiCalls();
-  expect(calls.by_kind.overview).toMatchObject({ model: "claude-opus-5-5", effort: "low", max_tokens: 4000, key_set: true });
+  expect(calls.by_kind.overview).toMatchObject({ model: "claude-opus-5-5", effort: "medium", max_tokens: 4000, key_set: true });
   const afterSession = await card(page).getAttribute("data-overview");
 
   // The update fails: the previous overview stays, with "Update failed" and Retry.

@@ -285,14 +285,15 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   hides the previous overview: it shows "Update failed — <reason>" with **Retry**. Offline, the last saved copy.
 - Built from raw data only (`worker/lib/ai/overview.ts`): sets with weight, reps and RIR per session, Payam's session
   notes, the main lifts' e1RM per session (Epley) with the % change over the window, stalls (3 exposures without
-  beating the best before), drops (10% or more below the best), sessions per week against the program's days, weekly
+  beating the best before), drops (10% or more below the best), sessions per week against the program's days (planned
+  sessions count only from the active program's start, or the window's start if later; Payam, 2026-10-13), weekly
   volume against the targets (fractional sets) and skipped planned exercises. The text of session reports and earlier
   overviews is never sent, so model mistakes do not compound.
 - Numbers come from the app: the lift table (1RM, change) is the app's; the model only phrases. A sentence with a number
   the input does not have (percentages: only the app's `*_pct` values, as given or rounded) is dropped; a summary with
   one makes the reply invalid (retried once, then an error row). Same rules as the report: chest first, no deload or
   light week unless a note says he is tired, no medical advice.
-- Config in `wrangler.toml` `[vars]`: `OVERVIEW_EFFORT` (low), `OVERVIEW_MAX_TOKENS` (4000; thinking counts toward
+- Config in `wrangler.toml` `[vars]`: `OVERVIEW_EFFORT` (medium, Payam 2026-10-13), `OVERVIEW_MAX_TOKENS` (4000; thinking counts toward
   it). Limit: 10 overviews per local day. Settings: "This month: N reports, M overviews, ~$X" and today's counts.
 - Every update inserts a row in `training_overviews` (migration 0010); the latest `ok` row is shown and older rows are
   kept. Deleting the triggering session keeps the overview (its trigger becomes null). Backups include the table.

@@ -52,9 +52,36 @@ describe("buildOverviewInput", () => {
       ["2026-09-21", false, 5, 4],
       ["2026-09-28", true, 1, 4],
     ]);
-    expect(input.totals).toEqual({ sessions_done: 8, sessions_planned: 20 });
+    // No activation in the data: every week plans the program's 4 days.
+    expect(input.program.started).toBeNull();
+    expect(input.totals).toEqual({ since: "2026-08-31", sessions_done: 8, sessions_planned: 20 });
     // Sessions before the window (Aug 20) and unfinished ones are left out.
     expect(input.sessions.map((s) => s.date)).toEqual(["2026-09-15", "2026-09-18", "2026-09-21", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-28"]);
+  });
+
+  it("counts planned sessions only from the active program's start when it started mid-window (Payam, 2026-10-13)", () => {
+    // Activated on Thursday 2026-09-17 at noon in Denver: the week of Sep 14 plans its last 4 days (4 × 4/7), the weeks
+    // before plan none, and the totals count done sessions from the same day (Sep 15 is before it).
+    const d = data();
+    const info = (acts: [string, string | null][]) => ({
+      id: "fullbody4", name: "Full body", style: null, days_per_week: 4, params: null, generated_by: null, created_at: "2026-08-01T00:00:00.000Z", approved_at: null, archived_at: null,
+      status: "active" as const, activations: acts.map(([started_at, ended_at], i) => ({ id: `a${i}`, program_id: "fullbody4", started_at, ended_at })),
+      days: d.program.days,
+    });
+    const mid = buildOverviewInput({ ...d, programs: [info([["2026-09-17T18:00:00.000Z", null]])] }, [], TODAY, null);
+    expect(mid.program.started).toBe("2026-09-17");
+    expect(mid.weeks.map((w) => [w.start, w.sessions_planned, w.sessions_done])).toEqual([
+      ["2026-08-31", 0, 0],
+      ["2026-09-07", 0, 0],
+      ["2026-09-14", 2.3, 2],
+      ["2026-09-21", 4, 5],
+      ["2026-09-28", 4, 1],
+    ]);
+    expect(mid.totals).toEqual({ since: "2026-09-17", sessions_done: 7, sessions_planned: 10.3 });
+    // Activated before the window: the whole window plans the program's days.
+    const before = buildOverviewInput({ ...d, programs: [info([["2026-08-01T18:00:00.000Z", null]])] }, [], TODAY, null);
+    expect(before.program.started).toBe("2026-08-01");
+    expect(before.totals).toEqual({ since: "2026-08-31", sessions_done: 8, sessions_planned: 20 });
   });
 
   it("has the raw sets and Payam's own notes, and no AI text", () => {

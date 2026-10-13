@@ -84,7 +84,7 @@ describe("training overview", () => {
     await put({ ...s, updated_at: "2026-10-13T00:00:01.000Z" });
     await settled(s.id);
     expect(mock.calls.map((c) => kindOf(c.body))).toEqual(["report", "overview"]);
-    expect(mock.calls[1].body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 4000, output_config: { effort: "low" } });
+    expect(mock.calls[1].body).toMatchObject({ model: "claude-opus-5-5", max_tokens: 4000, output_config: { effort: "medium" } });
     const o = await overview();
     expect(o.pending).toBe(false);
     expect(o.failed).toBeNull();

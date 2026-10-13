@@ -65,8 +65,14 @@ function dayNames(d: ReportData): Map<string, string> {
   return new Map([...(d.programs ?? []).flatMap((p) => p.days), ...d.program.days].map((x) => [x.id, x.name_en]));
 }
 
+/** The local date the program active on `date` was (last) activated; null when no activation started by then. */
+export function activeSince(d: ReportData, date: string): string | null {
+  const starts = (d.programs ?? []).flatMap((p) => p.activations.map((a) => localDate(d.settings.timezone, a.started_at))).filter((f) => f <= date);
+  return starts.length ? starts.sort().at(-1)! : null;
+}
+
 /** Planned sessions over [from, to]: each day adds the weekly days of the program active then, divided by 7. */
-function plannedSessions(d: ReportData, from: string, to: string): number {
+export function plannedSessions(d: ReportData, from: string, to: string): number {
   let n = 0;
   for (let day = from; day <= to; day = addDays(day, 1)) n += programOn(d, day).days_per_week / 7;
   return n;
