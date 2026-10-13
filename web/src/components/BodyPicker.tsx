@@ -29,6 +29,8 @@ const memory = new Map<string, Place>();
 
 const HALVES: Record<FigureView, HalfRegion[]> = { front: FRONT, back: BACK };
 const EQUIPMENT: Equipment[] = ["barbell", "dumbbell", "cable", "machine", "bodyweight"];
+/** Height of the enlarged area, in CSS pixels. */
+const ZOOM_H = 340;
 
 /** Bounding box of absolute path data (control points included, so it never cuts a curve). */
 function bbox(ds: string[]) {
@@ -133,7 +135,8 @@ function AreaView({ place, go }: { place: Place; go: (p: Partial<Place>) => void
         ) : null}
       </div>
       <h2 style={{ margin: 0 }}>{def.label}</h2>
-      <svg class="zoom" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} role="img" aria-label={`${def.label}, ${view === "front" ? "front" : "back"}: tap a muscle`}>
+      {/* The drawing box has the zoomed area's own proportions, at most 340 px tall, so nothing else shows beside it. */}
+      <svg class="zoom" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{ width: `min(100%, ${Math.round((ZOOM_H * vb.w) / vb.h)}px)`, aspectRatio: `${vb.w} / ${vb.h}` }} role="img" aria-label={`${def.label}, ${view === "front" ? "front" : "back"}: tap a muscle`}>
         <path d={SILHOUETTE} class="body" />
         {context.map((r) => (
           <path d={r.d} class="pick-context" />

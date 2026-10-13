@@ -418,13 +418,13 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 
 /* body-map exercise picker (SPEC-v3 M9b) */
 .bodypick .figure svg { touch-action: manipulation; }
-.pick-muscle { fill: var(--surface-2); stroke: var(--muted); stroke-width: 0.8; stroke-linejoin: round; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pick-muscle { fill: var(--surface); stroke: var(--muted); stroke-width: 0.8; stroke-linejoin: round; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .pick-muscle:hover, .pick-muscle:active { fill: var(--accent-soft); stroke: var(--accent); }
 .pick-muscle.on { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 0.6; }
 .pick-muscle.on:hover, .pick-muscle.on:active { fill: var(--accent); }
 .pick-hit { fill: none; stroke: transparent; stroke-width: 9; pointer-events: stroke; cursor: pointer; }
 .pick-context { fill: var(--surface-2); stroke: var(--line); stroke-width: 0.4; pointer-events: none; opacity: 0.7; }
-.zoom { display: block; width: 100%; max-height: 340px; margin: 0 auto; touch-action: manipulation; }
+.zoom { display: block; height: auto; margin: 0 auto; overflow: hidden; touch-action: manipulation; }
 .zoom .body { fill: var(--surface); stroke: var(--line); stroke-width: 0.6; }
 .bigchips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .bigchip { min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 15px; color: var(--ink); padding: 8px 10px; }
