@@ -281,8 +281,9 @@ export async function savePlan(plan: SessionPlan) {
 export async function startPlan(plan: SessionPlan) {
   const now = new Date().toISOString();
   const started: SessionPlan = { ...plan, status: "started", started_at: now, updated_at: now };
-  await savePlan(started);
+  // The session first: the planner leaves for it as soon as it sees the plan started.
   await saveSession(sessionFromPlan(state.boot!, started, today(), now));
+  await savePlan(started);
   navigate("session", plan.id);
 }
 
