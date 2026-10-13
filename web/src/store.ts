@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { Category } from "../../worker/lib/category";
-import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
 import { cancelPush, schedulePush } from "./push";
@@ -12,7 +13,7 @@ import * as ldb from "./localdb";
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram";
 
 export interface SyncState {
   pending: number;
@@ -26,7 +27,8 @@ export interface State {
   auth: AuthState;
   boot: BootData | null;
   sessions: Record<string, WorkoutSession>;
-  view: { name: ViewName; sessionId?: string };
+  /** sessionId: the session view; programId: a draft opened in the program editor. */
+  view: { name: ViewName; sessionId?: string; programId?: string };
   sync: SyncState;
   rest: { id: string; endsAt: number; label: string } | null;
   flash: string | null;
@@ -83,6 +85,12 @@ export const today = () => localDate(state.boot?.settings.timezone ?? "America/D
 
 export function navigate(name: ViewName, sessionId?: string) {
   setState({ view: { name, sessionId } });
+  window.scrollTo(0, 0);
+}
+
+/** Opens the program editor: a new proposal, or a saved draft. */
+export function openProgramEditor(programId?: string) {
+  setState({ view: { name: "newprogram", programId } });
   window.scrollTo(0, 0);
 }
 
@@ -427,6 +435,21 @@ export async function uploadCustomPhoto(ex: Exercise, file: Blob): Promise<Exerc
 }
 
 export const mediaSrc = (m: ExerciseMedia) => (m.r2_key ? `/api/library/media/${m.r2_key.split("/").map(encodeURIComponent).join("/")}` : (m.url ?? ""));
+
+/* ---------------- programs (SPEC-v2 M8; online only) ---------------- */
+
+export const generateProposal = (input: GeneratorInput) => api<{ proposal: Proposal }>("POST", "/programs/generate", input).then((r) => r.proposal);
+
+export const loadProgramVersions = () => api<{ programs: ProgramVersion[] }>("GET", "/programs").then((r) => r.programs);
+
+export const saveProgramDraft = (draft: { id: string; params: GeneratorInput; days: { exercises: EditedExercise[] }[] }) =>
+  api<{ program: ProgramVersion; check: CheckResult }>("POST", "/programs", draft);
+
+/** Approves a draft or re-activates an archived program, then reloads the bootstrap so the new program is offline too. */
+export async function switchProgram(id: string, how: "approve" | "activate") {
+  await api<{ ok: true; programs: ProgramInfo[] }>("POST", `/programs/${encodeURIComponent(id)}/${how}`);
+  await refresh();
+}
 
 /* ---------------- sync ---------------- */
 

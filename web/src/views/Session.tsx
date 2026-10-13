@@ -10,7 +10,7 @@ import { clock, dateLong, fmtNum, hm, ytLink } from "../format";
 import { dayInfo, guidance, retime, sessionBlocks, type ExerciseBlock, type Guidance } from "../model";
 import { addExtraExercise, allExercises, flash, getState, navigate, photoSrc, removeExtraExercise, removeSession, saveBodyMass, saveSession, startRest, stopRest, useStore } from "../store";
 import { ExercisePicker, ExerciseThumb } from "./Library";
-import { targetText } from "./Program";
+import { rirText, targetText } from "./Program";
 import { WatchStats, workoutTypeName } from "./Watch";
 import { PhotoPicker, poseLabel } from "./Photos";
 
@@ -427,7 +427,12 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
             {plan.superset_tag ? <span class="tag">{plan.superset_tag}</span> : null}
           </b>
         </div>
-        {extra ? null : <div class="target num">{targetText(plan)}</div>}
+        {extra ? null : (
+          <div class="target num">
+            {targetText(plan)}
+            {rirText(plan) ? <small class="rirt">{rirText(plan)}</small> : null}
+          </div>
+        )}
       </div>
       {ex.cue_en ? <div class="cue">{ex.cue_en}</div> : null}
       <div class="ex-links">
@@ -448,7 +453,7 @@ function ExerciseCard({ block, session, g, updateSets }: { block: ExerciseBlock;
         ) : extra ? (
           <span class="last">Added to this session only; no target.</span>
         ) : (
-          <span class="last">First time: start light.</span>
+          <span class="last">First time: choose your weight.</span>
         )}
       </div>
       <div class={`colhead${isTime ? " timed" : ""}`}>

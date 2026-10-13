@@ -13,7 +13,10 @@ import {
   type DayExercise,
   type Exercise,
   type Program,
+  type ProgramActivation,
   type ProgramDay,
+  type ProgramInfo,
+  type ProgramVersion,
   type SetEntry,
   type WeeklyReview,
   type Settings,
@@ -63,23 +66,7 @@ export async function readProgram(env: Env): Promise<{ program: Program; other_d
      WHERE p.active = 1 ORDER BY de.day_id, de.position`
   ).all<Record<string, number | string | null>>();
   const byDay = new Map<string, DayExercise[]>();
-  for (const r of dex.results) {
-    const list = byDay.get(r.day_id as string) ?? [];
-    list.push({
-      id: r.id as string,
-      exercise_id: r.exercise_id as string,
-      position: r.position as number,
-      sets: r.sets as number,
-      reps_min: r.reps_min as number,
-      reps_max: r.reps_max as number,
-      per_leg: r.per_leg === 1,
-      is_time: r.is_time === 1,
-      rest_sec: r.rest_sec as number,
-      superset_tag: (r.superset_tag as string | null) ?? null,
-      is_main: r.is_main === 1,
-    });
-    byDay.set(r.day_id as string, list);
-  }
+  for (const r of dex.results) byDay.set(r.day_id as string, [...(byDay.get(r.day_id as string) ?? []), mapDayExercise(r)]);
   const activeDays = days.results.filter((d) => d.program_id === prog?.id);
   return {
     program: {
@@ -89,6 +76,83 @@ export async function readProgram(env: Env): Promise<{ program: Program; other_d
     },
     other_days: days.results.filter((d) => d.program_id !== prog?.id).map(mapDay),
   };
+}
+
+interface ProgramRow {
+  id: string;
+  name: string;
+  active: number;
+  created_at: string;
+  style: string | null;
+  days_per_week: number | null;
+  params: string | null;
+  generated_by: string | null;
+  approved_at: string | null;
+  archived_at: string | null;
+}
+
+const parseParams = (raw: string | null): ProgramInfo["params"] => {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ProgramInfo["params"];
+  } catch {
+    return null;
+  }
+};
+
+/** Every program with its activations, newest first (SPEC-v2 §8.6). */
+export async function readProgramInfos(env: Env): Promise<ProgramInfo[]> {
+  const [progs, acts] = await env.DB.batch<ProgramRow | ProgramActivation>([
+    env.DB.prepare("SELECT id, name, active, created_at, style, days_per_week, params, generated_by, approved_at, archived_at FROM programs ORDER BY created_at DESC, id"),
+    env.DB.prepare("SELECT id, program_id, started_at, ended_at FROM program_activations ORDER BY started_at, id"),
+  ]);
+  const byProgram = new Map<string, ProgramActivation[]>();
+  for (const a of acts.results as ProgramActivation[]) byProgram.set(a.program_id, [...(byProgram.get(a.program_id) ?? []), a]);
+  return (progs.results as ProgramRow[]).map((p) => ({
+    id: p.id,
+    name: p.name,
+    style: p.style,
+    days_per_week: p.days_per_week,
+    params: parseParams(p.params),
+    generated_by: p.generated_by === "seed" || p.generated_by === "generator" ? p.generated_by : null,
+    created_at: p.created_at,
+    approved_at: p.approved_at,
+    archived_at: p.archived_at,
+    status: p.active === 1 ? "active" : p.archived_at ? "archived" : p.approved_at ? "archived" : "draft",
+    activations: byProgram.get(p.id) ?? [],
+  }));
+}
+
+const mapDayExercise = (r: Record<string, number | string | null>): DayExercise => ({
+  id: r.id as string,
+  exercise_id: r.exercise_id as string,
+  position: r.position as number,
+  sets: r.sets as number,
+  reps_min: r.reps_min as number,
+  reps_max: r.reps_max as number,
+  per_leg: r.per_leg === 1,
+  is_time: r.is_time === 1,
+  rest_sec: r.rest_sec as number,
+  superset_tag: (r.superset_tag as string | null) ?? null,
+  is_main: r.is_main === 1,
+  target_rir_min: (r.target_rir_min as number | null | undefined) ?? null,
+  target_rir_max: (r.target_rir_max as number | null | undefined) ?? null,
+  slot: (r.slot as DayExercise["slot"] | undefined) ?? null,
+});
+
+/** Programs with their days and exercises; `ids` limits the list. */
+export async function readProgramVersions(env: Env, ids?: string[]): Promise<ProgramVersion[]> {
+  const infos = (await readProgramInfos(env)).filter((p) => !ids || ids.includes(p.id));
+  const [days, dex] = await env.DB.batch<DayRow | Record<string, number | string | null>>([
+    env.DB.prepare("SELECT * FROM program_days ORDER BY program_id, position"),
+    env.DB.prepare("SELECT * FROM day_exercises ORDER BY day_id, position"),
+  ]);
+  const byDay = new Map<string, DayExercise[]>();
+  for (const r of dex.results as Record<string, number | string | null>[]) byDay.set(r.day_id as string, [...(byDay.get(r.day_id as string) ?? []), mapDayExercise(r)]);
+  return infos.map((p) => ({
+    ...p,
+    days: (days.results as DayRow[]).filter((d) => d.program_id === p.id).map((d) => ({ ...mapDay(d), exercises: byDay.get(d.id) ?? [] })),
+  }));
 }
 
 const jsonList = <T>(raw: unknown): T[] => {
@@ -223,15 +287,16 @@ dataRoutes.get("/bootstrap", async (c) => {
   const today = localDate(settings.timezone);
   const from = addDays(today, -60);
   const to = addDays(today, 1);
-  const [{ program, other_days }, exercises, sessions, watch, body, review] = await Promise.all([
+  const [{ program, other_days }, programs, exercises, sessions, watch, body, review] = await Promise.all([
     readProgram(c.env),
+    readProgramInfos(c.env),
     readExercises(c.env),
     readSessions(c.env, from, to),
     readWatchForSessions(c.env, from, to),
     readBodyMetrics(c.env, from, to),
     readLatestReview(c.env),
   ]);
-  const payload: Bootstrap = { settings, program, other_days, exercises, sessions, watch, body, review, server_time: nowISO() };
+  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, server_time: nowISO() };
   return c.json(payload);
 });
 

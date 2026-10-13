@@ -1,7 +1,7 @@
 import { daysBetween } from "../../../worker/lib/time";
 import type { ProgramDay } from "../../../worker/lib/types";
 import { dateShort, fmtNum, hm, plural } from "../format";
-import { activeSession, dayInfo, exerciseMap, homeModel, newSession } from "../model";
+import { activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession } from "../model";
 import { navigate, saveSession, today, useStore } from "../store";
 import { HistoryItem } from "./HistoryItem";
 import { WeeklyReviewCard } from "./Review";
@@ -31,7 +31,8 @@ export function Home() {
     why = `Last session: ${dayInfo(boot, m.next.last.program_day_id).name_en}, ${when}.`;
   }
 
-  const dots = Math.max(4, m.weekDone);
+  const perWeek = daysPerWeek(boot);
+  const dots = Math.max(perWeek, m.weekDone);
   return (
     <>
       {act ? (
@@ -68,7 +69,7 @@ export function Home() {
         <div>
           <b class="num">
             {fmtNum(m.weekDone)}
-            <small> of 4</small>
+            <small> of {fmtNum(perWeek)}</small>
           </b>
           <br />
           <small>sessions this week</small>

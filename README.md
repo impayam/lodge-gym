@@ -2,7 +2,7 @@
 
 Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md` and `SPEC-v2.md`; working rules: `CLAUDE.md`.
 
-Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library).
+Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library), **M8** (training styles and program generator).
 
 ## Stack
 
@@ -25,7 +25,7 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 | `npm test` | Vitest: pure logic + Worker API in workerd |
 | `npm run e2e` | Playwright, iPhone 15 profile: WebKit against a local HTTPS server (:8789, self-signed, through the airplane-mode proxy on :8790 and a persistent context) and Chromium against HTTP (:8788); see `scripts/e2e-server.mjs`, `scripts/e2e-proxy.mjs`, `tests/e2e/fixtures.ts` |
 | `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
-| `npm run seed:local` / `:remote` | Upsert the program seed (idempotent) |
+| `npm run seed:local` / `:remote` | Insert the seed rows a database is missing (insert-only: never changes the active program, approvals, archives or activations) |
 | `npm run deploy` | Build, migrate + seed remote D1, `wrangler deploy` |
 
 ## Deploy (Cloudflare Workers Builds)
@@ -116,7 +116,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   the muscle map. Stretching, plyometrics, cardio and strongman are logged but count 0 sets; the exercise detail says
   "Not counted in volume". The rule lives in `worker/lib/category.ts`.
 - A new personal record needs an earlier best to beat (a first-ever lift is not a PR).
-- Monthly adherence = sessions ÷ (4 × days in month ÷ 7), capped at 100 %.
+- Adherence = sessions ÷ planned sessions, capped at 100 %; each day of the period adds the days per week of the
+  program active that day ÷ 7. A week's targets and session goal are the program's that was active at the week's end.
 
 ## English UI (SPEC-v2 M6)
 
@@ -146,6 +147,26 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Muscle names map to the canonical keys in one table, `worker/lib/muscles.ts`.
 - Every exercise shows a "Watch form video" link: a YouTube search for `name_en + " form"`, built at render time.
 
+## Training styles and program generator (SPEC-v2 M8)
+
+- Settings → Program → New program: days per week, style (auto, full body, upper/lower, PPL, PPL + upper/lower, bro
+  split, strength), session length, priority muscles, exercises to leave out, and full gym or dumbbells only.
+- The generator (`worker/lib/generator/`, pure and seeded) fills each style's fixed weekly layout: main and secondary
+  lifts first, then accessories and isolation toward the weekly targets (the current program's fractional volume, +3
+  for added priority muscles, floors of 10 for chest, back, quads and hamstrings & glutes), with at most 10 fractional
+  sets per muscle per session, rear delts ≥ 6, pull ≥ push, at least one hinge and one squat, and every day inside
+  the session length. Exercise choice prefers history, then the current program, then compound, then
+  beginner/intermediate; one exercise keeps one role a week; Olympic-style lifts are never picked automatically.
+- `checkPlan` (`check.ts`) is shared by the generator, the editor on the phone and the server: hard-rule violations
+  block approval, warnings (floors, under/over target, long days, frequency) do not.
+- The editor swaps an exercise for one with the same movement pattern and primary muscle and changes sets inside the
+  slot's range. Approving archives the old program; History shows the program timeline, groups sessions by program and
+  can switch back to an archived program (a new activation; history stays). Switching twice within 3 weeks shows a
+  notice. No intro week, no light week; weights continue from the last sessions.
+- Tests: property tests over every style × days × session length × 50 seeds on the real library
+  (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
+  ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
+
 ## Artwork and credits
 
 - Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
@@ -168,3 +189,7 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   behind sign-in); session sets accept `is_extra` and `position`; `/api/bootstrap` carries only the exercises the app
   needs offline; the backup export adds `custom_exercises`. Migration `0005_exercise_category.sql`.
 - `POST /api/health/raw` (replaces `/health/workouts`), `GET /api/health/status`, `PUT /api/health/workouts/:id/match`.
+- Program generator (SPEC-v2 §8.7, approved 2026-10-12): `POST /api/programs/generate`, `POST /api/programs` (draft),
+  `POST /api/programs/:id/approve`, `POST /api/programs/:id/activate`, `GET /api/programs`; migration
+  `0006_program_styles.sql`; `programs` in `/api/bootstrap` and in the backup export; the weekly report names the
+  program it is scored against.

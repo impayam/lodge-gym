@@ -1,12 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
 import { isValidTimeZone } from "../../../worker/lib/time";
-import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
+import type { ProgramInfo, Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
-import { dateLong, fmtNum } from "../format";
+import { dateLong, fmtNum, instantShort } from "../format";
+import { activeProgramInfo, programName, styleLabel } from "../model";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
 import { deviceLabel, registerPasskey } from "../passkey";
-import { logout, navigate, saveSettings, syncNow, useStore } from "../store";
+import { loadProgramVersions, logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
 
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
 
@@ -75,6 +76,9 @@ export function Settings() {
         </div>
       </div>
 
+      <h2>Program</h2>
+      <ProgramSettings />
+
       <h2>Connections</h2>
       <button type="button" class="setlink" onClick={() => navigate("watch")} data-testid="open-watch">
         <span>
@@ -123,6 +127,55 @@ export function Settings() {
         </button>
       </div>
     </>
+  );
+}
+
+/** Settings → Program (SPEC-v2 §8.6): the active program, a new program, and saved drafts. */
+function ProgramSettings() {
+  const boot = useStore((s) => s.boot)!;
+  const info = activeProgramInfo(boot);
+  const since = info?.activations[info.activations.length - 1]?.started_at;
+  const [drafts, setDrafts] = useState<ProgramInfo[] | null>(null);
+  useEffect(() => {
+    loadProgramVersions()
+      .then((list) => setDrafts(list.filter((p) => p.status === "draft")))
+      .catch(() => setDrafts(null));
+  }, []);
+  return (
+    <div class="card stack" data-testid="program-settings">
+      <div class="kv">
+        <span>Current program</span>
+        <span>
+          {programName(info, boot.program.name)}
+          {since ? ` · since ${instantShort(since, boot.settings.timezone)}` : ""}
+        </span>
+      </div>
+      <div class="kv">
+        <span>Style</span>
+        <span>{styleLabel(info?.style ?? null)}</span>
+      </div>
+      <button type="button" class="btn btn-primary btn-block" data-testid="new-program" onClick={() => openProgramEditor()}>
+        New program
+      </button>
+      {drafts?.length ? (
+        <div class="stack">
+          <div class="why">Drafts</div>
+          {drafts.map((d) => (
+            <button type="button" class="setlink" data-testid="open-draft" onClick={() => openProgramEditor(d.id)}>
+              <span>
+                {d.name}
+                <br />
+                <small>Saved {instantShort(d.created_at, boot.settings.timezone)}</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <p class="why" style={{ margin: 0 }}>
+        Past programs are in History, where you can switch back to one.
+      </p>
+    </div>
   );
 }
 
