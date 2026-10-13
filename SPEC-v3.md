@@ -290,7 +290,20 @@ Approved by Payam on 2026-10-12.
 - Each suggestion has an **Apply** button. Nothing changes without that tap.
 - Applied suggestions are marked. Payam can still edit or undo.
 
-### Data (one migration; show SQL to Payam before applying)
+### Data — AS BUILT (2026-10-13)
+`workout_sessions` has `CHECK (status IN ('active','done'))` and `started_at NOT NULL`, so Payam chose **option A**: plans live in a separate table. Migration `0008_planned_sessions.sql` (in production) created `planned_sessions` (status `planned|started|discarded`, one open plan per program day; Start creates the workout session with the same id) and `session_plan_items` referencing `planned_sessions(id)`, plus `per_leg` and `target_rir_min/max`. `workout_sessions` was not changed. The repo migration is the source of truth.
+
+**Still to build in M9a (show SQL first):** `plan_advice`, referencing `planned_sessions(id)` (not `workout_sessions`):
+```sql
+CREATE TABLE plan_advice (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES planned_sessions(id),
+  created_at TEXT NOT NULL, model TEXT NOT NULL, status TEXT NOT NULL,
+  advice_json TEXT, error TEXT, input_tokens INTEGER, output_tokens INTEGER
+);
+```
+
+Original draft (superseded, kept for history):
 ```sql
 -- planned sessions reuse workout_sessions with status = 'planned' and started_at NULL
 CREATE TABLE session_plan_items (

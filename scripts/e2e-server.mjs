@@ -4,9 +4,11 @@
 //   https://localhost:8789 (.wrangler/e2e-https)  for WebKit (it does not send Secure / __Host- cookies over
 //                                                  http://localhost; wrangler's self-signed certificate + ignoreHTTPSErrors)
 //   http://localhost:8790  forward proxy WebKit uses, so tests can cut its network (see scripts/e2e-proxy.mjs)
+//   http://127.0.0.1:8791  mock of the Claude Messages API (scripts/e2e-ai-mock.mjs); the real API is never called
 import { execFileSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { startProxy } from "./e2e-proxy.mjs";
+import { startAiMock } from "./e2e-ai-mock.mjs";
 import { loadLibrary } from "./e2e-library.mjs";
 
 export const SERVERS = [
@@ -34,6 +36,9 @@ async function waitFor(url) {
 
 const proxy = await startProxy(process.env.E2E_PROXY_PORT ?? "8790");
 process.on("exit", () => proxy.close());
+const AI_PORT = process.env.E2E_AI_PORT ?? "8791";
+const aiMock = await startAiMock(AI_PORT);
+process.on("exit", () => aiMock.close());
 
 for (const s of SERVERS) {
   rmSync(s.persist, { recursive: true, force: true });
@@ -43,7 +48,12 @@ for (const s of SERVERS) {
   loadLibrary(s.persist);
   const dev = spawn(
     "npx",
-    ["wrangler", "dev", "--port", s.port, "--local-protocol", s.protocol, "--persist-to", s.persist, "--var", "SETUP_TOKEN:e2e-setup-token-0123456789"],
+    [
+      "wrangler", "dev", "--port", s.port, "--local-protocol", s.protocol, "--persist-to", s.persist,
+      "--var", "SETUP_TOKEN:e2e-setup-token-0123456789",
+      "--var", "ANTHROPIC_API_KEY:e2e-not-a-real-key",
+      "--var", `ANTHROPIC_BASE_URL:http://127.0.0.1:${AI_PORT}`,
+    ],
     { stdio: "inherit" }
   );
   dev.on("exit", (code) => {

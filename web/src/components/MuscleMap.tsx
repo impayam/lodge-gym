@@ -40,7 +40,7 @@ export const MUSCLE_NAME: Record<string, string> = {
 };
 
 export const STATUS_NAME: Record<Status, string> = { none: "No sets", under: "Under target", on: "On target", over: "Over target", untracked: "No target" };
-const STATUS_ICON: Record<Status, string> = { none: "–", under: "▼", on: "✓", over: "▲", untracked: "·" };
+export const STATUS_ICON: Record<Status, string> = { none: "–", under: "▼", on: "✓", over: "▲", untracked: "·" };
 
 const setsText = (r: MuscleRow) =>
   `${fmtNum(r.sets)} direct · ${fmtNum(r.fractional, 1)} fractional${r.target !== null ? ` of ${fmtNum(r.target)}` : ""} sets · ${STATUS_NAME[r.status]}`;

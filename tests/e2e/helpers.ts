@@ -46,7 +46,7 @@ export async function signIn(context: BrowserContext, baseURL: string) {
 }
 
 export function resetWorkouts() {
-  sql("DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
+  sql("DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
 }
 
 /** The seed program active again; versions made by the generator (M8) or by Apply to program (M9c) go. */
@@ -54,6 +54,7 @@ export function resetPrograms() {
   const made = "SELECT id FROM programs WHERE generated_by IN ('generator', 'session')";
   sql(
     [
+      `DELETE FROM plan_advice WHERE session_id IN (SELECT id FROM planned_sessions WHERE program_day_id IN (SELECT id FROM program_days WHERE program_id IN (${made})))`,
       `DELETE FROM session_plan_items WHERE session_id IN (SELECT id FROM planned_sessions WHERE program_day_id IN (SELECT id FROM program_days WHERE program_id IN (${made})))`,
       `DELETE FROM planned_sessions WHERE program_day_id IN (SELECT id FROM program_days WHERE program_id IN (${made}))`,
       `DELETE FROM day_exercises WHERE day_id IN (SELECT id FROM program_days WHERE program_id IN (${made}))`,
@@ -68,4 +69,18 @@ export function resetPrograms() {
 
 export async function waitForSynced(page: Page) {
   await page.getByTestId("sync-chip").filter({ hasText: "Synced" }).waitFor();
+}
+
+const AI_MOCK = `http://127.0.0.1:${process.env.E2E_AI_PORT ?? "8791"}`;
+
+/** Switches the mock model's answers (scripts/e2e-ai-mock.mjs): ok, fail (API error) or auth (expired key). */
+export async function aiMode(mode: { report?: "ok" | "fail" | "auth"; advice?: "ok" | "fail" | "auth" }) {
+  const q = new URLSearchParams(mode as Record<string, string>);
+  const res = await fetch(`${AI_MOCK}/__mode?${q}`, { headers: { Connection: "close" } });
+  if (!res.ok) throw new Error("AI mock did not switch");
+}
+
+/** Calls the mock model received, and the last one (kind, model, effort). */
+export async function aiCalls(): Promise<{ calls: number; last: { kind: string; model: string; effort: string; key_set: boolean } | null }> {
+  return (await fetch(`${AI_MOCK}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: { kind: string; model: string; effort: string; key_set: boolean } | null }>;
 }

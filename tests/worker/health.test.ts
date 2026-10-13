@@ -25,6 +25,7 @@ beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM health_workouts"),
     env.DB.prepare("DELETE FROM set_entries"),
+    env.DB.prepare("DELETE FROM session_reports"),
     env.DB.prepare("DELETE FROM workout_sessions"),
     env.DB.prepare("DELETE FROM api_tokens"),
     env.DB.prepare("DELETE FROM settings WHERE key LIKE 'health_%'"),

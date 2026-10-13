@@ -232,6 +232,49 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Code: plan operations `worker/lib/plan.ts` (pure, unit-tested), API `worker/plans.ts`, planner `web/src/views/Planner.tsx`,
   shared list `web/src/components/PlanList.tsx`.
 
+## AI session report and plan advice (SPEC-v3 M9a, M9c "Get advice")
+
+- Model `claude-opus-5-5` through the Messages API (`@anthropic-ai/sdk`, pinned), server-side only. Config in
+  `wrangler.toml` `[vars]`: `REPORT_MODEL`, `REPORT_EFFORT` (low), `ADVICE_EFFORT` (medium), `REPORT_MAX_TOKENS`
+  (3000; thinking counts toward it). Opus 5.5 takes no `temperature` (the API rejects it), so effort is the control
+  (approved 2026-10-13). The key is the Worker secret `ANTHROPIC_API_KEY` (dashboard or `wrangler secret put`); it is
+  never sent to the phone or logged. Opus only, no fallback model: a refusal is stored as an error and shows "Report
+  unavailable" with Retry (Payam, 2026-10-13).
+- Reply format: JSON constrained by the output schema (structured outputs) and validated again with Zod; a reply that
+  is cut off, not JSON or not valid is retried once, then stored as an error. Every call writes one row
+  (`session_reports` or `plan_advice`, migration 0009) with its tokens; rows are never updated, so regenerating keeps
+  the older ones. Deleting a session deletes its reports. Backups include both tables.
+- **Report:** a session that syncs as done (app sessions, first time) is queued in the `AiJobs` Durable Object, which
+  writes the report from an alarm (up to 15 min, retried); `ctx.waitUntil` stops 30 s after the response, which a
+  report can exceed (approved 2026-10-13). Finish session opens the report screen (with the progress-photo prompt):
+  "Report pending" until the session reaches the server, "Writing your report…", then the Persian (RTL) report:
+  summary, highlights, volume table, extra exercises, skipped work, next time, warnings. "Report unavailable" comes
+  with Retry and the reason (key expired or invalid, key not set, daily limit, service error). From History → session
+  → **Session report**; **Regenerate** writes a new one.
+- Report input (`worker/lib/ai/report.ts`): the session (day, local times, duration, unit, note), every planned and
+  extra exercise with category, muscles, done sets, missed sets and the plan's targets; 0-volume categories are listed
+  and marked; the previous session of the same day (weights, reps, e1RM), today's records (existing PR rule), the
+  week so far by the muscle map's rules (a set counts at most once per group) against the weekly targets, the app's own
+  progression for next time, Apple Watch HR and kcal, body weight today and the last 4 weekly averages. The volume
+  table always shows the input's numbers.
+- **Next time** is computed by the app's progression function (`suggest`, SPEC §7 + RIR rules: +5 lb upper, +10 lb
+  lower, +5 lb per dumbbell, double with RIR 3+ on every planned set, otherwise the same weight) and shown by the app
+  ("145 lb × 5 · +5 lb"); the model only adds a short Persian note per exercise, and a note containing any number is
+  not shown (Payam, 2026-10-13).
+- **Get advice** (planner, needs a connection; disabled offline with "Needs connection"): saves and sends the plan,
+  then one model call with the plan, the original day, the last 14 days, group volume (week so far, last 7 days, what
+  the plan adds) against the targets, the last heavy compound per group, the program style, Payam's preferences and a
+  candidate list of real exercises (`worker/lib/ai/advice.ts`). Suggestions with an exercise id outside the candidate
+  list (or not fitting the plan) are dropped. Each suggestion has **Apply** (exercises it adds or swaps in get origin
+  `ai`) and then **Undo**; nothing changes without the tap, and the plan is saved as usual.
+- Limits per local day: 10 reports, 20 advice (calls that used tokens). Settings → AI reports: "This month: N reports,
+  ~$X" ($4 / $20 per million input / output tokens), today's counts, the model, and "Report unavailable — API key
+  expired or invalid" after an authentication error (or "API key not set"), until a call succeeds.
+- Tests never call the API: Worker tests replace `aiTransport.fetch` (`tests/fixtures/anthropic-mock.ts`), and the
+  e2e Workers use `ANTHROPIC_BASE_URL` pointing at `scripts/e2e-ai-mock.mjs`.
+- Code: client `worker/ai.ts`, routes and the job `worker/aiReports.ts`, cost and limits `worker/lib/ai/cost.ts`,
+  screens `web/src/views/SessionReport.tsx`, `web/src/views/Planner.tsx`, `web/src/views/Settings.tsx`.
+
 ## Artwork and credits
 
 - Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
@@ -266,3 +309,7 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `POST /api/sessions/plan`, `PUT /api/sessions/:id/plan-items`, `POST /api/sessions/:id/start`,
   `POST /api/sessions/:id/apply-to-program`; `plans` in `/api/bootstrap` and in the backup export; programs may have
   `generated_by = 'session'`.
+- AI report and advice (SPEC-v3 M9a/M9c, SQL and choices approved 2026-10-13): migration `0009_ai_reports.sql`
+  (`session_reports`, `plan_advice` referencing `planned_sessions`); `GET /api/ai/usage` (Settings cost line and key
+  status, never the key); Durable Object `AiJobs` (report writer); `[vars]` `REPORT_MODEL`, `REPORT_EFFORT`,
+  `ADVICE_EFFORT`, `REPORT_MAX_TOKENS`; `DELETE /api/sessions/:id` also deletes the session's reports.

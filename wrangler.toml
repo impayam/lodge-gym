@@ -22,9 +22,26 @@ migrations_dir = "migrations"
 name = "REST_PUSH"
 class_name = "RestPush"
 
+# AI session reports (SPEC-v3 M9a): one SQLite-backed Durable Object writes them from an alarm (up to 15 min).
+[[durable_objects.bindings]]
+name = "AI_JOBS"
+class_name = "AiJobs"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RestPush"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["AiJobs"]
+
+# AI session report and plan advice (SPEC-v3 M9a, M9c; approved 2026-10-13). claude-opus-5-5 takes no temperature;
+# effort is the control. Change these without a code change; the key is the ANTHROPIC_API_KEY secret.
+[vars]
+REPORT_MODEL = "claude-opus-5-5"
+REPORT_EFFORT = "low"
+ADVICE_EFFORT = "medium"
+REPORT_MAX_TOKENS = "3000"
 
 # Weekly backup (Monday 10:17 UTC).
 [triggers]
@@ -37,4 +54,4 @@ bucket_name = "lodge-gym-photos"
 [observability]
 enabled = true
 
-# Secret (never committed): SETUP_TOKEN — set in the dashboard or with `wrangler secret put SETUP_TOKEN`.
+# Secrets (never committed): SETUP_TOKEN and ANTHROPIC_API_KEY — set in the dashboard or with `wrangler secret put <NAME>`.

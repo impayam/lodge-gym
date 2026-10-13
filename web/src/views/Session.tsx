@@ -16,6 +16,7 @@ import {
   flash,
   getState,
   navigate,
+  openReport,
   photoSrc,
   removeExtraExercise,
   removeSession,
@@ -30,7 +31,7 @@ import {
 import { ExercisePicker, ExerciseThumb } from "./Library";
 import { rirText, targetText } from "./Program";
 import { WatchStats, workoutTypeName } from "./Watch";
-import { PhotoPicker, poseLabel } from "./Photos";
+import { poseLabel } from "./Photos";
 
 function useWakeLock(enabled: boolean) {
   useEffect(() => {
@@ -77,7 +78,6 @@ export function Session({ id }: { id: string }) {
   const sessions = useStore((s) => s.sessions);
   const s = sessions[id];
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [justFinished, setJustFinished] = useState(false);
   const [picking, setPicking] = useState(false);
   const [arranging, setArranging] = useState(false);
   useStore((st) => st.library);
@@ -150,12 +150,12 @@ export function Session({ id }: { id: string }) {
     if (!(await removeSessionExercise(s.id, exerciseId))) flash(`${name} has done sets. Uncheck them first; history is never removed silently.`);
   };
 
+  // SPEC-v3 M9a: the report screen opens (with the progress-photo prompt); the report is written once the session syncs.
   const finish = () => {
     stopRest();
     update((x) => ({ ...x, status: "done", ended_at: new Date().toISOString() }));
     flash("Session saved.");
-    setJustFinished(true);
-    window.scrollTo(0, 0);
+    openReport(s.id, true);
   };
 
   if (picking)
@@ -240,21 +240,14 @@ export function Session({ id }: { id: string }) {
             ))}
           </span>
         </div>
+        {s.status === "done" ? (
+          <button type="button" class="btn btn-ghost btn-block" style={{ marginTop: "10px" }} data-testid="open-report" onClick={() => openReport(s.id)}>
+            Session report
+          </button>
+        ) : null}
         {hasGroup ? <div class="ss-note">A1/A2 (and A3) are grouped: do one set of each in turn; the rest timer starts after each round.</div> : null}
       </section>
 
-      {justFinished ? (
-        <section class="card photo-prompt stack" style={{ marginTop: "14px" }} data-testid="photo-prompt">
-          <b>Progress photos today?</b>
-          <span class="why">Front, side and back; optional.</span>
-          {(["front", "side", "back"] as const).map((pose) => (
-            <PhotoPicker pose={pose} date={s.local_date} sessionId={s.id} compact />
-          ))}
-          <button type="button" class="btn btn-ghost btn-block" onClick={() => setJustFinished(false)}>
-            Later
-          </button>
-        </section>
-      ) : null}
       {sessionPhotos.length ? (
         <div class="photos" style={{ marginTop: "10px" }} data-testid="session-photos">
           {sessionPhotos.map((p) => (
