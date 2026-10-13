@@ -488,3 +488,10 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .sghead { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding-inline-end: 4px; font-size: 13px; }
 .sghead b { color: var(--plate); }
 .sghead span { color: var(--ink-2); font-size: 12.5px; }
+
+/* 3D muscle map in Reports (SPEC-v6 §8) */
+.anatomy.balance { height: clamp(320px, 60svh, 520px); margin-bottom: 8px; }
+.balance-card { align-items: flex-end; font-size: 13px; line-height: 1.4; }
+.balance-card small { color: #b9c4bf; font-size: 12.5px; }
+.balance-st { font-weight: 700; white-space: nowrap; }
+.balance-legend .sw { border: 1px solid var(--line); }

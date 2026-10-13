@@ -26,6 +26,31 @@ describe("3D anatomy mapping (SPEC-v6 M9b-3D)", () => {
     for (const m of MAPPED_MUSCLES) expect(areaOfMuscle(m), m).not.toBeNull();
   });
 
+  it("maps parts of one muscle by where they are, not only by their names (the model swaps two trapezius names)", () => {
+    // Mesh centres in model space (metres, y up, +z front), both sides.
+    const centre = (name: string) => {
+      const ns = muscleNodes.filter((n) => n.mesh && n.min && baseName(n.name) === name);
+      expect(ns.length, name).toBeGreaterThanOrEqual(2);
+      return [0, 1, 2].map((i) => ns.reduce((a, n) => a + (n.min![i] + n.max![i]) / 2, 0) / ns.length);
+    };
+    const y = (name: string) => centre(name)[1];
+    const z = (name: string) => centre(name)[2];
+    // Trapezius: the part mapped to traps (upper fibres) is above both parts mapped to upper back.
+    const trap = ANATOMY_ROWS.filter((r) => /part of trapezius/.test(r.name));
+    const upper = trap.filter((r) => r.muscle === "traps").map((r) => y(r.name));
+    const midLower = trap.filter((r) => r.muscle === "back_upper").map((r) => y(r.name));
+    expect(upper).toHaveLength(1);
+    expect(midLower).toHaveLength(2);
+    expect(Math.min(...upper)).toBeGreaterThan(Math.max(...midLower));
+    expect(anatomyOf("Ascending part of trapezius muscle")?.muscle).toBe("traps");
+    expect(anatomyOf("Descending part of trapezius muscle")?.muscle).toBe("back_upper");
+    // Chest regions top to bottom; front delts in front of rear delts.
+    const pec = (region: string) => y(ANATOMY_ROWS.find((r) => r.region === region && r.muscle === "chest")!.name);
+    expect(pec("chest_upper")).toBeGreaterThan(pec("chest_mid"));
+    expect(pec("chest_mid")).toBeGreaterThan(pec("chest_lower"));
+    expect(z("Clavicular part of deltoid muscle")).toBeGreaterThan(z("Scapular spinal part of deltoid muscle"));
+  });
+
   it("maps only names that exist in the model as muscles with a mesh, on both sides", () => {
     for (const r of ANATOMY_ROWS) {
       const copies = muscleNodes.filter((n) => baseName(n.name) === r.name);
