@@ -69,6 +69,14 @@ describe("programs after migration 0006 and the seed", () => {
     expect(byId.get("fullbody4")).toMatchObject({ status: "active", style: "seed_full_body", days_per_week: 4, generated_by: "seed", activations: [{ id: "act-fullbody4-seed", ended_at: null }] });
     expect(byId.get("upperlower")).toMatchObject({ status: "archived", style: "seed_upper_lower", activations: [] });
   });
+  it("the seed program started on Sep 27 in Payam's time zone, not the evening before (migration 0007)", async () => {
+    const seed = (await bootstrap()).programs.find((p) => p.id === "fullbody4")!.activations[0];
+    expect(seed.started_at).toBe("2026-09-27T06:00:00.000Z");
+    expect(localDate("America/Denver", seed.started_at)).toBe("2026-09-27");
+    // Re-running 0007 changes nothing; a start the app has already moved is never touched.
+    const sql = "UPDATE program_activations SET started_at = '2026-09-27T06:00:00.000Z' WHERE id = 'act-fullbody4-seed' AND started_at = '2026-09-27T00:00:00.000Z'";
+    expect((await env.DB.prepare(sql).run()).meta.changes).toBe(0);
+  });
 });
 
 describe("generate, save a draft, approve, re-activate (SPEC-v2 §8.6)", () => {
