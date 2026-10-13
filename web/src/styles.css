@@ -414,3 +414,4 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .tl-confirm { margin-top: 8px; }
 .chipset legend.lbl { font-size: 11.5px; color: var(--muted); }
 .tl-row .btn { white-space: nowrap; flex: none; }
+.nowrap { white-space: nowrap; }

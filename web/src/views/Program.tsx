@@ -64,7 +64,7 @@ export function Program() {
         {programName(info, boot.program.name)}{" "}
         <small>
           {info?.generated_by === "generator" ? "" : "· original program "}
-          {since ? `· since ${instantShort(since, boot.settings.timezone)}` : ""}
+          {since ? <span class="nowrap">· since {instantShort(since, boot.settings.timezone)}</span> : null}
         </small>
       </h2>
       <div class="card">
