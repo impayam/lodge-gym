@@ -11,6 +11,7 @@ declare global {
       TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
       TEST_SEED_SQL: string;
       TEST_GLB_NODES: { name: string; type: string | null; mesh: boolean }[];
+      TEST_STYLES: string;
     }
   }
 }

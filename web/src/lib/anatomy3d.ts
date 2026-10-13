@@ -7,7 +7,9 @@
 //  - A tap picks the mapped muscle under the finger (anatomy-map.ts). The pick renders the 49 × 49 px around the tap
 //    with one flat colour per app muscle (unmapped meshes black, still hiding what is behind them) and takes the
 //    nearest coloured pixel within 24 px, so a near miss still finds the muscle and an unmapped muscle falls through.
-//  - Frames are drawn on demand: while a gesture, its damping or a camera move runs, never when idle.
+//  - Frames are drawn on demand: while the body moves under a finger, its damping or a camera move runs, never when idle.
+//  - Reports (SPEC-v6 §8) tint each mapped muscle with a colour of its own (its weekly status) and draw unmapped
+//    muscles dark; the selected muscle keeps its colour and glows.
 
 import {
   Color,
@@ -158,6 +160,13 @@ export interface ViewOptions {
   accent: string;
   /** performance.now() when the picker opened, for the load-time stats. */
   openedAt: number;
+  /** A colour per app muscle (Reports); unmapped muscles are then drawn dark. Without it, the picker's muscle colour. */
+  tints?: Map<Muscle, string>;
+}
+
+interface Tint {
+  base: MeshStandardMaterial;
+  glow: MeshStandardMaterial;
 }
 
 export class AnatomyView {
@@ -170,12 +179,13 @@ export class AnatomyView {
   private pickBuffer = new Uint8Array(PICK_SIZE * PICK_SIZE * 4);
   private mats: { muscle: MeshStandardMaterial; context: MeshStandardMaterial; bone: MeshStandardMaterial; highlight: MeshStandardMaterial; hidden: MeshBasicMaterial; ids: Map<Muscle, MeshBasicMaterial> };
   private model!: Model;
+  private tints: Map<Muscle, string> | null;
+  private tintMats = new Map<string, Tint>();
   private area: BodyArea | null = null;
   private selected: Muscle | null = null;
   private pose: CameraPose = { target: [0, 1, 0], distance: 4, yaw: 0 };
   private move: { from: CameraPose; to: CameraPose; start: number; ms: number; done?: () => void } | null = null;
   private raf = 0;
-  private gesture = false;
   private frames: number[] = [];
   private resize: ResizeObserver;
   private down: { id: number; x: number; y: number; t: number } | null = null;
@@ -207,6 +217,7 @@ export class AnatomyView {
     private host: HTMLElement,
     private o: ViewOptions
   ) {
+    this.tints = o.tints ?? null;
     this.canvas = document.createElement("canvas");
     this.canvas.setAttribute("aria-hidden", "true");
     this.canvas.dataset.testid = "anatomy-canvas";
@@ -358,15 +369,45 @@ export class AnatomyView {
     this.wake();
   }
 
+  /** New colours per app muscle (Reports, when the week's numbers change). */
+  setTints(tints: Map<Muscle, string>) {
+    this.tints = tints;
+    this.paint();
+    this.wake();
+  }
+
+  /** The materials of one tint colour: as drawn, and selected (the same colour, glowing). */
+  private tint(color: string): Tint {
+    let t = this.tintMats.get(color);
+    if (!t) {
+      const c = new Color(color);
+      t = {
+        base: new MeshStandardMaterial({ color: c, roughness: 0.62, metalness: 0 }),
+        glow: new MeshStandardMaterial({ color: c, emissive: c.clone().multiplyScalar(0.6), roughness: 0.5, metalness: 0 }),
+      };
+      t.base.userData.tint = t.glow.userData.tint = color;
+      this.tintMats.set(color, t);
+    }
+    return t;
+  }
+
   private tappable(m: Muscle | null): m is Muscle {
     return m !== null && (!this.area || areaDef(this.area).muscles.includes(m));
   }
 
   /** Materials for the current area and selection. */
   private paint() {
+    const tints = this.tints;
     for (const p of this.model.parts) {
       if (p.kind !== "muscle") p.mesh.material = this.mats.bone;
-      else if (p.muscle && p.muscle === this.selected) p.mesh.material = this.mats.highlight;
+      else if (tints) {
+        // Reports: unmapped muscles, and in a close-up the other areas' muscles, dark; mapped ones in their colour.
+        if (!p.muscle || (this.area && !this.tappable(p.muscle))) p.mesh.material = this.mats.context;
+        else {
+          const t = this.tint(tints.get(p.muscle) ?? COLORS.muscle);
+          p.mesh.material = p.muscle === this.selected ? t.glow : t.base;
+        }
+      } else if (p.muscle && p.muscle === this.selected) p.mesh.material = this.mats.highlight;
       else if (this.area && !this.tappable(p.muscle)) p.mesh.material = this.mats.context;
       else p.mesh.material = this.mats.muscle;
     }
@@ -463,13 +504,12 @@ export class AnatomyView {
     // Taps are handled on pointerup; the click only claims the tap for the canvas.
     e.preventDefault();
   };
+  // A finger resting on the body draws nothing: frames come from the controls' "change" (a real move) and from their
+  // damping, so a tap is not held up by a frame drawn for the touch itself.
   private onStart = () => {
-    this.gesture = true;
     this.frames = [];
-    this.wake();
   };
   private onEnd = () => {
-    this.gesture = false;
     const yaw = this.current().yaw;
     this.o.onFacing(Math.cos(yaw) >= 0 ? "front" : "back");
   };
@@ -482,7 +522,7 @@ export class AnatomyView {
 
   private tick = (now: number) => {
     this.raf = 0;
-    let more = this.gesture;
+    let more = false;
     if (this.move) {
       const t = (now - this.move.start) / this.move.ms;
       this.apply(lerpPose(this.move.from, this.move.to, t));
@@ -574,7 +614,15 @@ export class AnatomyView {
 
   /** Test hook: model names (without the left/right suffix, so a muscle lit on both sides is listed twice) of the meshes drawn highlighted. */
   lit(): string[] {
-    return this.model.parts.filter((p) => p.mesh.material === this.mats.highlight).map((p) => p.name);
+    const glows = new Set<Material>([this.mats.highlight, ...[...this.tintMats.values()].map((t) => t.glow)]);
+    return this.model.parts.filter((p) => glows.has(p.mesh.material as Material)).map((p) => p.name);
+  }
+
+  /** Test hook: the colour (#rrggbb) an app muscle is drawn in, or "unmapped" for the colour of unmapped muscles. */
+  colorOf(muscle: Muscle | "unmapped"): string | null {
+    const part = this.model.parts.find((p) => p.kind === "muscle" && (muscle === "unmapped" ? !p.muscle : p.muscle === muscle));
+    const m = part?.mesh.material as MeshStandardMaterial | undefined;
+    return m ? ((m.userData.tint as string | undefined) ?? `#${m.color.getHexString()}`) : null;
   }
 
   /** Test hook: whether a Front / Back turn or an area move is still running. */
@@ -611,6 +659,10 @@ export class AnatomyView {
       this.scene.remove(this.model.root);
     }
     for (const m of [this.mats.muscle, this.mats.context, this.mats.bone, this.mats.highlight, this.mats.hidden, ...this.mats.ids.values()]) m.dispose();
+    for (const t of this.tintMats.values()) {
+      t.base.dispose();
+      t.glow.dispose();
+    }
     this.pickTarget.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();

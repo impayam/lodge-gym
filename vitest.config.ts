@@ -15,7 +15,14 @@ export default defineConfig({
     cloudflareTest({
       wrangler: { configPath: "./tests/wrangler.test.toml" },
       miniflare: {
-        bindings: { TEST_MIGRATIONS: migrations, TEST_SEED_SQL: seedSql, TEST_GLB_NODES: glbNodes, SETUP_TOKEN: "test-setup-token-0123456789" },
+        bindings: {
+          TEST_MIGRATIONS: migrations,
+          TEST_SEED_SQL: seedSql,
+          TEST_GLB_NODES: glbNodes,
+          // The app stylesheet, for the 3D map colours that must equal the dark theme's status tokens.
+          TEST_STYLES: readFileSync("./web/src/styles.css", "utf8"),
+          SETUP_TOKEN: "test-setup-token-0123456789",
+        },
       },
     }),
   ],

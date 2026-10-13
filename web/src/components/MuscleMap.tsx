@@ -6,6 +6,7 @@
 import { useState } from "preact/hooks";
 import { fmtNum } from "../../../worker/lib/digits";
 import { groupOf } from "../../../worker/lib/muscles";
+import { BalanceStage } from "./BalanceStage";
 import { BACK, BACK_DETAIL, FRONT, FRONT_DETAIL, SILHOUETTE, VIEW_H, VIEW_W, bothSides, mirrorPath, type HalfRegion, type RegionKey } from "./bodyMap";
 
 export type Status = "none" | "under" | "on" | "over" | "untracked";
@@ -109,12 +110,13 @@ function Figure({ regions, lines, rows, title, pick, onPick }: { regions: HalfRe
 
 const regionLabel = (key: RegionKey, group: string) => (REGION_NAME[key] === MUSCLE_NAME[group] ? MUSCLE_NAME[group] : `${REGION_NAME[key]} (${MUSCLE_NAME[group]})`);
 
-export function MuscleMap({ muscles }: { muscles: MuscleRow[] }) {
+/** The drawn front and back figures: shown while the 3D map (SPEC-v6 §8) is unavailable, until Payam approves it. */
+function Figures({ muscles }: { muscles: MuscleRow[] }) {
   const [pick, setPick] = useState<Pick | null>(null);
   const rows = new Map(muscles.map((m) => [m.muscle, m]));
   const a = pick ? rows.get(pick.group) : null;
   return (
-    <div class="musclemap" data-testid="muscle-map">
+    <>
       <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
         <defs>
           {/* Stripe directions match the legend swatches (CSS 45deg under, 135deg over). */}
@@ -142,6 +144,14 @@ export function MuscleMap({ muscles }: { muscles: MuscleRow[] }) {
           </span>
         ))}
       </div>
+    </>
+  );
+}
+
+export function MuscleMap({ muscles }: { muscles: MuscleRow[] }) {
+  return (
+    <div class="musclemap" data-testid="muscle-map">
+      <BalanceStage muscles={muscles} text={{ name: STATUS_NAME, icon: STATUS_ICON, group: (g) => MUSCLE_NAME[g] ?? g }} fallback={<Figures muscles={muscles} />} />
       <ul class="musclelist">
         <li class="head" aria-hidden="true">
           <span>Muscle</span>

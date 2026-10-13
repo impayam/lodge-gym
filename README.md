@@ -105,10 +105,15 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   2026-10-12): each planned set counts 1 for its primary group and 0.5 for each secondary group, so following the
   program exactly is on target everywhere. Traps, forearms, lower back, adductors, abductors and neck have no target
   and show their sets only.
-- Muscle map (Reports → Progress): anatomical front and back figures with one region per canonical muscle key
-  (chest, lats, upper back, traps, lower back, front/side/rear delts, biceps, triceps, forearms, core, quads,
-  hamstrings, glutes, adductors, calves), each coloured by its report group. Tapping a region selects its group: every
-  region of that group gets a filled highlight and a thick outline. Abductors and neck appear in the list only.
+- Muscle map (Reports → Progress, SPEC-v6 §8): the picker's 3D model (same scene, mapping and lazy loading). Every
+  mapped muscle takes the status of its report group, in the dark theme's status colours (the stage is dark in both
+  themes): under amber, on target green, over orange, trained without a target teal, not trained this week muted;
+  unmapped muscles are dark (`web/src/lib/anatomy-status.ts`). Drag turns it, Front / Back turn it round; on the whole
+  body a tap zooms to that muscle's area (as in the picker); in the close-up a tap shows a card with the muscle, its
+  group and "done / target sets this week" (fractional) with the status icon and label; "← Body" goes back. The legend
+  and the list under the map carry icon and label, so status is never colour alone; the list is the accessible
+  alternative. Without WebGL 2, or when the model fails or takes over 10 s, a "3D unavailable" note shows with the
+  drawn front and back figures (one region per canonical muscle key, tapping a region selects its group).
 - Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
   secondary muscle (decided 2026-10-12).
 - Only strength work counts (decided 2026-10-12): exercises whose `category` (migration `0005_exercise_category.sql`)

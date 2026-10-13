@@ -448,3 +448,10 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .pickmain .meta b { display: block; font-size: 14px; line-height: 1.35; }
 .pickmain .meta small { color: var(--muted); font-size: 12px; }
 .pickrow .formlink { font-size: 12.5px; align-self: flex-start; padding: 4px 0; }
+
+/* 3D muscle map in Reports (SPEC-v6 §8) */
+.anatomy.balance { height: clamp(320px, 60svh, 520px); margin-bottom: 8px; }
+.balance-card { align-items: flex-end; font-size: 13px; line-height: 1.4; }
+.balance-card small { color: #b9c4bf; font-size: 12.5px; }
+.balance-st { font-weight: 700; white-space: nowrap; }
+.balance-legend .sw { border: 1px solid var(--line); }

@@ -1,3 +1,4 @@
+import { STAGE_STATUS_COLOR } from "../../web/src/lib/anatomy-status";
 import { expect, test } from "./fixtures";
 import { resetWorkouts, signIn, sql } from "./helpers";
 
@@ -73,15 +74,17 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await page.getByRole("tab", { name: "Progress" }).click();
   await expect(page.getByTestId("progress-lifts")).toContainText("Barbell Bench Press");
   await expect(page.getByTestId("progress-lifts")).toContainText("+3.8%");
-  const map = page.getByTestId("muscle-map");
-  await expect(map.locator('path[data-muscle="chest"]').first()).toHaveAttribute("data-status", "under");
-  await expect(map.locator('path[data-muscle="quads"]').first()).toHaveAttribute("data-status", "none");
+  // The 3D muscle map (SPEC-v6 §8) colours chest by its status; the list holds the numbers.
+  await expect(page.getByTestId("balance-stage")).toHaveAttribute("data-mode", "3d", { timeout: 30_000 });
+  const colorOf = (m: string) => page.evaluate((k) => (window as unknown as { __anatomy: { view: { colorOf(m: string): string } } }).__anatomy.view.colorOf(k), m);
+  expect(await colorOf("chest")).toBe(STAGE_STATUS_COLOR.under);
+  expect(await colorOf("quads")).toBe(STAGE_STATUS_COLOR.none);
   await expect(page.getByTestId("muscle-chest")).toContainText("7 · 7 / 13");
   await expect(page.getByTestId("muscle-chest")).toContainText("Under target");
-  await map.locator('path[data-muscle="rear_delts"]').first().click();
   // Fractional (SPEC-v2 §7.4): face pull 3 sets (primary) + seated cable row 3 sets × 0.5 (secondary) = 4.5, against the
   // program's own fractional rear-delt volume of 11 (face pulls 6 + rows and lat pulldown as secondary 5).
-  await expect(map.locator(".readout")).toContainText("Rear delts: 3 direct · 4.5 fractional of 11 sets · Under target");
+  await expect(page.getByTestId("muscle-rear_delts")).toContainText("3 · 4.5 / 11");
+  await expect(page.getByTestId("muscle-rear_delts")).toContainText("Under target");
   await expect(page.getByTestId("muscle-lower_back")).toContainText("0 · 1.5 / –");
   await expect(page.getByTestId("muscle-lower_back")).toContainText("No target");
   // Stretching is logged but counts 0 sets (SPEC-v2 §7.4): only the 3 RDL sets count for hamstrings and glutes.
