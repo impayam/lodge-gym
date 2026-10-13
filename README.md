@@ -1,6 +1,6 @@
 # Lodge Gym
 
-Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md` and `SPEC-v2.md`; working rules: `CLAUDE.md`.
+Personal workout PWA (single user, English LTR UI) on Cloudflare Workers + D1 + R2. Spec: `SPEC.md`, `SPEC-v2.md` and `SPEC-v3.md` (M9, M10); working rules: `CLAUDE.md`.
 
 Status: **M1** (shell, passkey auth, program seed, offline logging), **M2** (progress photos), **M3** (reports + progress page), **M4** (Apple Watch bridge via iOS Shortcuts), RIR per set, weekly backup, rest-timer push, weekly review card, **M6** (English UI, SPEC-v2), **M7** (exercise library), **M8** (training styles and program generator).
 
@@ -167,12 +167,44 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
   ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
 
+## Body-map exercise picker (SPEC-v3 M9b, 3D model SPEC-v6)
+
+- In a session, "+ Add exercise" opens on the **Body** tab (Search is the second tab) with a 3D anatomy model on a dark
+  stage: drag turns it around the vertical axis, pinch zooms (never inside the body, no panning), Front / Back turn it
+  round in 380 ms. In the whole-body view a tap on a muscle, or one of the 8 area chips, zooms to that area's close-up
+  (SPEC-v6 §7: the muscle itself is chosen only in a close-up). In the close-up the area's muscle chips take the place
+  of the area chips, all visible above the tab bar; only that area's muscles are tappable; a tap lights up the app
+  muscle on both sides with "Show exercises", a tap within 24 px still finds it, empty space and unmapped muscles
+  (face, neck, deep spine, hands, feet, shins…) clear it; "← Body" goes back. The chips do everything the model does
+  (VoiceOver never needs the canvas). The exercise is added as an extra with 3 empty sets, as in M7. A "Drag to turn"
+  hint sits beside the feet until the first touch on the model.
+- Areas → muscles (`worker/lib/bodyAreas.ts`): Chest; Shoulders (front, side, rear delts); Arms (biceps, triceps,
+  forearms); Back (lats, upper back, traps, lower back); Core; Glutes & hips (glutes, adductors, abductors); Thighs
+  (quads, hamstrings); Calves. Model muscle → app muscle and M10 coverage region: `web/src/lib/anatomy-map.ts`
+  (approved table; 78 of the model's 222 muscle names), tested against the GLB's own node list.
+- The list: primary-muscle exercises, then "Also works this muscle"; inside each, done before (most recent first),
+  then the current program, then compound, then name. Filters: equipment and category (default: strength, the
+  counted categories). The picker remembers its place per session while the app is open.
+- Loading: three.js 0.186.1 and the 3D code are a separate chunk (`anatomy3d-*.js`, about 165 kB gzip) loaded when the
+  Body tab opens; nothing of it is in the main bundle. The model (`web/public/models/body.glb`, 8.2 MB, pinned by
+  SHA-256; `npm run build` fails if it differs) is decoded once per app run with three's Draco decoder (WebAssembly),
+  which Vite copies into `/assets/`. None of these is precached: the service worker caches them on first use
+  (cache-first, cache `anatomy-<sha>`), so after one online open the picker works offline. Each open gets its own
+  renderer and WebGL context and releases them, its materials and GPU buffers when it closes.
+- CSP (approved for SPEC-v6): `script-src 'self' 'wasm-unsafe-eval'` for the decoder's WebAssembly and
+  `worker-src 'self' blob:` for its worker; eval stays blocked.
+- Without WebGL 2, when the model fails, or after 10 s, the picker shows the chips only with a "3D unavailable" note.
+- `window.__anatomy` is the 3D view's test hook (points on a muscle, picks, lit meshes, GPU memory, load times).
+
 ## Artwork and credits
 
 - Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
   drawn and mirrored in code, so the figures are symmetric by construction. No third-party artwork or icon set is
   used, so no external licence applies.
 - Exercise images: free-exercise-db (Unlicense), copied into the private R2 bucket (see "Exercise library").
+- 3D anatomy model of the exercise picker: Body Anatomy 3D Viewer by hpfrei (github.com/hpfrei/body-anatomy-3d-viewer,
+  commit 0fc76a9), based on Z-Anatomy, CC BY-SA 4.0, used unmodified (`web/public/models/ANATOMY-SOURCE.md`); credited
+  in Settings → About.
 
 ## Approved additions beyond SPEC §5/§11
 

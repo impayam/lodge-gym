@@ -114,6 +114,7 @@ export function Session({ id }: { id: string }) {
   if (picking)
     return (
       <ExercisePicker
+        sessionId={s.id}
         onCancel={() => setPicking(false)}
         onPick={(ex) => {
           setPicking(false);
