@@ -47,9 +47,12 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
     await check(tab);
   }
   await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
-  await page.getByTestId("open-reviews").click();
+  await expect(page.getByTestId("rt-col")).toHaveCount(1);
+  await page.getByTestId("rt-mode-list").click();
+  await check("Reports timeline (list)");
+  await page.getByTestId("rt-list").getByTestId("rt-item").first().click();
   await expect(page.getByTestId("weekly-review")).toBeVisible();
-  await check("Weekly reviews");
+  await check("Saved weekly review");
   await page.getByRole("button", { name: "Reports" }).click();
   for (const tab of ["Monthly", "Progress"]) {
     await page.getByRole("tab", { name: tab }).click();

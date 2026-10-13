@@ -4,6 +4,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { Category } from "../../worker/lib/category";
 import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
+import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import { liveItems, removeItem, type SessionPlan } from "../../worker/lib/plan";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
@@ -15,7 +16,7 @@ import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./mod
 import type { BootData, OutboxEntry } from "./localdb";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report" | "reviews";
+export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report" | "saved";
 
 export interface SyncState {
   pending: number;
@@ -33,7 +34,7 @@ export interface State {
    * sessionId: the session view or its AI report (fresh: just finished); programId: a draft opened in the program
    * editor; planId: the session planner.
    */
-  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string; fresh?: boolean };
+  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string; fresh?: boolean; saved?: TimelineItem };
   sync: SyncState;
   rest: { id: string; endsAt: number; label: string } | null;
   flash: string | null;
@@ -99,6 +100,12 @@ export function navigate(name: ViewName, sessionId?: string) {
 /** A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). */
 export function openReport(sessionId: string, fresh = false) {
   setState({ view: { name: "report", sessionId, fresh } });
+  window.scrollTo(0, 0);
+}
+
+/** A saved report from History → Reports timeline, read-only (SPEC-v7 M9d). */
+export function openSaved(item: TimelineItem) {
+  setState({ view: { name: "saved", saved: item } });
   window.scrollTo(0, 0);
 }
 

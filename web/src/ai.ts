@@ -4,13 +4,14 @@
 
 import type { PlanAdvice } from "../../worker/lib/ai/suggestions";
 import type { AiUsage } from "../../worker/lib/ai/cost";
-import type { OverviewResponse, SessionReportItem } from "../../worker/lib/ai/overview";
+import type { OverviewResponse, OverviewView, SessionReportItem } from "../../worker/lib/ai/overview";
+import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import type { ReportResponse } from "../../worker/lib/ai/report";
 import type { WeeklyReview } from "../../worker/lib/types";
 import { api } from "./api";
 import * as ldb from "./localdb";
 
-export type { AiUsage, OverviewResponse, PlanAdvice, ReportResponse, SessionReportItem };
+export type { AiUsage, OverviewResponse, OverviewView, PlanAdvice, ReportResponse, SessionReportItem, TimelineItem };
 
 /** The latest answer per session, so a screen shown again starts from what it last saw. */
 const seen = new Map<string, ReportResponse>();
@@ -73,6 +74,22 @@ export async function fetchReviews(): Promise<WeeklyReview[]> {
   return r.reviews;
 }
 export const cachedReviews = () => ldb.kvGet<WeeklyReview[]>("reviews");
+
+/** Every saved report on its date (History → Reports timeline); kept on the device for offline use. */
+export async function fetchTimeline(): Promise<TimelineItem[]> {
+  const r = await api<{ items: TimelineItem[] }>("GET", "/report-timeline");
+  await ldb.kvSet("ai:timeline", r.items);
+  return r.items;
+}
+export const cachedTimeline = () => ldb.kvGet<TimelineItem[]>("ai:timeline");
+
+/** One saved overview, read-only; the ones already opened are kept on the device. */
+export async function fetchSavedOverview(id: string): Promise<OverviewView> {
+  const r = await api<{ overview: OverviewView }>("GET", `/overviews/${encodeURIComponent(id)}`);
+  await ldb.kvSet(`ai:overview:${id}`, r.overview);
+  return r.overview;
+}
+export const cachedSavedOverview = (id: string) => ldb.kvGet<OverviewView>(`ai:overview:${id}`);
 
 /** Why a report or an overview is unavailable, from its stored error code. */
 export function unavailableReason(code: string | null, what: "report" | "overview" = "report"): string {

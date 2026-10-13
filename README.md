@@ -69,9 +69,10 @@ works only in the Home Screen app on iOS 16.4+.
 ## Weekly AI review (written by Claude into D1)
 
 The app only reads this table; Claude writes one row per week directly into D1
-(`lodge-gym-db`, id `f8ba012b-9970-423c-83f3-8c32111695e7`, migration `0003_weekly_reviews.sql`). Every row is shown
-under History → **Weekly reviews**, newest week first (`GET /api/reviews`). Since SPEC-v7 M9d the training overview
-replaces the card on the home and reports pages (approved 2026-10-13); the rows are kept.
+(`lodge-gym-db`, id `f8ba012b-9970-423c-83f3-8c32111695e7`, migration `0003_weekly_reviews.sql`). Every row sits in
+History → **Reports timeline** on the last day of the week it covers (`week_start` + 6) and opens read-only. Since
+SPEC-v7 M9d the training overview replaces the card on the home and reports pages (approved 2026-10-13); the rows are
+kept.
 The review stays in Persian (SPEC-v2 M6): the card renders `summary_fa`, `highlights` and `suggestions` right-to-left
 (`dir="rtl" lang="fa"`) inside the English UI, with the iOS system font.
 
@@ -286,7 +287,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Built from raw data only (`worker/lib/ai/overview.ts`): sets with weight, reps and RIR per session, Payam's session
   notes, the main lifts' e1RM per session (Epley) with the % change over the window, stalls (3 exposures without
   beating the best before), drops (10% or more below the best), sessions per week against the program's days (planned
-  sessions count only from the active program's start, or the window's start if later; Payam, 2026-10-13), weekly
+  sessions count only from the active program's start, or the window's start if later, as whole sessions; Payam,
+  2026-10-13), weekly
   volume against the targets (fractional sets) and skipped planned exercises. The text of session reports and earlier
   overviews is never sent, so model mistakes do not compound.
 - Numbers come from the app: the lift table (1RM, change) is the app's; the model only phrases. A sentence with a number
@@ -299,8 +301,16 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   kept. Deleting the triggering session keeps the overview (its trigger becomes null). Backups include the table.
 - **Session reports** in Reports: every session's latest report, newest session first (day, date, one-line summary;
   the latest 5, then "Show all"); a row opens the full report screen. Reports also stay under History → session.
-- Code: job and routes `worker/aiOverview.ts` (`GET`/`POST /api/overview`, `GET /api/session-reports`), limits
-  `worker/aiLimits.ts`, screens `web/src/views/Overview.tsx` and `web/src/views/Review.tsx` (History → Weekly reviews).
+- **History → Reports timeline** (design approved 2026-10-13): two labeled rows, ● Session report and □ Weekly review,
+  one column per date that has a report, newest on the right. A session date lists its report and the overview written
+  after it; an overview on a day without a session (Regenerate) marks its date with ◆. Tapping a date opens its report,
+  or a short list to choose from when it has several. The **List** view (the accessible alternative, remembered on the
+  device) shows all three types, newest first. Every report opens read-only (no Regenerate, Retry or photo prompt).
+  Dates: a session report on the session's date (its latest report, when ok), an overview on its session's date or the
+  local day it was written, a weekly review on the last day of its week (`worker/lib/ai/timeline.ts`).
+- Code: job and routes `worker/aiOverview.ts` (`GET`/`POST /api/overview`, `GET /api/overviews/:id`,
+  `GET /api/session-reports`, `GET /api/report-timeline`), limits `worker/aiLimits.ts`, screens
+  `web/src/views/Overview.tsx` and `web/src/views/ReportsTimeline.tsx`.
 
 ## Artwork and credits
 
@@ -342,5 +352,6 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `ADVICE_EFFORT`, `REPORT_MAX_TOKENS`; `DELETE /api/sessions/:id` also deletes the session's reports.
 - Training overview (SPEC-v7 M9d, window, card replacement and SQL approved 2026-10-13): migration
   `0010_training_overviews.sql`; `GET /api/overview`, `POST /api/overview`, `GET /api/session-reports`,
-  `GET /api/reviews` (History → Weekly reviews); `[vars]` `OVERVIEW_EFFORT`, `OVERVIEW_MAX_TOKENS`; the backup export
-  adds `training_overviews`.
+  `GET /api/reviews`; read-only `GET /api/report-timeline` and `GET /api/overviews/:id` (History → Reports timeline,
+  approved in the PR review); `[vars]` `OVERVIEW_EFFORT`, `OVERVIEW_MAX_TOKENS`; the backup export adds
+  `training_overviews`.

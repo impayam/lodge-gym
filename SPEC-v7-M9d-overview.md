@@ -64,7 +64,7 @@ CREATE INDEX training_overviews_created ON training_overviews(created_at);
 
 ## 8. As built (2026-10-13)
 - CONFIRM answers (Payam): window = this week + previous 4 weeks; the overview **replaces** the weekly-review card on
-  Home and Reports, and every `weekly_reviews` row stays readable under History → Weekly reviews (`GET /api/reviews`).
+  Home and Reports, and every `weekly_reviews` row stays readable in History → Reports timeline (see below).
   The §5 SQL was approved as shown (migration `0010_training_overviews.sql`).
 - Same Durable Object queue as the report: a finished session queues its report (if none yet), then the overview. A
   waiting overview is replaced by a newer one, so a burst of syncs costs one call.
@@ -77,5 +77,11 @@ CREATE INDEX training_overviews_created ON training_overviews(created_at);
   (Regenerate/Retry, 202), `GET /api/session-reports` (latest report per session, newest session first).
 - Reports → Session reports shows the latest 5, then "Show all" (kept after review).
 - Planned sessions (PR review): counted only from the later of the active program's start date (its last activation)
-  and the window's start; weeks before plan none, the start week plans only its days since then. The totals compare
-  done and planned sessions from that same date (`totals.since`).
+  and the window's start; weeks before plan none, the start week plans only its days since then; whole sessions
+  ("5 of 13"). The totals compare done and planned sessions from that same date (`totals.since`) — pending Payam's
+  decision on how a program switch and re-activation should count.
+- History → Reports timeline (PR review): two rows, Session report and Weekly review, one column per date with a report;
+  a session date's chooser lists its session report and the overview written after it; an overview on a day without a
+  session gets a ◆ marker on its date; the List view shows all three types. Every report opens read-only. A weekly
+  review sits on the last day of the week it covers (`week_start` + 6; the production rows are Monday–Sunday weeks).
+  Endpoints approved: `GET /api/report-timeline` (dates, kinds, ids only) and `GET /api/overviews/:id`.

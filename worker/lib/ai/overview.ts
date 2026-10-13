@@ -105,18 +105,22 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
   const since = started && started > start ? started : start;
 
   const weeks: OverviewWeek[] = [];
+  let planned = 0;
   for (let k = OVERVIEW_WEEKS - 1; k >= 0; k--) {
     const w = weekRange(addDays(thisWeek.start, -7 * k), d.settings.week_start);
     const list = inWindow.filter((s) => s.local_date >= w.start && s.local_date <= w.end);
     const scored = programOn(d, w.end);
     const targets = muscleTargets({ program: scored.program, exercises: d.exercises });
     const sets = setsPerMuscle(list, ex);
+    const p = w.end < since ? 0 : plannedSessions(d, w.start > since ? w.start : since, w.end);
+    planned += p;
     weeks.push({
       start: w.start,
       end: w.end,
       this_week: k === 0,
       sessions_done: list.length,
-      sessions_planned: w.end < since ? 0 : round1(plannedSessions(d, w.start > since ? w.start : since, w.end)),
+      // Whole sessions (Payam, 2026-10-13): "5 of 13", not "5 of 12.6".
+      sessions_planned: Math.round(p),
       volume: TARGET_GROUPS.map((g) => ({ group: GROUP_NAME[g], sets: round1(sets[g].fractional), target: round1(targets[g] ?? 0), status: balanceStatus(sets[g].fractional, targets[g] ?? 0) })),
     });
   }
@@ -198,7 +202,7 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
     window: { start, end, today, weeks: OVERVIEW_WEEKS, unit },
     program: { name: program.program.name, style, days_per_week: program.days_per_week, started },
     weeks,
-    totals: { since, sessions_done: inWindow.filter((s) => s.local_date >= since).length, sessions_planned: round1(weeks.reduce((a, w) => a + w.sessions_planned, 0)) },
+    totals: { since, sessions_done: inWindow.filter((s) => s.local_date >= since).length, sessions_planned: Math.round(planned) },
     sessions,
     lifts,
     stalls,

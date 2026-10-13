@@ -2,13 +2,15 @@
 //   GET  /api/overview          the latest overview, whether a newer attempt failed, and whether one is being written
 //   POST /api/overview          rewrite it now (Regenerate), in the background
 //   GET  /api/session-reports   every session's latest report, newest session first (the Reports list)
+//   GET  /api/report-timeline   every saved report on its date, for History → Reports timeline (no report text)
+//   GET  /api/overviews/:id     one saved overview, read-only (opened from the timeline)
 // The overview is rewritten by the AiJobs Durable Object after every finished session, right after that session's
 // report (worker/aiReports.ts). Older rows are kept; a failed attempt never hides the previous overview.
 
 import { Hono } from "hono";
 import { callModel, effortOf, maxTokensOf, modelOf, type AiFail, type AiOk } from "./ai";
 import { errorText, overLimit } from "./aiLimits";
-import { readProgramInfos } from "./data";
+import { readProgramInfos, readSettings } from "./data";
 import type { AppBindings, Env } from "./env";
 import { fail, nowISO } from "./http";
 import { readAllPlans } from "./plans";
@@ -25,8 +27,9 @@ import {
   type SessionReportItem,
   type TrainingOverview,
 } from "./lib/ai/overview";
+import { buildTimeline, type TimelineItem, type TimelineRows } from "./lib/ai/timeline";
 import { localDate } from "./lib/time";
-import { ulid } from "./lib/ulid";
+import { ID_RE, ulid } from "./lib/ulid";
 
 /** Default reply size of an overview (OVERVIEW_MAX_TOKENS); thinking counts toward it. */
 export const OVERVIEW_DEFAULT_MAX_TOKENS = 4000;
@@ -126,6 +129,37 @@ overviewRoutes.post("/overview", async (c) => {
   if (await overLimit(c.env, "overview")) return fail(c, 429, "limit", `The daily limit of ${DAILY_LIMIT.overview} overviews is reached. Try again tomorrow.`);
   await jobs(c.env).enqueueOverview(null);
   return c.json({ ok: true, pending: true }, 202);
+});
+
+overviewRoutes.get("/overviews/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!ID_RE.test(id)) return fail(c, 400, "invalid_input", "The overview id is not valid.");
+  const row = await c.env.DB.prepare("SELECT * FROM training_overviews WHERE id = ? AND status = 'ok'").bind(id).first<OverviewRow>();
+  if (!row) return fail(c, 404, "not_found", "No saved overview with this id.");
+  return c.json({ overview: await viewOf(c.env, row) });
+});
+
+overviewRoutes.get("/report-timeline", async (c) => {
+  const [reports, overviews, reviews] = await c.env.DB.batch([
+    // A session's latest report, when it is ok (a newer failed attempt hides the session from the timeline).
+    c.env.DB.prepare(
+      `SELECT r.session_id, s.local_date, s.program_day_id, r.created_at
+       FROM session_reports r JOIN workout_sessions s ON s.id = r.session_id
+       WHERE r.status = 'ok' AND r.id = (SELECT r2.id FROM session_reports r2 WHERE r2.session_id = r.session_id ORDER BY r2.created_at DESC, r2.id DESC LIMIT 1)`
+    ),
+    c.env.DB.prepare(
+      `SELECT o.id, o.created_at, s.local_date AS trigger_date, s.program_day_id AS trigger_day
+       FROM training_overviews o LEFT JOIN workout_sessions s ON s.id = o.trigger_session_id WHERE o.status = 'ok'`
+    ),
+    c.env.DB.prepare("SELECT id, week_start, created_at FROM weekly_reviews"),
+  ]);
+  const { timezone } = await readSettings(c.env);
+  const rows: TimelineRows = {
+    reports: reports.results as TimelineRows["reports"],
+    overviews: overviews.results as TimelineRows["overviews"],
+    reviews: reviews.results as TimelineRows["reviews"],
+  };
+  return c.json<{ items: TimelineItem[] }>({ items: buildTimeline(rows, timezone) });
 });
 
 overviewRoutes.get("/session-reports", async (c) => {

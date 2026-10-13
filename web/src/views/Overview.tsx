@@ -144,7 +144,7 @@ function UpdatedAfter({ view, tz }: { view: OverviewView; tz: string }) {
   );
 }
 
-function OverviewBody({ view }: { view: OverviewView }) {
+export function OverviewBody({ view }: { view: OverviewView }) {
   const o = view.overview;
   const lifts = o.lifts.filter((l) => l.sessions > 0);
   const list = (title: string, items: string[], mark: string, testid: string, cls = "") =>

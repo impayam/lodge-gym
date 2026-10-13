@@ -60,8 +60,9 @@ describe("buildOverviewInput", () => {
   });
 
   it("counts planned sessions only from the active program's start when it started mid-window (Payam, 2026-10-13)", () => {
-    // Activated on Thursday 2026-09-17 at noon in Denver: the week of Sep 14 plans its last 4 days (4 × 4/7), the weeks
-    // before plan none, and the totals count done sessions from the same day (Sep 15 is before it).
+    // Activated on Thursday 2026-09-17 at noon in Denver: the week of Sep 14 plans its last 4 days (4 × 4/7 = 2.3, shown
+    // as 2), the weeks before plan none, and the totals count done sessions from the same day (Sep 15 is before it).
+    // Planned counts are whole sessions (round(10.3) = 10).
     const d = data();
     const info = (acts: [string, string | null][]) => ({
       id: "fullbody4", name: "Full body", style: null, days_per_week: 4, params: null, generated_by: null, created_at: "2026-08-01T00:00:00.000Z", approved_at: null, archived_at: null,
@@ -73,11 +74,15 @@ describe("buildOverviewInput", () => {
     expect(mid.weeks.map((w) => [w.start, w.sessions_planned, w.sessions_done])).toEqual([
       ["2026-08-31", 0, 0],
       ["2026-09-07", 0, 0],
-      ["2026-09-14", 2.3, 2],
+      ["2026-09-14", 2, 2],
       ["2026-09-21", 4, 5],
       ["2026-09-28", 4, 1],
     ]);
-    expect(mid.totals).toEqual({ since: "2026-09-17", sessions_done: 7, sessions_planned: 10.3 });
+    expect(mid.totals).toEqual({ since: "2026-09-17", sessions_done: 7, sessions_planned: 10 });
+    // Activated on the Sunday ending a week (like production, Sep 27): that week plans 4/7, the totals 12.6 → 13.
+    const sunday = buildOverviewInput({ ...d, programs: [info([["2026-09-27T06:00:00.000Z", null]])] }, [], TODAY, null);
+    expect(sunday.weeks.map((w) => w.sessions_planned)).toEqual([0, 0, 0, 1, 4]);
+    expect(sunday.totals).toMatchObject({ since: "2026-09-27", sessions_planned: 5 });
     // Activated before the window: the whole window plans the program's days.
     const before = buildOverviewInput({ ...d, programs: [info([["2026-08-01T18:00:00.000Z", null]])] }, [], TODAY, null);
     expect(before.program.started).toBe("2026-08-01");

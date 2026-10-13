@@ -3,8 +3,9 @@ import type { ProgramInfo, WorkoutSession } from "../../../worker/lib/types";
 import { errorText } from "../api";
 import { instantShort, monthLabel, plural } from "../format";
 import { activeSession, programName, recentSwitch, sortedSessions, styleLabel } from "../model";
-import { flash, loadAllHistory, navigate, switchProgram, useStore } from "../store";
+import { flash, loadAllHistory, switchProgram, useStore } from "../store";
 import { HistoryItem } from "./HistoryItem";
+import { ReportsTimeline } from "./ReportsTimeline";
 
 const lastStart = (p: ProgramInfo) => p.activations[p.activations.length - 1]?.started_at ?? "";
 
@@ -34,15 +35,7 @@ export function History() {
   return (
     <>
       {programs.length ? <Timeline programs={ordered} /> : null}
-      <button type="button" class="hist" style={{ marginTop: "14px" }} data-testid="open-reviews" onClick={() => navigate("reviews")}>
-        <span class="meta">
-          <b>Weekly reviews</b>
-          <small>Every weekly review, newest first</small>
-        </span>
-        <span class="side" aria-hidden="true">
-          ›
-        </span>
-      </button>
+      <ReportsTimeline />
       {!all.length ? (
         <>
           <h2>History</h2>

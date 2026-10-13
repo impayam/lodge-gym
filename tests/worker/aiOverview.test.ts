@@ -1,6 +1,7 @@
 import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { OverviewResponse, SessionReportItem } from "../../worker/lib/ai/overview";
+import type { OverviewResponse, OverviewView, SessionReportItem } from "../../worker/lib/ai/overview";
+import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import type { SetEntry, WeeklyReview, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
 import { mockAnthropic, OVERVIEW_REPLY, REPORT_REPLY } from "../fixtures/anthropic-mock";
@@ -202,5 +203,52 @@ describe("weekly reviews history", () => {
       ["w2", "2026-09-21", "دوم", ["خوب"]],
       ["w1", "2026-09-14", "اول", []],
     ]);
+  });
+});
+
+describe("report timeline (History) and saved overviews", () => {
+  it("lists each session's latest ok report, every ok overview and every weekly review on its date; a saved overview opens by id", async () => {
+    await env.DB.prepare("DELETE FROM weekly_reviews").run();
+    const a = { ...session(ulid()), local_date: "2026-10-10", started_at: "2026-10-10T23:00:00.000Z" };
+    const b = session(ulid());
+    mock = mockAnthropic([{ json: REPORT_REPLY }, { json: OVERVIEW_REPLY }, { json: REPORT_REPLY }, { json: OVERVIEW_REPLY }]);
+    await put(a);
+    await settled(a.id);
+    await put(b);
+    await settled(b.id);
+    // Session b's latest report failed: it leaves the timeline (its earlier ok report is no longer the latest).
+    await env.DB.prepare(
+      "INSERT INTO session_reports (id, session_id, created_at, model, status, report_json, error, input_tokens, output_tokens) VALUES (?, ?, ?, 'claude-opus-5-5', 'error', NULL, 'api: mock', NULL, NULL)"
+    )
+      .bind(ulid(), b.id, "2026-10-14T00:00:00.000Z")
+      .run();
+    // A failed overview is not listed; a Regenerate (no trigger) written Oct 11 at 21:00 Denver sits on Oct 11.
+    const ok = await env.DB.prepare("SELECT overview_json FROM training_overviews WHERE status = 'ok' LIMIT 1").first<{ overview_json: string }>();
+    const manual = ulid();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO training_overviews (id, created_at, window_start, window_end, model, status, error) VALUES (?, '2026-10-12T04:00:00.000Z', '2026-09-07', '2026-10-11', 'claude-opus-5-5', 'error', 'api: mock')").bind(ulid()),
+      env.DB.prepare("INSERT INTO training_overviews (id, created_at, window_start, window_end, model, status, overview_json) VALUES (?, '2026-10-12T03:00:00.000Z', '2026-09-07', '2026-10-11', 'claude-opus-5-5', 'ok', ?)").bind(manual, ok!.overview_json),
+      env.DB.prepare("INSERT INTO weekly_reviews (id, week_start, created_at, summary_fa, highlights, suggestions) VALUES ('wr-2026-09-28', '2026-09-28', '2026-10-05T13:58:00Z', 'مرور', '[]', '[]')"),
+    ]);
+    const items = ((await (await client.fetch("/api/report-timeline")).json()) as { items: TimelineItem[] }).items;
+    const overviews = await env.DB.prepare("SELECT id, trigger_session_id FROM training_overviews WHERE status = 'ok' AND trigger_session_id IS NOT NULL ORDER BY created_at").all<{ id: string; trigger_session_id: string }>();
+    expect(items.map((i) => [i.kind, i.date, i.program_day_id])).toEqual([
+      ["overview", "2026-10-12", "D1"],
+      ["overview", "2026-10-11", null],
+      ["session", "2026-10-10", "D1"],
+      ["overview", "2026-10-10", "D1"],
+      ["review", "2026-10-04", null],
+    ]);
+    expect(items.find((i) => i.kind === "session")!.id).toBe(a.id);
+    expect(items.filter((i) => i.kind === "overview" && i.program_day_id).map((i) => i.id).sort()).toEqual(overviews.results.map((r) => r.id).sort());
+    expect(items.find((i) => i.kind === "review")).toMatchObject({ id: "wr-2026-09-28", week_start: "2026-09-28" });
+    // The timeline carries no report text.
+    expect(JSON.stringify(items)).not.toContain(OVERVIEW_REPLY.summary_fa);
+
+    const one = (await (await client.fetch(`/api/overviews/${manual}`)).json()) as { overview: OverviewView };
+    expect(one.overview).toMatchObject({ id: manual, trigger: null, window_end: "2026-10-11" });
+    expect(one.overview.overview.summary_fa).toBe(OVERVIEW_REPLY.summary_fa);
+    expect((await client.fetch(`/api/overviews/${ulid()}`)).status).toBe(404);
+    expect((await client.fetch("/api/overviews/bad%20id")).status).toBe(400);
   });
 });
