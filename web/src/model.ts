@@ -32,10 +32,11 @@ export function programName(p: Pick<ProgramInfo, "name" | "style"> | null | unde
   return p.name || fallback;
 }
 
-/** Full-body and strength weeks allow at most two training days in a row (§8.4); split days are sequenced instead. */
+/** Full-body and strength weeks (and the seed programs) allow at most two training days in a row (§8.4); split days
+ *  are sequenced instead. */
 export function twoInARowRule(boot: BootData): boolean {
   const style = activeProgramInfo(boot)?.style ?? "seed_full_body";
-  return style === "seed_full_body" || MAX_TWO_IN_A_ROW.has(style as ResolvedStyle);
+  return style.startsWith("seed_") || MAX_TWO_IN_A_ROW.has(style as ResolvedStyle);
 }
 
 /** The latest program switch within the last 3 weeks (§8.5 "too many switches"), not counting the first activation. */
