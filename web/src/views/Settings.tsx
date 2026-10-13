@@ -121,6 +121,26 @@ export function Settings() {
         </button>
       </div>
 
+      <h2>About</h2>
+      <div class="card stack" data-testid="about">
+        {/* CC BY-SA 4.0 attribution of the picker's 3D model (SPEC-v6 §1, web/public/models/ANATOMY-SOURCE.md). */}
+        <div class="why">
+          3D anatomy model:{" "}
+          <a href="https://github.com/hpfrei/body-anatomy-3d-viewer" target="_blank" rel="noopener noreferrer">
+            Body Anatomy 3D Viewer
+          </a>{" "}
+          by hpfrei, based on{" "}
+          <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener noreferrer">
+            Z-Anatomy
+          </a>
+          ,{" "}
+          <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">
+            CC BY-SA 4.0
+          </a>
+          .
+        </div>
+      </div>
+
       <div class="stack" style={{ marginTop: "22px" }}>
         <button class="btn btn-danger btn-block" type="button" onClick={() => void logout()}>
           Sign out

@@ -175,7 +175,10 @@ test("home shows the rest advice after two training days in a row", async ({ pag
 
 test("security headers are present on the app shell", async ({ page, baseURL }) => {
   const res = await page.request.get(`${baseURL}/`);
-  expect(res.headers()["content-security-policy"]).toBe("default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'");
+  // SPEC §13, plus the SPEC-v6 sources for the 3D picker's Draco decoder: WebAssembly compilation and its blob worker.
+  expect(res.headers()["content-security-policy"]).toBe(
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'"
+  );
   const manifest = await (await page.request.get(`${baseURL}/manifest.webmanifest`)).json();
   expect(manifest).toMatchObject({ lang: "en", dir: "ltr", display: "standalone", start_url: "/", scope: "/" });
 });
