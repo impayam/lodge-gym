@@ -32,21 +32,31 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await put("01R2", days(0), "D1", [["bench", 4, 135, 5], ["incline_db", 3, 40, 10], ["rdl", 3, 155, 8], ["cable_row", 3, 100, 10], ["lateral", 3, 15, 12], ["facepull", 3, 40, 15], ["fedb-Hamstring_Stretch", 2, 0, 1]]);
   await page.request.put(`${baseURL}/api/body-mass/${denver(days(0))}`, { headers: { Origin: baseURL! }, data: { value: 180, unit: "lb" } });
 
+  // The 1RM chart and the calendar read the sessions on the phone: load them.
+  await page.reload();
   await goTo(page, "Reports");
-  await expect(page.getByTestId("week-stats")).toContainText("1 of 4");
-  await expect(page.getByTestId("week-stats")).toContainText("60");
+  // Week (the default): tiles, sets vs target (chest first), the period's details.
+  const tiles = page.getByTestId("week-stats");
+  await expect(tiles).toContainText("1/4");
+  await expect(tiles).toContainText("+3.8%");
+  await expect(page.getByTestId("week-body")).toContainText("60 min");
   const lifts = page.getByTestId("week-lifts");
   await expect(lifts).toContainText("135×5 · 1RM 157.5");
   await expect(lifts).toContainText("+3.8%");
   await expect(page.getByTestId("week-prs")).toContainText("Barbell Bench Press");
-  await page.getByText("Table", { exact: true }).first().click();
-  await expect(page.locator(".tableview table").first()).toContainText("Chest");
+  // Estimated 1RM of the big three: bench 157.5 this week.
+  await expect(page.getByTestId("e1rm-trend").getByTestId("chart-legend")).toHaveCount(0);
+  await expect(page.getByTestId("e1rm-trend").getByRole("img")).toHaveAttribute("aria-label", /latest Bench 157\.5$/);
+  const sets = page.getByTestId("week-sets");
+  await expect(sets.locator(".bar-row").first()).toHaveAttribute("data-row", "chest");
+  await expect(sets.locator('.bar-row[data-row="chest"]')).toContainText("7 / 13");
+  await expect(sets.locator('.bar-row[data-row="chest"]')).toContainText("under target");
+  await sets.getByTestId("chart-table-toggle").click();
+  await expect(sets.locator('tr[data-row="chest"]')).toHaveText(/Chest\s*7\s*7\s*13/);
+  // Consistency: today's session in this week's row.
+  await expect(page.getByTestId("consistency").locator(`.calendar__cell[data-date="${denver(days(0))}"]`)).toHaveAttribute("data-trained", "true");
   // A stored note stays as written.
   await expect(page.getByText("عالی")).toBeVisible();
-
-  // Readout on tap.
-  await page.locator(".chart .row").first().click();
-  await expect(page.locator(".chart .readout").first()).toContainText("Chest: 7 fractional sets of target 13 (direct 7)");
 
   // CSV and PNG downloads (headless Chromium has no share sheet, so both download).
   const csvDownload = page.waitForEvent("download");
@@ -60,18 +70,18 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   expect((await pngDownload).suggestedFilename()).toBe("gym-time-report.png");
 
   // Previous week.
-  await page.getByRole("button", { name: "← Previous week" }).click();
+  await page.getByRole("button", { name: "Previous week" }).click();
   await expect(page.getByTestId("week-lifts")).toContainText("130×5");
 
   // Monthly (Gregorian month).
-  await page.getByRole("tab", { name: "Monthly" }).click();
-  await expect(page.getByTestId("month-stats")).toContainText("adherence");
-  await expect(page.locator(".navrow b")).toHaveText(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "America/Denver" }).format(now));
-  await expect(page.getByText("Estimated 1RM trend")).toBeVisible();
+  await page.getByRole("tab", { name: "Month" }).click();
+  await expect(page.getByTestId("month-numbers")).toContainText("Adherence");
+  await expect(page.getByTestId("period-label")).toHaveText(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "America/Denver" }).format(now));
+  await expect(page.getByText("Estimated 1RM this month")).toBeVisible();
   await expect(page.getByText("Body weight").first()).toBeVisible();
 
-  // Progress with the muscle map.
-  await page.getByRole("tab", { name: "Progress" }).click();
+  // All (since the first session) with the muscle map.
+  await page.getByRole("tab", { name: "All" }).click();
   await expect(page.getByTestId("progress-lifts")).toContainText("Barbell Bench Press");
   await expect(page.getByTestId("progress-lifts")).toContainText("+3.8%");
   // The 3D muscle map (SPEC-v6 §8) colours chest by its status; the list holds the numbers.

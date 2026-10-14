@@ -134,9 +134,7 @@ export function App() {
         <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
       </Legacy>
     ) : view.name === "reports" ? (
-      <Legacy>
-        <Reports />
-      </Legacy>
+      <Reports />
     ) : view.name === "library" ? (
       <Legacy>
         <Library />

@@ -58,7 +58,7 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   await expect(page.getByTestId("weekly-review")).toBeVisible();
   await check("Saved weekly review");
   await goTo(page, "Reports");
-  for (const tab of ["Monthly", "Progress"]) {
+  for (const tab of ["Month", "All"]) {
     await page.getByRole("tab", { name: tab }).click();
     await page.waitForLoadState("networkidle");
     await check(tab);

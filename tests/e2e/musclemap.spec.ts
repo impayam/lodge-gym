@@ -27,7 +27,7 @@ const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Americ
 async function openProgress(page: Page) {
   await page.goto("/");
   await goTo(page, "Reports");
-  await page.getByRole("tab", { name: "Progress" }).click();
+  await page.getByRole("tab", { name: "All" }).click();
   await expect(page.getByTestId("muscle-map")).toBeVisible();
 }
 
@@ -84,7 +84,7 @@ test("3D map: each mapped muscle in its group's status colour, unmapped dark; a 
   const stage = page.getByTestId("balance-stage");
   await expect(stage).toHaveAttribute("data-mode", "3d", { timeout: 30_000 });
   await expect(page.getByTestId("anatomy-fallback")).toHaveCount(0);
-  await expect(page.getByTestId("muscle-map").locator("svg.figure, .figures")).toHaveCount(0);
+  await expect(page.getByTestId("muscle-map").locator(".body-figures")).toHaveCount(0);
 
   // Colours equal the statuses of the list's numbers.
   for (const [key, status] of Object.entries(MIXED)) {
@@ -97,7 +97,7 @@ test("3D map: each mapped muscle in its group's status colour, unmapped dark; a 
   // Every muscle mesh, mesh by mesh: a mapped one in the colour of its group's status in the table, an unmapped one dark.
   const table = Object.fromEntries(
     await page.getByTestId("muscle-map").locator("li[data-testid^='muscle-']").evaluateAll((rows) =>
-      rows.map((r) => [r.getAttribute("data-testid")!.slice("muscle-".length), r.querySelector(".st")!.className.replace(/^.*\bst-(\w+).*$/, "$1")])
+      rows.map((r) => [r.getAttribute("data-testid")!.slice("muscle-".length), r.getAttribute("data-status")!])
     )
   ) as Record<string, BalanceStatus>;
   const parts = await view(page, (v) => v.partColors());
@@ -175,16 +175,16 @@ async function shoot(page: Page, name: string) {
   // The app's CSP refuses injected stylesheets, so hide the bars through the DOM.
   const bars = (hidden: boolean) =>
     page.evaluate((h) => {
-      for (const el of document.querySelectorAll<HTMLElement>("header.top, nav.tabbar")) el.style.visibility = h ? "hidden" : "";
+      for (const el of document.querySelectorAll<HTMLElement>("nav.tabbar, .fab")) el.style.visibility = h ? "hidden" : "";
     }, hidden);
   await bars(true);
   const map = page.getByTestId("muscle-map");
-  await map.locator(".figures").scrollIntoViewIfNeeded();
+  await map.locator(".body-figures").scrollIntoViewIfNeeded();
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     const box = await map.evaluate((el) => {
-      const top = el.querySelector(".readout")!.getBoundingClientRect();
-      const bottom = el.querySelector(".legend")!.getBoundingClientRect();
+      const top = el.querySelector(".chart-readout")!.getBoundingClientRect();
+      const bottom = el.querySelector(".chart-legend")!.getBoundingClientRect();
       const card = el.closest(".card")!.getBoundingClientRect();
       return { x: card.left + window.scrollX, y: top.top + window.scrollY - 8, width: card.width, height: bottom.bottom - top.top + 16 };
     });
@@ -203,12 +203,12 @@ test("fallback figures: every region, mirror-symmetric, inside one silhouette, f
   const map = page.getByTestId("muscle-map");
 
   const shape = await map.evaluate((root) =>
-    [...root.querySelectorAll<SVGSVGElement>(".figure svg")].map((svg) => {
-      const body = svg.querySelectorAll("path.body");
+    [...root.querySelectorAll<SVGSVGElement>(".body-figure svg")].map((svg) => {
+      const body = svg.querySelectorAll("path.body-figure__body");
       const sil = body[0] as SVGPathElement;
       // A point lies on the body when it is inside the silhouette or on its 1-unit outline.
       const onBody = (x: number, y: number) => sil.isPointInFill(new DOMPoint(x, y)) || sil.isPointInStroke(new DOMPoint(x, y));
-      const regions = [...svg.querySelectorAll<SVGPathElement>("path.muscle")].map((p) => {
+      const regions = [...svg.querySelectorAll<SVGPathElement>("path.body-region")].map((p) => {
         const b = p.getBBox();
         const len = p.getTotalLength();
         const outside = Array.from({ length: 48 }, (_, i) => p.getPointAtLength((len * i) / 48)).filter((pt) => !onBody(pt.x, pt.y)).length;
@@ -225,7 +225,7 @@ test("fallback figures: every region, mirror-symmetric, inside one silhouette, f
     expect(f.viewBox).toBe("0 0 200 460");
     // One silhouette and nothing else under the muscles: no second, offset body layer.
     expect(f.bodies).toBe(1);
-    expect(f.kinds.every((k) => /^path\.(body|muscle .*|detail)$/.test(k))).toBe(true);
+    expect(f.kinds.every((k) => /^path\.(body-figure__body|body-region|body-figure__detail)$/.test(k))).toBe(true);
     // Left/right pairs are exact mirror images across x = 100.
     expect(f.regions.length % 2).toBe(0);
     for (let i = 0; i < f.regions.length; i += 2) {
@@ -242,7 +242,7 @@ test("fallback figures: every region, mirror-symmetric, inside one silhouette, f
   }
   // Both figures fit the phone's width; the page never scrolls sideways.
   const fit = await page.evaluate(() => {
-    const figs = [...document.querySelectorAll(".figure svg")].map((s) => s.getBoundingClientRect());
+    const figs = [...document.querySelectorAll(".body-figure svg")].map((s) => s.getBoundingClientRect());
     return { right: Math.max(...figs.map((r) => r.right)), left: Math.min(...figs.map((r) => r.left)), vw: window.innerWidth, scroll: document.documentElement.scrollWidth };
   });
   expect(fit.left).toBeGreaterThanOrEqual(0);
@@ -250,7 +250,7 @@ test("fallback figures: every region, mirror-symmetric, inside one silhouette, f
   expect(fit.scroll).toBeLessThanOrEqual(fit.vw);
 
   // Empty week: every region shows "no sets".
-  await expect(map.locator("path.muscle:not([data-status='none'])")).toHaveCount(0);
+  await expect(map.locator("path.body-region:not([data-status='none'])")).toHaveCount(0);
   await shoot(page, "empty-week");
 });
 
@@ -265,16 +265,16 @@ test("fallback figures, mixed week: regions take their group's status; a tap fil
   const map = page.getByTestId("muscle-map");
 
   for (const [key, status] of Object.entries(MIXED)) {
-    const regions = map.locator(`path.muscle[data-muscle="${key}"]`);
+    const regions = map.locator(`path.body-region[data-muscle="${key}"]`);
     expect(await regions.count(), key).toBeGreaterThan(0);
     for (const s of await regions.evaluateAll((els) => els.map((e) => e.getAttribute("data-status")))) expect(s, key).toBe(status);
   }
   await shoot(page, "mixed-week");
 
   // Tap a front delt: every shoulders region on both figures (front and side delts) is filled and outlined.
-  await map.locator('path.muscle[data-muscle="shoulders_front"]').first().click();
-  await expect(map.locator(".readout")).toContainText("Front delts (Shoulders): 6 direct · 12 fractional of 15.5 sets · Under target");
-  const sel = map.locator("path.sel");
+  await map.locator('path.body-region[data-muscle="shoulders_front"]').first().click();
+  await expect(map.locator(".chart-readout")).toContainText("Front delts (Shoulders): 6 direct · 12 fractional of 15.5 sets · Under target");
+  const sel = map.locator("path.body-figure__sel");
   await expect(sel).toHaveCount(6);
   expect(new Set(await sel.evaluateAll((els) => els.map((e) => e.getAttribute("data-selected"))))).toEqual(new Set(["shoulders_front", "shoulders_side"]));
   const look = await sel.first().evaluate((e) => {
@@ -287,7 +287,7 @@ test("fallback figures, mixed week: regions take their group's status; a tap fil
   await shoot(page, "mixed-week-selected");
 
   // Another group replaces the selection.
-  await map.locator('path.muscle[data-muscle="back_lats"]').first().click();
-  await expect(map.locator(".readout")).toContainText("Lats (Back): 0 direct · 5 fractional of 17.5 sets · Under target");
+  await map.locator('path.body-region[data-muscle="back_lats"]').first().click();
+  await expect(map.locator(".chart-readout")).toContainText("Lats (Back): 0 direct · 5 fractional of 17.5 sets · Under target");
   await expect(sel).toHaveCount(4);
 });

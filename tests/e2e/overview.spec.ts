@@ -61,6 +61,10 @@ test("the overview updates after a finished session, keeps the old one on failur
   await expect(page.getByTestId("overview-updated")).toHaveText(/^Updated after: Day 1 · Chest · [A-Z][a-z]{2} \d{1,2}$/, { timeout: 30_000 });
   await expect(card(page)).not.toHaveAttribute("data-overview", manual!);
   await expect(page.getByTestId("overview-summary")).toContainText("در 5 هفتهٔ اخیر 1 جلسه");
+  // The rest opens in the card (Payam, 2026-10-14).
+  await expect(page.getByTestId("overview-lifts")).toHaveCount(0);
+  await page.getByTestId("overview-more").click();
+  await expect(page.getByTestId("overview-more")).toHaveAttribute("aria-expanded", "true");
   // The app's lift table: bench 4 × 5 at 140 lb → Epley 1RM 163.3.
   const bench = page.getByTestId("overview-lifts").locator('tr[data-lift="bench"]');
   await expect(bench.locator("td").nth(0)).toHaveText("Barbell Bench Press");
@@ -125,8 +129,8 @@ test("Session reports lists each finished session's report, newest first, and a 
   const rows = page.getByTestId("session-report-row");
   await expect(rows).toHaveCount(1, { timeout: 30_000 });
   await expect(rows.first()).toContainText("Day 1 · Chest");
-  await expect(rows.first().locator(".sr-line")).toHaveAttribute("dir", "rtl");
-  await expect(rows.first().locator(".sr-line")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
+  await expect(rows.first().locator(".list-row__note")).toHaveAttribute("dir", "rtl");
+  await expect(rows.first().locator(".list-row__note")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
   await rows.first().click();
   await expect(page.getByTestId("report-screen")).toBeVisible();
   await expect(page.getByTestId("report-summary")).toContainText("جلسهٔ Day 1 · Chest انجام شد");

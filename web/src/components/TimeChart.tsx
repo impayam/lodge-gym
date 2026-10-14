@@ -13,6 +13,8 @@ export interface ChartSeries {
   /** The series colour token, e.g. "--series-1". */
   color: `--${string}`;
   points: { date: string; value: number }[];
+  /** Points only, no line (e.g. daily body weight under its 7-day average). */
+  dots?: boolean;
 }
 
 export interface Pick {
@@ -134,14 +136,18 @@ export function TimeChart({ series, height, label, unit, area, yAxis, grid = tru
       },
       series: [
         {},
-        ...series.map((s, k): uPlot.Series => ({
-          label: s.label,
-          stroke: colors[k],
-          width: 2,
-          spanGaps: true,
-          fill: area && series.length === 1 ? colors[k] + "1f" : undefined,
-          points: { show: true, size: 9, width: 2, stroke: ring, fill: colors[k], filter: (u, si) => [lastIndex(u.data[si] as (number | null)[])] },
-        })),
+        ...series.map((s, k): uPlot.Series =>
+          s.dots
+            ? { label: s.label, stroke: colors[k], width: 0, paths: () => null, points: { show: true, size: 5, width: 0, stroke: colors[k], fill: colors[k] } }
+            : {
+                label: s.label,
+                stroke: colors[k],
+                width: 2,
+                spanGaps: true,
+                fill: area && series.length === 1 ? colors[k] + "1f" : undefined,
+                points: { show: true, size: 9, width: 2, stroke: ring, fill: colors[k], filter: (u, si) => [lastIndex(u.data[si] as (number | null)[])] },
+              }
+        ),
       ],
       hooks: {
         setCursor: [
@@ -252,7 +258,7 @@ export function TimeChart({ series, height, label, unit, area, yAxis, grid = tru
             const i = lastIndex(col);
             return (
               <span>
-                <span class="chart-legend__key" style={{ background: `var(${s.color})` }} />
+                <span class={s.dots ? "chart-legend__swatch" : "chart-legend__key"} style={{ background: `var(${s.color})` }} />
                 {s.label} <b class="num">{i >= 0 ? fmtNum(round1(col[i]!)) : "–"}</b>
               </span>
             );
