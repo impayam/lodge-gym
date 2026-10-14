@@ -71,6 +71,12 @@ export function activeSince(d: ReportData, date: string): string | null {
   return starts.length ? starts.sort().at(-1)! : null;
 }
 
+/** The local date the first program was first activated: planned sessions count from here (SPEC-v7 M9d option A). */
+export function firstActivation(d: ReportData): string | null {
+  const starts = (d.programs ?? []).flatMap((p) => p.activations.map((a) => localDate(d.settings.timezone, a.started_at)));
+  return starts.length ? starts.sort()[0] : null;
+}
+
 /** Planned sessions over [from, to]: each day adds the weekly days of the program active then, divided by 7. */
 export function plannedSessions(d: ReportData, from: string, to: string): number {
   let n = 0;

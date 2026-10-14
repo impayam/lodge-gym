@@ -76,10 +76,11 @@ CREATE INDEX training_overviews_created ON training_overviews(created_at);
 - Routes: `GET /api/overview` (latest ok overview, `failed` when a newer attempt failed, `pending`), `POST /api/overview`
   (Regenerate/Retry, 202), `GET /api/session-reports` (latest report per session, newest session first).
 - Reports → Session reports shows the latest 5, then "Show all" (kept after review).
-- Planned sessions (PR review): counted only from the later of the active program's start date (its last activation)
-  and the window's start; weeks before plan none, the start week plans only its days since then; whole sessions
-  ("5 of 13"). The totals compare done and planned sessions from that same date (`totals.since`) — pending Payam's
-  decision on how a program switch and re-activation should count.
+- Planned sessions (PR review, option A chosen 2026-10-14): counted from the later of the first program activation and
+  the window's start, each day with the days per week of the program active that day (the Monthly/Progress adherence
+  rule), so switching programs or re-activating one never resets the count; weeks before plan none, the start week
+  plans only its days since then; whole sessions ("5 of 13"). The totals compare done and planned sessions from that
+  same date (`totals.since`).
 - History → Reports timeline (PR review): two rows, Session report and Weekly review, one column per date with a report;
   a session date's chooser lists its session report and the overview written after it; an overview on a day without a
   session gets a ◆ marker on its date; the List view shows all three types. Every report opens read-only. A weekly

@@ -89,6 +89,31 @@ describe("buildOverviewInput", () => {
     expect(before.totals).toEqual({ since: "2026-08-31", sessions_done: 8, sessions_planned: 20 });
   });
 
+  it("a program switch and a re-activation never reset the count: each day plans the program active then (option A, 2026-10-14)", () => {
+    const d = data();
+    const version = (id: string, dpw: number, acts: [string, string | null][], days = d.program.days) => ({
+      id, name: id, style: null, days_per_week: dpw, params: null, generated_by: null, created_at: "2026-08-01T00:00:00.000Z", approved_at: null, archived_at: null,
+      status: "active" as const, activations: acts.map(([started_at, ended_at], i) => ({ id: `${id}-${i}`, program_id: id, started_at, ended_at })), days,
+    });
+    // Full body (4 a week) from Sep 3; a 3-day program from Wed Sep 16; Full body again from Wed Sep 23 (noon in Denver).
+    const programs = [
+      version("fullbody4", 4, [["2026-09-03T18:00:00.000Z", "2026-09-16T18:00:00.000Z"], ["2026-09-23T18:00:00.000Z", null]]),
+      version("gen3", 3, [["2026-09-16T18:00:00.000Z", "2026-09-23T18:00:00.000Z"]], d.program.days.slice(0, 3)),
+    ];
+    const input = buildOverviewInput({ ...d, programs }, [], TODAY, null);
+    // The active program was re-activated Sep 23, but the count runs from the first activation (Sep 3).
+    expect(input.program.started).toBe("2026-09-23");
+    expect(input.weeks.map((w) => [w.start, w.sessions_planned])).toEqual([
+      ["2026-08-31", 2], // Sep 3–6 at 4 a week: 16/7
+      ["2026-09-07", 4],
+      ["2026-09-14", 3], // Sep 14–15 at 4, Sep 16–20 at 3: 23/7
+      ["2026-09-21", 4], // Sep 21–22 at 3, Sep 23–27 at 4: 26/7
+      ["2026-09-28", 4],
+    ]);
+    // Every session since Sep 3 counts, including the ones before the re-activation.
+    expect(input.totals).toEqual({ since: "2026-09-03", sessions_done: 8, sessions_planned: 17 });
+  });
+
   it("has the raw sets and Payam's own notes, and no AI text", () => {
     const x3 = input.sessions.at(-1)!;
     expect(x3).toMatchObject({ day: "Day 1 · Chest", note: "Left shoulder a bit sore.", duration_min: 55 });

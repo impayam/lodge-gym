@@ -9,7 +9,7 @@ import { countsVolume } from "../category";
 import { weekRange } from "../cycle";
 import { toLatinDigits } from "../digits";
 import { liveItems, type SessionPlan } from "../plan";
-import { activeSince, balanceStatus, bestSet, convertWeight, epley, mainLifts, muscleTargets, plannedSessions, programOn, setsPerMuscle, type BalanceStatus, type ReportData } from "../reports";
+import { activeSince, balanceStatus, bestSet, convertWeight, epley, firstActivation, mainLifts, muscleTargets, plannedSessions, programOn, setsPerMuscle, type BalanceStatus, type ReportData } from "../reports";
 import { TARGET_GROUPS } from "../muscles";
 import { addDays } from "../time";
 import type { Exercise, SetEntry, Unit, WorkoutSession } from "../types";
@@ -50,7 +50,7 @@ export interface OverviewInput {
   /** `started`: the local date the active program was (last) activated. */
   program: { name: string; style: string | null; days_per_week: number; started: string | null };
   weeks: OverviewWeek[];
-  /** Done and planned sessions from `since`: the active program's start or the window's start, whichever is later. */
+  /** Done and planned sessions from `since`: the first program activation or the window's start, whichever is later. */
   totals: { since: string; sessions_done: number; sessions_planned: number };
   sessions: {
     date: string;
@@ -99,10 +99,12 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
   const done = d.sessions.filter((s) => s.status === "done").sort((a, b) => order(a).localeCompare(order(b)));
   const inWindow = done.filter((s) => s.local_date >= start && s.local_date <= end);
   const dayName = (id: string) => sessionDay(d, id)?.name_en ?? id;
-  // Planned sessions count only from the active program's start, or the window's start if later (Payam, 2026-10-13):
-  // weeks before it plan none, and the week it started plans only its days since then.
+  // Planned sessions count from the first program activation, or the window's start if later; each day plans the days
+  // of the program active that day, so switching programs or re-activating one never resets the count (Payam,
+  // 2026-10-14, option A). Weeks before it plan none; the week it started plans only its days since then.
   const started = activeSince(d, today);
-  const since = started && started > start ? started : start;
+  const first = firstActivation(d);
+  const since = first && first > start ? first : start;
 
   const weeks: OverviewWeek[] = [];
   let planned = 0;
@@ -358,7 +360,7 @@ Rules:
 - Numbers: write only numbers that appear in the input, exactly or rounded (for example a change_pct of 3.8 may be written as 4%). Prefer words over numbers. Any sentence with another number is removed by the app.
 - trends: one item per main lift in lifts that has a change_pct (direction and size over the window).
 - volume_fa: groups on, under or over target this week (weeks with this_week true) and over the window. Chest is Payam's priority.
-- consistency_fa: sessions done per week against sessions_planned, and any pattern in skipped. Planned sessions count only from the active program's start (program.started) or the window's start, whichever is later: weeks before it plan none, and totals compare the sessions done and planned since totals.since.
+- consistency_fa: sessions done per week against sessions_planned, and any pattern in skipped. Planned sessions count from totals.since (the first program activation or the window's start, whichever is later), each day with the program active that day: weeks before it plan none, and totals compare the sessions done and planned since totals.since.
 - focus_next: 1–3 concrete priorities for the coming sessions, for strength and balance.
 - warnings: only real issues: stalls, drops, pain or injury in a note. Usually none.
 - Never suggest a deload, a light week or less volume, unless a session note says he is tired. This is his stated preference.

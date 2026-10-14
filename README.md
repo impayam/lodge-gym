@@ -287,8 +287,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Built from raw data only (`worker/lib/ai/overview.ts`): sets with weight, reps and RIR per session, Payam's session
   notes, the main lifts' e1RM per session (Epley) with the % change over the window, stalls (3 exposures without
   beating the best before), drops (10% or more below the best), sessions per week against the program's days (planned
-  sessions count only from the active program's start, or the window's start if later, as whole sessions; Payam,
-  2026-10-13), weekly
+  sessions count from the first program activation, or the window's start if later, each day with the program active
+  that day, so a switch or re-activation never resets the count; whole sessions; Payam, 2026-10-14, option A), weekly
   volume against the targets (fractional sets) and skipped planned exercises. The text of session reports and earlier
   overviews is never sent, so model mistakes do not compound.
 - Numbers come from the app: the lift table (1RM, change) is the app's; the model only phrases. A sentence with a number
