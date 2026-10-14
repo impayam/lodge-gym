@@ -30,8 +30,8 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/^"?Instrument Sans"?,/);
   expect(await page.evaluate(() => [...new Set([...document.fonts].map((f) => f.family.replace(/"/g, "")))].sort())).toEqual(["Barlow Condensed", "Instrument Sans"]);
   expect(await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => new URL(e.name).origin !== location.origin).map((e) => e.name))).toEqual([]);
-  // Header date is Gregorian, e.g. "Mon, Oct 12, 2026".
-  await expect(page.locator(".brand small")).toHaveText(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+  // The Home date is Gregorian, e.g. "Wednesday, October 14".
+  await expect(page.getByTestId("today-date")).toHaveText(/^[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}$/);
 
   const check = async (label: string) => {
     const text = await uiText(page);

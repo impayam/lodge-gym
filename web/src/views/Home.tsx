@@ -257,7 +257,9 @@ export function Home() {
     <main class="page" data-testid="home">
       <header class="page-head">
         <div class="l-col l-gap-2">
-          <span class="page-head__sub">{dateHeading(t)}</span>
+          <span class="page-head__sub" data-testid="today-date">
+            {dateHeading(t)}
+          </span>
           <h1 class="h-page">Today</h1>
         </div>
         <SyncStatus />

@@ -266,7 +266,7 @@ test("offline: after one online open the 3D picker loads from the service worker
 
   await setOffline(context, page, true);
   await page.reload();
-  await page.getByRole("button", { name: "Continue session" }).click();
+  await page.getByTestId("continue").click();
   const step = await openPicker(page);
   await expect(step.getByTestId("anatomy-canvas")).toBeVisible();
   await setOffline(context, page, false);
