@@ -51,6 +51,8 @@ async function pickBySearch(page: Page, query: string, name: RegExp) {
 }
 
 test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in the session; a done exercise can't be deleted", async ({ page, context }) => {
+  // A long walk through the planner, the session and the sync: about a minute in WebKit under a full run.
+  test.setTimeout(120_000);
   await page.goto("/");
   await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
