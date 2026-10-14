@@ -48,7 +48,8 @@ export interface State {
   /** The selected tab (SPEC-v8 §5); pushed screens keep the tab they were opened from. */
   tab: TabName;
   sync: SyncState;
-  rest: { id: string; endsAt: number; label: string } | null;
+  /** The rest timer: when it ends, what it follows, and its length in seconds (the ring's full circle). */
+  rest: { id: string; endsAt: number; label: string; total: number } | null;
   flash: string | null;
   /** Synced photo metadata plus photos still waiting in the outbox. */
   photos: Photo[];
@@ -789,13 +790,15 @@ export async function upsertWatch(list: HealthWorkout[]) {
 
 export function startRest(seconds: number, label: string) {
   if (state.rest) cancelPush(state.rest.id);
-  const rest = { id: ulid(), endsAt: Date.now() + seconds * 1000, label };
+  const rest = { id: ulid(), endsAt: Date.now() + seconds * 1000, label, total: seconds };
   setState({ rest });
   schedulePush(rest.id, rest.endsAt, label);
 }
 export function extendRest(seconds: number) {
   if (!state.rest) return;
-  const rest = { ...state.rest, endsAt: Math.max(Date.now(), state.rest.endsAt) + seconds * 1000 };
+  const endsAt = Math.max(Date.now(), state.rest.endsAt) + seconds * 1000;
+  // The ring grows with the extension: it never shows more than a full circle.
+  const rest = { ...state.rest, endsAt, total: Math.max(state.rest.total, (endsAt - Date.now()) / 1000) };
   setState({ rest });
   schedulePush(rest.id, rest.endsAt, rest.label);
 }

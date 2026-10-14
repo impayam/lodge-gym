@@ -14,9 +14,11 @@ interface Props {
   decimals?: boolean;
   label: string;
   testId?: string;
+  /** Pulse styling (big number in a well between two clay buttons); the planner keeps the pre-Pulse look until it moves. */
+  pulse?: boolean;
 }
 
-export function Stepper({ value, placeholder, step, onChange, base, min, decimals = true, label, testId }: Props) {
+export function Stepper({ value, placeholder, step, onChange, base, min, decimals = true, label, testId, pulse = false }: Props) {
   const [text, setText] = useState<string | null>(null);
   const repeat = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean }>({ t: null, fired: false });
   const latest = useRef(value);
@@ -60,12 +62,14 @@ export function Stepper({ value, placeholder, step, onChange, base, min, decimal
   };
 
   const shown = text ?? (value == null ? "" : fmtNum(value));
+  const btn = pulse ? "clay press" : undefined;
   return (
-    <div class="stepper" data-testid={testId}>
-      <button type="button" aria-label={`Decrease ${label}`} onPointerDown={press(-1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(-1)}>
+    <div class={pulse ? "num-stepper" : "stepper"} data-testid={testId}>
+      <button type="button" class={btn} aria-label={`Decrease ${label}`} onPointerDown={press(-1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(-1)}>
         −
       </button>
       <input
+        class={pulse ? "num-stepper__input well num" : undefined}
         inputMode={min !== undefined && min >= 0 ? (decimals ? "decimal" : "numeric") : "text"}
         enterKeyHint="done"
         autoComplete="off"
@@ -82,7 +86,7 @@ export function Stepper({ value, placeholder, step, onChange, base, min, decimal
           if (n !== null && (decimals || Number.isInteger(n)) && (min === undefined || n >= min)) onChange(n);
         }}
       />
-      <button type="button" aria-label={`Increase ${label}`} onPointerDown={press(1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(1)}>
+      <button type="button" class={btn} aria-label={`Increase ${label}`} onPointerDown={press(1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(1)}>
         +
       </button>
     </div>

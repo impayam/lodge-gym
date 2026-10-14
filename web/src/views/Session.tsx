@@ -1,14 +1,24 @@
-// Session screen (SPEC §7): fewest taps — prefilled suggestions, one-tap check, steppers, rest timer, autosave.
+// Session screen (SPEC §7, SPEC-v8 §6.02). An active session is full screen on the session background: one exercise at a
+// time (Prev / "Next: <exercise>" and a swipe on the card), the set's weight and reps open a sheet, RIR under the current
+// set, the session's other tools in the More sheet, effort in the chip, bar, glow and accents. A finished session
+// (opened from History) lists all its exercises. Every change autosaves.
 
+import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { localHM } from "../../../worker/lib/time";
-import type { SetEntry, Unit, WorkoutSession } from "../../../worker/lib/types";
+import type { HealthWorkout, SetEntry, Unit, WorkoutSession } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
-import { IconCheck } from "../components/Icons";
-import { Stepper } from "../components/Stepper";
-import { clock, dateLong, fmtNum, hm, ytLink } from "../format";
 import { restAfterGroupSet } from "../../../worker/lib/plan";
 import { groupKind, PlanList } from "../components/PlanList";
+import { IconBack, IconCheck, IconChevron, IconMore, IconPlay, IconPlus, IconProgram } from "../components/PulseIcons";
+import { Sheet } from "../components/Sheet";
+import { Stepper } from "../components/Stepper";
+import { SyncStatus } from "../components/SyncStatus";
+import { clock, dateShort, fmtNum, hm, minutesBetween, ytLink } from "../format";
+import { effortColor, effortLabel } from "../lib/effort";
+import { dayTitle } from "../lib/lifts";
+import { cardIndex, cardSwipeOutcome, currentSetIndex, sessionEffort } from "../lib/session";
+import { effortStops } from "../lib/tokens";
 import { dayInfo, guidance, planForSession, retime, sessionBlocks, sessionPlan, type ExerciseBlock, type Guidance } from "../model";
 import {
   addExtraExercise,
@@ -16,6 +26,7 @@ import {
   flash,
   getState,
   navigate,
+  openPhotos,
   openReport,
   photoSrc,
   removeExtraExercise,
@@ -28,10 +39,10 @@ import {
   stopRest,
   useStore,
 } from "../store";
-import { ExercisePicker, ExerciseThumb } from "./Library";
+import { ExercisePicker } from "./Library";
+import { poseLabel } from "./Photos";
 import { rirText, targetText } from "./Program";
 import { WatchStats, workoutTypeName } from "./Watch";
-import { poseLabel } from "./Photos";
 
 function useWakeLock(enabled: boolean) {
   useEffect(() => {
@@ -66,23 +77,29 @@ function Elapsed({ from }: { from: string }) {
     return () => clearInterval(t);
   }, []);
   const sec = (now - Date.parse(from)) / 1000;
-  return (
-    <div class="clock num" data-testid="elapsed">
-      {sec < 86_400 ? clock(sec) : "–"}
-    </div>
-  );
+  return <span data-testid="elapsed">{sec < 86_400 ? clock(sec) : "–"}</span>;
 }
+
+/** The exercise each session's card showed last, so leaving and reopening the session keeps it. */
+const shownExercise = new Map<string, string>();
+
+type SheetState = { kind: "set"; exerciseId: string; set: number } | { kind: "more" } | { kind: "delete" } | null;
 
 export function Session({ id }: { id: string }) {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
   const s = sessions[id];
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sheet, setSheet] = useState<SheetState>(null);
   const [picking, setPicking] = useState(false);
   const [arranging, setArranging] = useState(false);
+  const [, setShown] = useState<string | null>(null);
+  const [said, setSaid] = useState("");
+  // The card changed by Prev / Next, a swipe or a superset round: focus follows it to the new exercise's title.
+  const moved = useRef(false);
   useStore((st) => st.library);
   const plans = useStore((st) => st.plans);
   const photos = useStore((st) => st.photos);
+  const resting = useStore((st) => st.rest !== null);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [note, setNote] = useState(s?.note ?? "");
   useWakeLock(s?.status === "active");
@@ -92,23 +109,38 @@ export function Session({ id }: { id: string }) {
   }, [s]);
   if (!s) return null;
 
+  const active = s.status === "active";
   const tz = boot.settings.timezone;
   const day = dayInfo(boot, s.program_day_id);
   const watch = (boot.watch ?? []).filter((w) => w.matched_session_id === s.id).sort((a, b) => a.started_at.localeCompare(b.started_at));
   const exMap = allExercises();
   const plan = sessionPlan(plans, s.id);
   const blocks = sessionBlocks(boot, s, exMap, plan);
-  const hasGroup = blocks.some((b) => b.group);
   const sessionPhotos = photos.filter((p) => p.session_id === s.id);
-  const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
-  const bodyToday = manualBody.find((m) => m.local_date === s.local_date) ?? null;
-  const lastBody = [...manualBody].reverse().find((m) => m.unit === s.unit)?.value ?? null;
   const startHM = localHM(tz, s.started_at);
   const endHM = s.ended_at ? localHM(tz, s.ended_at) : "";
+  const effort = sessionEffort(s.sets);
+  const vars = { "--effort": effortColor(effort.e, effortStops()), "--e": String(effort.e) };
+
+  // The card keeps its exercise; the first time it opens on the first exercise with a set left.
+  const idx = cardIndex(
+    blocks.map((b) => ({ id: b.ex.id, sets: b.sets })),
+    shownExercise.get(id) ?? null
+  );
+  const cur = blocks[idx] ?? null;
+  if (cur) shownExercise.set(id, cur.ex.id);
+  const show = (i: number) => {
+    const b = blocks[i];
+    if (!b) return;
+    shownExercise.set(id, b.ex.id);
+    moved.current = true;
+    setShown(b.ex.id);
+    setSaid(`Exercise ${i + 1} of ${blocks.length}: ${b.ex.name_en}`);
+  };
 
   const update = (mut: (x: WorkoutSession) => WorkoutSession) => {
-    const cur = getState().sessions[id];
-    if (cur) void saveSession(mut(cur));
+    const now = getState().sessions[id];
+    if (now) void saveSession(mut(now));
   };
   const updateSets = (exerciseId: string, fn: (sets: SetEntry[]) => SetEntry[]) =>
     update((x) => {
@@ -127,8 +159,8 @@ export function Session({ id }: { id: string }) {
 
   /**
    * Rest after a checked set (SPEC-v3 M9c). In a superset or tri-set a round is set i of each member: no timer inside
-   * the round (the next member's set comes into view), the group's rest after its last set; a member's extra sets
-   * beyond the others' counts are done alone with their own rest.
+   * the round (the card moves to the next member), the group's rest after its last set; a member's extra sets beyond
+   * the others' counts are done alone with their own rest.
    */
   const restAfterSet = (b: ExerciseBlock, i: number) => {
     const g = b.group;
@@ -139,7 +171,7 @@ export function Session({ id }: { id: string }) {
     if (rest === null) {
       const k = members.findIndex((m) => m.ex.id === b.ex.id);
       const next = [...members.slice(k + 1), ...members.slice(0, k)].find((m) => m.sets[i] && !m.sets[i].done);
-      if (next) requestAnimationFrame(() => document.querySelector(`[data-set="${CSS.escape(`${next.ex.id}-${i}`)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+      if (next) show(blocks.indexOf(next));
       return;
     }
     const round = done.filter((d) => d.length > i).length >= 2;
@@ -157,46 +189,273 @@ export function Session({ id }: { id: string }) {
     flash("Session saved.");
     openReport(s.id, true);
   };
+  const leave = () => navigate(getState().tab);
+  const saveNote = (v: string) => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    if (v !== getState().sessions[id]?.note) update((x) => ({ ...x, note: v }));
+  };
 
   if (picking)
     return (
-      <ExercisePicker
-        sessionId={s.id}
-        onCancel={() => setPicking(false)}
-        onPick={(ex) => {
-          setPicking(false);
-          void addExtraExercise(s.id, ex).then(() => {
-            requestAnimationFrame(() => document.querySelector(`[data-ex="${CSS.escape(ex.id)}"]`)?.scrollIntoView({ block: "center" }));
-          });
-        }}
-      />
+      <div class="legacy">
+        <div class="wrap">
+          <main>
+            <ExercisePicker
+              sessionId={s.id}
+              onCancel={() => setPicking(false)}
+              onPick={(ex) => {
+                setPicking(false);
+                // The card shows the new exercise once it is in the session.
+                void addExtraExercise(s.id, ex).then(() => {
+                  shownExercise.set(id, ex.id);
+                  setShown(ex.id);
+                });
+              }}
+            />
+          </main>
+        </div>
+      </div>
     );
+
+  if (arranging && active)
+    return (
+      <div class="page page--session" style={vars} data-testid="arrange-panel">
+        <div class="session-glow" aria-hidden="true" />
+        <header class="screen-head">
+          <div class="l-col l-grow">
+            <h1 class="screen-head__title l-m0">Reorder and group</h1>
+            <span class="screen-head__sub">{dayTitle(day.name_en)}</span>
+          </div>
+          <button type="button" class="clay press btn t-pink" onClick={() => setArranging(false)}>
+            Done
+          </button>
+        </header>
+        <p class="ex-card__cue">Drag or use the arrows to reorder. Select 2 or 3 exercises to group them. An exercise with done sets can't be removed.</p>
+        <div class="legacy legacy--overlay">
+          <div class="stack">
+            <PlanList
+              plan={planForSession(boot, s, plan, exMap, new Date().toISOString())}
+              exMap={exMap}
+              mode="session"
+              onChange={(next) => void savePlan(next)}
+              progress={(eid) => {
+                const mine = s.sets.filter((x) => x.exercise_id === eid);
+                return `${mine.filter((x) => x.done).length} of ${mine.length} sets done`;
+              }}
+              onRemove={(it) => void removeExercise(it.exercise_id, exMap.get(it.exercise_id)?.name_en ?? it.exercise_id)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+
+  const card = (b: ExerciseBlock, i: number, current: boolean) => (
+    <ExerciseCard
+      key={b.ex.id}
+      block={b}
+      n={i + 1}
+      total={blocks.length}
+      session={s}
+      g={guidance(b, s, sessions)}
+      current={current}
+      updateSets={(fn) => updateSets(b.ex.id, fn)}
+      onSetDone={(k) => restAfterSet(b, k)}
+      onEdit={(k) => setSheet({ kind: "set", exerciseId: b.ex.id, set: k })}
+    />
+  );
+  const next = blocks[idx + 1] ?? null;
+  const editing = sheet?.kind === "set" ? (blocks.find((b) => b.ex.id === sheet.exerciseId) ?? null) : null;
+  const minutes = minutesBetween(s.started_at, s.ended_at);
 
   return (
     <>
-      <section class="sess-head">
-        <div class="sess-title">
-          <div>
-            <b>{day.name_en}</b>
+      <div class="page page--session" style={vars} inert={sheet !== null} data-resting={resting ? "true" : "false"} data-testid="session">
+        <div class="session-glow" aria-hidden="true" />
+        <header class="screen-head">
+          <button type="button" class="clay press btn-icon t-muted" aria-label="Back" onClick={leave}>
+            <IconBack size={20} />
+          </button>
+          <div class="l-col l-grow">
+            <h1 class="screen-head__title l-m0">{dayTitle(day.name_en)}</h1>
+            <span class="screen-head__sub num">
+              {active ? (
+                <>
+                  <Elapsed from={s.started_at} /> elapsed
+                </>
+              ) : (
+                `${dateShort(s.local_date)}${minutes != null ? ` · ${fmtNum(minutes)} min` : ""}`
+              )}
+            </span>
           </div>
-          <div style={{ textAlign: "right" }}>
-            {s.status === "active" ? (
-              <>
-                <Elapsed from={s.started_at} />
-                <small class="muted" style={{ fontSize: "12px" }}>
-                  Elapsed
-                </small>
-              </>
+          {active ? (
+            <>
+              <span class="effort-chip" data-testid="effort-chip">
+                {effortLabel(effort.e)}
+              </span>
+              <button type="button" class="clay press btn t-effort" onClick={finish} data-testid="finish">
+                Finish
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" class="clay press btn t-pink" data-testid="open-report" onClick={() => openReport(s.id)}>
+                Report
+              </button>
+              <button type="button" class="clay press btn-icon t-muted" aria-label="More" aria-haspopup="dialog" data-testid="more" onClick={() => setSheet({ kind: "more" })}>
+                <IconMore />
+              </button>
+            </>
+          )}
+        </header>
+        {active ? (
+          <div
+            class="effort-bar"
+            role="progressbar"
+            aria-label="Session effort"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(effort.e * 100)}
+            aria-valuetext={`${fmtNum(effort.done)} of ${fmtNum(effort.planned)} sets done`}
+            data-testid="effort-bar"
+          >
+            <span class="effort-bar__fill" />
+          </div>
+        ) : null}
+
+        <main class="l-col l-gap-12">
+          {active ? (
+            cur ? (
+              <SwipeCard key={cur.ex.id} focus={moved.current} canPrev={idx > 0} canNext={next !== null} onSwipe={(dir) => show(dir === "next" ? idx + 1 : idx - 1)}>
+                {card(cur, idx, true)}
+              </SwipeCard>
             ) : (
-              <span class="pill done">Done</span>
-            )}
+              <div class="state card card--session">
+                <span>No exercises in this session yet.</span>
+                <button type="button" class="clay press btn t-pink" data-testid="add-exercise" onClick={() => setPicking(true)}>
+                  + Add exercise
+                </button>
+              </div>
+            )
+          ) : (
+            <>
+              {blocks.map((b, i) => card(b, i, false))}
+              {watch.length ? <WatchCard watch={watch} session={s} tz={tz} cls="card card--session" /> : null}
+              {sessionPhotos.length ? (
+                <section class="card card--session l-gap-12" data-testid="session-photos">
+                  <h2 class="t-title l-m0">Photos</h2>
+                  <div class="l-grid-4 l-gap-8">
+                    {sessionPhotos.map((p) => (
+                      <button type="button" class="photo-thumb press" aria-label={`${poseLabel(p.pose)} photo`} onClick={() => openPhotos({ open: p.id })}>
+                        <span class="photo-thumb__frame well">
+                          <img src={photoSrc(p, "thumb")} alt="" loading="lazy" />
+                        </span>
+                        <span>{poseLabel(p.pose)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </>
+          )}
+        </main>
+
+        {active ? (
+          <footer class="session-foot">
+            <button type="button" class="clay press btn-icon btn-icon--lg t-muted" aria-label="Previous exercise" data-testid="prev" disabled={idx <= 0} onClick={() => show(idx - 1)}>
+              <IconBack size={20} />
+            </button>
+            <button type="button" class="clay press btn-lg t-effort" data-testid="next" disabled={next === null} onClick={() => show(idx + 1)}>
+              {next ? `Next: ${next.ex.name_en}` : "Last exercise"}
+            </button>
+            <button type="button" class="clay press btn-icon btn-icon--lg t-muted" aria-label="More" aria-haspopup="dialog" data-testid="more" onClick={() => setSheet({ kind: "more" })}>
+              <IconMore />
+            </button>
+          </footer>
+        ) : null}
+        <span class="l-sr" role="status">
+          {said}
+        </span>
+      </div>
+
+      <Sheet open={sheet?.kind === "set" && editing !== null} onClose={() => setSheet(null)} title={editing?.ex.name_en ?? ""} sub={editing && sheet?.kind === "set" ? `Set ${sheet.set + 1} of ${editing.sets.length}` : undefined} testId="set-sheet">
+        {editing && sheet?.kind === "set" ? (
+          <SetEditor block={editing} i={sheet.set} session={s} g={guidance(editing, s, sessions)} updateSets={(fn) => updateSets(editing.ex.id, fn)} onDone={() => setSheet(null)} />
+        ) : null}
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "more"} onClose={() => setSheet(null)} title={active ? "Session" : "Session details"} sub={dateShort(s.local_date)} testId="more-sheet">
+        <div class="l-col l-gap-12">
+          <SyncStatus />
+          <div class="card card--list">
+            <button
+              type="button"
+              class="list-row press"
+              data-testid="add-exercise"
+              onClick={() => {
+                setSheet(null);
+                setPicking(true);
+              }}
+            >
+              <span class="well icon-well t-pink">
+                <IconPlus size={18} />
+              </span>
+              <span class="list-row__text">
+                <span class="t-title">Add exercise</span>
+                <span class="caption">To this session only</span>
+              </span>
+              <span class="list-row__chevron">
+                <IconChevron size={16} />
+              </span>
+            </button>
+            {active && blocks.length ? (
+              <button
+                type="button"
+                class="list-row press"
+                data-testid="arrange"
+                onClick={() => {
+                  setSheet(null);
+                  setArranging(true);
+                }}
+              >
+                <span class="well icon-well t-orange">
+                  <IconProgram size={18} />
+                </span>
+                <span class="list-row__text">
+                  <span class="t-title">Reorder / group</span>
+                  <span class="caption">Supersets and tri-sets</span>
+                </span>
+                <span class="list-row__chevron">
+                  <IconChevron size={16} />
+                </span>
+              </button>
+            ) : null}
           </div>
-        </div>
-        <div class="when">
-          <div class="field">
-            <label for="f-date">Date</label>
+          <div class="form-field">
+            <label class="form-field__label" for="f-note">
+              Note
+            </label>
+            <textarea
+              id="f-note"
+              class="input"
+              placeholder="How you felt today, any pain, anything to remember…"
+              value={note}
+              onInput={(e) => {
+                const v = (e.currentTarget as HTMLTextAreaElement).value;
+                setNote(v);
+                if (noteTimer.current) clearTimeout(noteTimer.current);
+                noteTimer.current = setTimeout(() => update((x) => ({ ...x, note: v })), 500);
+              }}
+              onBlur={() => saveNote(note)}
+            />
+          </div>
+          <BodyWeight session={s} />
+          <div class="form-field">
+            <label class="form-field__label" for="f-date">
+              Date
+            </label>
             <input
               id="f-date"
+              class="input"
               type="date"
               value={s.local_date}
               onChange={(e) => {
@@ -205,203 +464,263 @@ export function Session({ id }: { id: string }) {
               }}
             />
           </div>
-          <div class="field">
-            <label for="f-start">Start</label>
-            <input
-              id="f-start"
-              type="time"
-              value={startHM}
-              onChange={(e) => {
-                const v = (e.currentTarget as HTMLInputElement).value;
-                if (v) update((x) => retime(x, tz, x.local_date, v, endHM || null));
-              }}
-            />
-          </div>
-          <div class="field">
-            <label for="f-end">End</label>
-            <input
-              id="f-end"
-              type="time"
-              value={endHM}
-              onChange={(e) => {
-                const v = (e.currentTarget as HTMLInputElement).value;
-                update((x) => retime(x, tz, x.local_date, startHM, v || null));
-              }}
-            />
-          </div>
-        </div>
-        <div class="jal">
-          <span>{dateLong(s.local_date)}</span>
-          <span class="seg" role="group" aria-label="Weight unit for this session">
-            {(["lb", "kg"] as Unit[]).map((u) => (
-              <button type="button" aria-pressed={s.unit === u} onClick={() => update((x) => ({ ...x, unit: u }))}>
-                {u}
-              </button>
-            ))}
-          </span>
-        </div>
-        {s.status === "done" ? (
-          <button type="button" class="btn btn-ghost btn-block" style={{ marginTop: "10px" }} data-testid="open-report" onClick={() => openReport(s.id)}>
-            Session report
-          </button>
-        ) : null}
-        {hasGroup ? <div class="ss-note">A1/A2 (and A3) are grouped: do one set of each in turn; the rest timer starts after each round.</div> : null}
-      </section>
-
-      {sessionPhotos.length ? (
-        <div class="photos" style={{ marginTop: "10px" }} data-testid="session-photos">
-          {sessionPhotos.map((p) => (
-            <button type="button" class="ph" onClick={() => navigate("photos")}>
-              <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo`} loading="lazy" />
-              <span class="d">{poseLabel(p.pose)}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {watch.length ? (
-        <section class="card watch stack" style={{ marginTop: "14px" }} data-testid="session-watch">
-          <div class="eyebrow">Apple Watch</div>
-          {watch.map((w) => (
-            <div class="row-w">
-              <b>
-                {w.kind === "session" ? (
-                  "During the session"
-                ) : (
-                  <>
-                    {workoutTypeName(w.activity_type)} · <span class="num">{hm(w.started_at, tz)}{w.ended_at ? `–${hm(w.ended_at, tz)}` : ""}</span>
-                  </>
-                )}
-              </b>
-              <WatchStats w={w} session={s} />
+          <div class="l-grid-2 l-gap-8">
+            <div class="form-field">
+              <label class="form-field__label" for="f-start">
+                Start
+              </label>
+              <input
+                id="f-start"
+                class="input"
+                type="time"
+                value={startHM}
+                onChange={(e) => {
+                  const v = (e.currentTarget as HTMLInputElement).value;
+                  if (v) update((x) => retime(x, tz, x.local_date, v, endHM || null));
+                }}
+              />
             </div>
-          ))}
-        </section>
-      ) : null}
-
-      <div class="kv navrow h2row">
-        <h2>Exercises</h2>
-        {s.status === "active" && blocks.length ? (
-          <button type="button" class="linkbtn" data-testid="arrange" aria-pressed={arranging} onClick={() => setArranging(!arranging)}>
-            {arranging ? "Done" : "Reorder / group"}
-          </button>
-        ) : null}
-      </div>
-      {arranging && s.status === "active" ? (
-        <div class="stack" data-testid="arrange-panel">
-          <div class="why">Drag or use the arrows to reorder. Select 2 or 3 exercises to group them. An exercise with done sets can't be removed.</div>
-          <PlanList
-            plan={planForSession(boot, s, plan, exMap, new Date().toISOString())}
-            exMap={exMap}
-            mode="session"
-            onChange={(next) => void savePlan(next)}
-            progress={(id) => {
-              const mine = s.sets.filter((x) => x.exercise_id === id);
-              return `${mine.filter((x) => x.done).length} of ${mine.length} sets done`;
-            }}
-            onRemove={(it) => void removeExercise(it.exercise_id, exMap.get(it.exercise_id)?.name_en ?? it.exercise_id)}
-          />
-          <button type="button" class="btn btn-ghost btn-block" onClick={() => setArranging(false)}>
-            Done
-          </button>
-        </div>
-      ) : (
-        <div class="stack">
-          {blocks.map((b, k) => {
-            const card = <ExerciseCard key={b.ex.id} block={b} session={s} g={guidance(b, s, sessions)} updateSets={(fn) => updateSets(b.ex.id, fn)} onSetDone={(i) => restAfterSet(b, i)} />;
-            if (!b.group) return card;
-            if (b.group.index > 0) return null;
-            const g = b.group;
-            const members = blocks.slice(k, k + g.size);
-            return (
-              <section class="sgroup" key={`group-${g.tag}`} data-testid={`sgroup-${g.tag}`} aria-label={`${groupKind(g.size)} ${g.tag}`}>
-                <div class="sghead">
-                  <b>
-                    {groupKind(g.size)} {g.tag}
-                  </b>
-                  <span class="num">rest {g.rest} s after each round</span>
-                </div>
-                {members.map((m) => (
-                  <ExerciseCard key={m.ex.id} block={m} session={s} g={guidance(m, s, sessions)} updateSets={(fn) => updateSets(m.ex.id, fn)} onSetDone={(i) => restAfterSet(m, i)} />
-                ))}
-              </section>
-            );
-          })}
-          <button type="button" class="btn btn-ghost btn-block" data-testid="add-exercise" onClick={() => setPicking(true)}>
-            + Add exercise
-          </button>
-        </div>
-      )}
-
-      <h2>Note</h2>
-      <textarea
-        id="f-note"
-        placeholder="How you felt today, any pain, anything to remember…"
-        value={note}
-        onInput={(e) => {
-          const v = (e.currentTarget as HTMLTextAreaElement).value;
-          setNote(v);
-          if (noteTimer.current) clearTimeout(noteTimer.current);
-          noteTimer.current = setTimeout(() => update((x) => ({ ...x, note: v })), 500);
-        }}
-        onBlur={() => {
-          if (noteTimer.current) clearTimeout(noteTimer.current);
-          if (note !== getState().sessions[id]?.note) update((x) => ({ ...x, note }));
-        }}
-      />
-
-      <h2>Body weight today</h2>
-      <div class="card bodyw" data-testid="body-weight">
-        <Stepper
-          value={bodyToday?.unit === s.unit || !bodyToday ? (bodyToday?.value ?? null) : null}
-          placeholder={bodyToday && bodyToday.unit !== s.unit ? `${fmtNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
-          base={lastBody ?? 0}
-          step={0.1}
-          min={0}
-          label={`Body weight (${s.unit})`}
-          onChange={(v) => void saveBodyMass(s.local_date, v, s.unit)}
-        />
-        <span>{s.unit}</span>
-        <small class="muted">Optional; saved for the reports.</small>
-      </div>
-
-      <div class="stack" style={{ marginTop: "14px" }}>
-        {s.status === "active" ? (
-          <button class="btn btn-primary btn-block" type="button" onClick={finish} data-testid="finish">
-            Finish session
-          </button>
-        ) : null}
-        <div class="row">
-          <button class="btn btn-ghost" type="button" onClick={() => navigate("home")}>
-            Back
-          </button>
-          <button class="btn btn-danger" type="button" onClick={() => setConfirmDelete(true)}>
+            <div class="form-field">
+              <label class="form-field__label" for="f-end">
+                End
+              </label>
+              <input
+                id="f-end"
+                class="input"
+                type="time"
+                value={endHM}
+                onChange={(e) => {
+                  const v = (e.currentTarget as HTMLInputElement).value;
+                  update((x) => retime(x, tz, x.local_date, startHM, v || null));
+                }}
+              />
+            </div>
+          </div>
+          <div class="l-row l-between l-gap-12">
+            <span class="t-title" id="unit-label">
+              Weight unit
+            </span>
+            <span class="segmented" role="group" aria-labelledby="unit-label" data-testid="unit">
+              {(["lb", "kg"] as Unit[]).map((u) => (
+                <button type="button" class="press" aria-pressed={s.unit === u} onClick={() => update((x) => ({ ...x, unit: u }))}>
+                  {u}
+                </button>
+              ))}
+            </span>
+          </div>
+          {active && watch.length ? <WatchCard watch={watch} session={s} tz={tz} cls="card" /> : null}
+          <button type="button" class="clay press btn t-danger" onClick={() => setSheet({ kind: "delete" })}>
             Delete session
           </button>
         </div>
-        {confirmDelete ? (
-          <div class="card" style={{ borderColor: "var(--danger)" }}>
-            <div style={{ marginBottom: "8px" }}>Delete this session permanently?</div>
-            <div class="row">
-              <button
-                class="btn btn-danger"
-                type="button"
-                onClick={() => {
-                  stopRest();
-                  void removeSession(s.id);
-                  navigate("home");
-                }}
-              >
-                Yes, delete
-              </button>
-              <button class="btn btn-ghost" type="button" onClick={() => setConfirmDelete(false)}>
-                No
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      </Sheet>
+
+      <Sheet open={sheet?.kind === "delete"} onClose={() => setSheet({ kind: "more" })} role="alertdialog" title="Delete this session permanently?" testId="delete-sheet">
+        <div class="l-col l-gap-8">
+          <button
+            type="button"
+            class="clay press btn-lg t-danger"
+            onClick={() => {
+              stopRest();
+              setSheet(null);
+              shownExercise.delete(s.id);
+              void removeSession(s.id);
+              navigate(getState().tab);
+            }}
+          >
+            Yes, delete
+          </button>
+          <button type="button" class="clay press btn t-muted" onClick={() => setSheet({ kind: "more" })}>
+            No
+          </button>
+        </div>
+      </Sheet>
     </>
+  );
+}
+
+/** The session's body weight (optional, for the reports), in the session's unit. */
+function BodyWeight({ session: s }: { session: WorkoutSession }) {
+  const boot = useStore((st) => st.boot)!;
+  const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
+  const bodyToday = manualBody.find((m) => m.local_date === s.local_date) ?? null;
+  const lastBody = [...manualBody].reverse().find((m) => m.unit === s.unit)?.value ?? null;
+  return (
+    <div class="form-field">
+      <span class="form-field__label" aria-hidden="true">
+        Body weight today ({s.unit}), optional, saved for the reports
+      </span>
+      <Stepper
+        pulse
+        value={bodyToday?.unit === s.unit || !bodyToday ? (bodyToday?.value ?? null) : null}
+        placeholder={bodyToday && bodyToday.unit !== s.unit ? `${fmtNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
+        base={lastBody ?? 0}
+        step={0.1}
+        min={0}
+        label={`Body weight (${s.unit})`}
+        testId="body-weight"
+        onChange={(v) => void saveBodyMass(s.local_date, v, s.unit)}
+      />
+    </div>
+  );
+}
+
+function WatchCard({ watch, session, tz, cls }: { watch: HealthWorkout[]; session: WorkoutSession; tz: string; cls: string }) {
+  return (
+    <section class={`${cls} l-col l-gap-8`} data-testid="session-watch">
+      <h2 class="t-title l-m0">Apple Watch</h2>
+      {watch.map((w) => (
+        <div class="l-col l-gap-2">
+          <span class="ex-card__meta">
+            {w.kind === "session" ? (
+              "During the session"
+            ) : (
+              <>
+                {workoutTypeName(w.activity_type)} ·{" "}
+                <span class="num">
+                  {hm(w.started_at, tz)}
+                  {w.ended_at ? `–${hm(w.ended_at, tz)}` : ""}
+                </span>
+              </>
+            )}
+          </span>
+          <WatchStats w={w} session={session} />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/**
+ * The active session's exercise card: a horizontal drag follows the finger; past 35% of the width or a flick it slides
+ * out and the next (left) or previous (right) exercise shows, otherwise it springs back. A drag is never a tap.
+ */
+function SwipeCard({
+  focus,
+  canPrev,
+  canNext,
+  onSwipe,
+  children,
+}: {
+  /** Move focus to the card's title when it mounts, unless a control outside the card (Next, Prev) keeps it. */
+  focus: boolean;
+  canPrev: boolean;
+  canNext: boolean;
+  onSwipe: (dir: "next" | "prev") => void;
+  children: preact.ComponentChildren;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const live = useRef({ canPrev, canNext, onSwipe });
+  live.current = { canPrev, canNext, onSwipe };
+
+  useEffect(() => {
+    const a = document.activeElement;
+    if (focus && (a === null || a === document.body)) ref.current?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current!;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let pointer: number | null = null;
+    let mode: "pending" | "drag" | null = null;
+    let x0 = 0;
+    let y0 = 0;
+    let dx = 0;
+    let lastX = 0;
+    let lastT = 0;
+    let velocity = 0;
+    let suppressClick = false;
+
+    const down = (e: PointerEvent) => {
+      if (!e.isPrimary || pointer !== null) return;
+      pointer = e.pointerId;
+      mode = "pending";
+      x0 = lastX = e.clientX;
+      y0 = e.clientY;
+      lastT = e.timeStamp;
+      dx = velocity = 0;
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointer || !mode) return;
+      const mx = e.clientX - x0;
+      const my = e.clientY - y0;
+      if (mode === "pending") {
+        if (Math.hypot(mx, my) < 8) return;
+        if (Math.abs(my) > Math.abs(mx)) {
+          pointer = null;
+          mode = null;
+          return;
+        }
+        mode = "drag";
+        el.dataset.dragging = "true";
+        el.setPointerCapture(e.pointerId);
+      }
+      const { canPrev: p, canNext: n } = live.current;
+      // Toward an end with no exercise the card resists.
+      dx = (mx > 0 && !p) || (mx < 0 && !n) ? mx / 3 : mx;
+      const dt = e.timeStamp - lastT;
+      if (dt > 0) velocity = (e.clientX - lastX) / dt;
+      lastX = e.clientX;
+      lastT = e.timeStamp;
+      el.style.transform = `translateX(${dx}px)`;
+    };
+    const up = (e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      const dragged = mode === "drag";
+      pointer = null;
+      mode = null;
+      if (!dragged) return;
+      suppressClick = true;
+      window.setTimeout(() => (suppressClick = false), 0);
+      el.dataset.dragging = "false";
+      const { canPrev: p, canNext: n, onSwipe: go } = live.current;
+      const outcome = e.type === "pointercancel" ? "cancel" : cardSwipeOutcome(dx, el.clientWidth, velocity, p, n);
+      if (outcome === "cancel") {
+        el.style.transform = "";
+        return;
+      }
+      if (reduce.matches) {
+        el.style.transform = "";
+        return go(outcome);
+      }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        go(outcome);
+      };
+      el.addEventListener("transitionend", finish, { once: true });
+      window.setTimeout(finish, 450);
+      el.style.transform = `translateX(${outcome === "next" ? "-110%" : "110%"})`;
+    };
+    const click = (e: MouseEvent) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    // A native drag (the form-video link under the finger) would cancel the swipe; nothing in the card is dragged.
+    const nativeDrag = (e: DragEvent) => e.preventDefault();
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    el.addEventListener("click", click, true);
+    el.addEventListener("dragstart", nativeDrag);
+    return () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      el.removeEventListener("click", click, true);
+      el.removeEventListener("dragstart", nativeDrag);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} class="swipe" data-testid="swipe-card">
+      {children}
+    </div>
   );
 }
 
@@ -431,42 +750,75 @@ const RIR_CHOICES: [number, string][] = [
   [3, "3+"],
 ];
 
+/** Labels of a card's weight and reps (long for the sheet and screen readers, short for the column heads). */
+function fieldLabels(block: ExerciseBlock, unit: Unit) {
+  const { ex, plan } = block;
+  const isBw = ex.equipment === "bodyweight";
+  const isDb = ex.equipment === "dumbbell";
+  return {
+    weight: isBw ? `Added/assist (${unit})` : isDb ? `Per dumbbell (${unit})` : `Weight (${unit})`,
+    weightHead: isBw ? `Added ${unit}` : isDb ? `Per dumbbell ${unit}` : `Weight ${unit}`,
+    reps: plan.is_time ? "Seconds" : plan.per_leg ? "Reps per leg" : "Reps",
+  };
+}
+
+/** What a set shows before anything is entered: the suggestion (prefilled when the set is checked). */
+function setDefaults(block: ExerciseBlock, g: Guidance) {
+  const { plan, extra, ex } = block;
+  return {
+    weight: g.prefillWeight,
+    weightText: g.prefillWeight != null ? fmtNum(g.prefillWeight) : ex.equipment === "bodyweight" ? "0" : "–",
+    reps: extra ? null : plan.reps_max,
+    seconds: g.prefillSeconds ?? plan.reps_max,
+  };
+}
+
 function ExerciseCard({
   block,
+  n,
+  total,
   session,
   g,
+  current,
   updateSets,
   onSetDone,
+  onEdit,
 }: {
   block: ExerciseBlock;
+  n: number;
+  total: number;
   session: WorkoutSession;
   g: Guidance;
+  /** The active session's single card: the current set is highlighted and has the RIR chips. */
+  current: boolean;
   updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void;
-  /** A set was checked in an active session: starts the rest timer (or, inside a group's round, does not). */
+  /** A set was checked in an active session: starts the rest timer (or, inside a group's round, moves on). */
   onSetDone: (setIndex: number) => void;
+  onEdit: (setIndex: number) => void;
 }) {
-  const { ex, plan, sets, extra } = block;
-  const unit = session.unit;
+  const { ex, plan, sets, extra, group } = block;
   const isTime = plan.is_time;
-  const isBw = ex.equipment === "bodyweight";
-  const allDone = sets.length > 0 && sets.every((x) => x.done);
-  const wLabel = isBw ? `Added/assist (${unit})` : ex.equipment === "dumbbell" ? `Per dumbbell (${unit})` : `Weight (${unit})`;
-  const rLabel = isTime ? "Seconds" : plan.per_leg ? "Reps per leg" : "Reps";
+  const labels = fieldLabels(block, session.unit);
+  const defaults = setDefaults(block, g);
   const sgText = suggestionText(g);
   const lt = lastText(g, isTime);
+  const now = current ? currentSetIndex(sets) : -1;
+  // A finished session shows what was done: no first-time hint and no suggestion for a day already trained.
+  const live = session.status === "active";
+  const target = extra ? "" : [targetText(plan), rirText(plan)].filter(Boolean).join(" · ");
 
   const setField = (i: number, patch: Partial<SetEntry>) => updateSets((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   const toggle = (i: number) => {
-    const cur = sets[i];
-    const done = !cur.done;
+    const x = sets[i];
+    const done = !x.done;
     const patch: Partial<SetEntry> = { done };
     if (done) {
       if (isTime) {
-        if (cur.seconds == null) patch.seconds = g.prefillSeconds ?? plan.reps_max;
+        if (x.seconds == null) patch.seconds = defaults.seconds;
       } else {
-        if (cur.reps == null && !extra) patch.reps = plan.reps_max;
-        if (cur.weight == null && g.prefillWeight != null) patch.weight = g.prefillWeight;
+        if (x.reps == null && !extra) patch.reps = plan.reps_max;
+        if (x.weight == null && g.prefillWeight != null) patch.weight = g.prefillWeight;
       }
     }
     setField(i, patch);
@@ -501,7 +853,7 @@ function ExerciseCard({
     });
   const copyLast = () => {
     if (!g.last) return;
-    const sameUnit = g.last.unit === unit;
+    const sameUnit = g.last.unit === session.unit;
     const src = g.last.sets;
     updateSets((list) =>
       src.map((x, i) => ({
@@ -520,133 +872,231 @@ function ExerciseCard({
   };
 
   return (
-    <article class={`ex${allDone ? " done" : ""}${extra ? " extra" : ""}`} data-ex={ex.id}>
-      <div class="ex-top">
-        {extra ? <ExerciseThumb ex={ex} /> : null}
-        <div class="ex-name">
-          <b>
-            {plan.is_main ? <span class="mainb">Main</span> : null}
-            {extra ? <span class="extrab">Extra</span> : null}
-            {ex.name_en}
-            {plan.superset_tag ? <span class="tag">{plan.superset_tag}</span> : null}
-          </b>
-        </div>
-        {extra ? null : (
-          <div class="target num">
-            {targetText(plan)}
-            {rirText(plan) ? <small class="rirt">{rirText(plan)}</small> : null}
-          </div>
-        )}
-      </div>
-      {ex.cue_en ? <div class="cue">{ex.cue_en}</div> : null}
-      <div class="ex-links">
-        <a href={ytLink(ex.name_en)} target="_blank" rel="noopener noreferrer">
-          Watch form video ↗
-        </a>
-        {g.last ? (
-          <>
-            <span class="last" data-testid="last-perf">
-              Last time: <span class="num">{lt}</span>
-            </span>
-            {sgText ? (
-              <span class="suggest" data-testid="suggestion">
-                {sgText}
-              </span>
+    <article class={`card card--session${group ? " card--grouped" : ""}`} data-ex={ex.id} data-testid="ex-card" aria-labelledby={`ex-title-${ex.id}`}>
+      <div class="l-row l-top l-gap-12">
+        <div class="l-col l-gap-4 l-grow">
+          <span class="ex-card__kicker num">
+            Exercise {fmtNum(n)} of {fmtNum(total)}
+            {plan.is_main ? " · Main lift" : ""}
+            {extra ? " · Added today" : ""}
+            {target ? (
+              <>
+                {" · "}
+                <span data-testid="target">{target}</span>
+              </>
             ) : null}
-          </>
-        ) : extra ? (
-          <span class="last">Added to this session only; no target.</span>
-        ) : (
-          <span class="last">First time: choose your weight.</span>
-        )}
-      </div>
-      <div class={`colhead${isTime ? " timed" : ""}`}>
-        <span>Set</span>
-        {isTime ? null : <span>{wLabel}</span>}
-        <span>{rLabel}</span>
-        <span />
-      </div>
-      <div class="sets">
-        {sets.map((x, i) => (
-          <div class="setwrap" key={x.id} data-set={`${ex.id}-${i}`}>
-          <div class={`setrow${isTime ? " timed" : ""}${x.done ? " ok" : ""}`}>
-            <span class="n num">{i + 1}</span>
-            {isTime ? null : (
-              <Stepper
-                value={x.weight}
-                placeholder={g.prefillWeight != null ? fmtNum(g.prefillWeight) : isBw ? "0" : "–"}
-                base={g.prefillWeight ?? 0}
-                step={g.step}
-                min={isBw ? undefined : 0}
-                label={`${wLabel}, set ${i + 1}`}
-                testId={`w-${ex.id}-${i}`}
-                onChange={(v) => setField(i, { weight: v })}
-              />
-            )}
-            {isTime ? (
-              <Stepper
-                value={x.seconds}
-                placeholder={fmtNum(g.prefillSeconds ?? plan.reps_max)}
-                base={g.prefillSeconds ?? plan.reps_max}
-                step={5}
-                min={0}
-                decimals={false}
-                label={`Seconds, set ${i + 1}`}
-                testId={`s-${ex.id}-${i}`}
-                onChange={(v) => setField(i, { seconds: v })}
-              />
-            ) : (
-              <Stepper
-                value={x.reps}
-                placeholder={extra ? "–" : fmtNum(plan.reps_max)}
-                base={extra ? 0 : plan.reps_max}
-                step={1}
-                min={0}
-                decimals={false}
-                label={`${rLabel}, set ${i + 1}`}
-                testId={`r-${ex.id}-${i}`}
-                onChange={(v) => setField(i, { reps: v })}
-              />
-            )}
-            <button type="button" class="check" aria-pressed={x.done} aria-label={`Set ${i + 1} done`} data-testid={`check-${ex.id}-${i}`} onClick={() => toggle(i)}>
-              <IconCheck />
-            </button>
-          </div>
-          {isTime ? null : (
-            <div class="rir" role="group" aria-label={`Reps in reserve (RIR), set ${i + 1}`} data-testid={`rir-${ex.id}-${i}`}>
-              <span>RIR</span>
-              {RIR_CHOICES.map(([v, label]) => (
-                <button type="button" aria-pressed={x.rir === v} aria-label={label} onClick={() => setField(i, { rir: x.rir === v ? null : v })}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          </div>
-        ))}
-      </div>
-      <div class="ex-actions">
-        <span>
-          <button type="button" onClick={addSet}>
-            + Add set
-          </button>
-          {lastUndone >= 0 ? (
-            <button type="button" onClick={removeSet} style={{ marginInlineStart: "14px" }}>
-              − Remove set
-            </button>
+          </span>
+          {group ? (
+            <span class="ex-card__group num" data-testid={`sgroup-${group.tag}`}>
+              {plan.superset_tag ?? `${group.tag}${group.index + 1}`} · {groupKind(group.size)} {group.tag} · rest {fmtNum(group.rest)} s after each round
+            </span>
           ) : null}
-        </span>
-        {extra && !sets.some((x) => x.done) ? (
-          <button type="button" data-testid={`remove-${ex.id}`} onClick={() => void removeExtraExercise(session.id, ex.id)}>
-            Remove exercise
+          <h2 class="big-num big-num--36 l-m0" id={`ex-title-${ex.id}`} tabIndex={-1}>
+            {ex.name_en}
+          </h2>
+          {g.last ? (
+            <span class="ex-card__meta num" data-testid="last-perf">
+              Last time {lt}
+            </span>
+          ) : live ? (
+            <span class="ex-card__meta">{extra ? "Added to this session only; no target." : "First time: choose your weight."}</span>
+          ) : null}
+          {live && g.last && sgText ? (
+            <span class="ex-card__suggest" data-testid="suggestion">
+              {sgText}
+            </span>
+          ) : null}
+        </div>
+        <a class="btn-icon btn-icon--soft press" href={ytLink(ex.name_en)} target="_blank" rel="noopener noreferrer" aria-label={`Form video: ${ex.name_en}`} data-testid="form-video">
+          <IconPlay />
+        </a>
+      </div>
+      <div class="l-col l-gap-4">
+        {sets.length ? null : <span class="ex-card__meta">No sets logged.</span>}
+        <div class={`set-head${isTime ? " set-head--timed" : ""}`} aria-hidden="true" hidden={!sets.length}>
+          <span>Set</span>
+          {isTime ? null : <span>{labels.weightHead}</span>}
+          <span>{labels.reps}</span>
+          <span>Done</span>
+        </div>
+        {sets.map((x, i) => {
+          const wSet = x.weight != null;
+          const rVal = isTime ? x.seconds : x.reps;
+          const rDefault = isTime ? defaults.seconds : defaults.reps;
+          const rText = rVal != null ? fmtNum(rVal) : rDefault != null ? fmtNum(rDefault) : "–";
+          return (
+            <Fragment key={x.id}>
+              <div class={`set-row${isTime ? " set-row--timed" : ""}${i === now ? " set-row--current" : ""}${x.done ? " set-row--done" : ""}`} data-set={`${ex.id}-${i}`}>
+                <span class="set-row__n num">{fmtNum(i + 1)}</span>
+                {isTime ? null : (
+                  <button
+                    type="button"
+                    class="set-value press"
+                    aria-haspopup="dialog"
+                    aria-label={`${labels.weight}, set ${i + 1}: ${wSet ? fmtNum(x.weight) : defaults.weight != null ? `suggested ${defaults.weightText}` : "not entered"}`}
+                    data-suggested={wSet ? "false" : "true"}
+                    data-testid={`w-${ex.id}-${i}`}
+                    onClick={() => onEdit(i)}
+                  >
+                    {wSet ? fmtNum(x.weight) : defaults.weightText}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  class="set-value press"
+                  aria-haspopup="dialog"
+                  aria-label={`${labels.reps}, set ${i + 1}: ${rVal != null ? fmtNum(rVal) : rDefault != null ? `target ${fmtNum(rDefault)}` : "not entered"}`}
+                  data-suggested={rVal != null ? "false" : "true"}
+                  data-testid={`${isTime ? "s" : "r"}-${ex.id}-${i}`}
+                  onClick={() => onEdit(i)}
+                >
+                  {rText}
+                </button>
+                <button type="button" class="set-check press" aria-pressed={x.done} aria-label={`Set ${i + 1} done`} data-testid={`check-${ex.id}-${i}`} onClick={() => toggle(i)}>
+                  {x.done ? <IconCheck /> : null}
+                </button>
+              </div>
+              {i === now && !isTime ? (
+                <div class="rir-row" role="group" aria-label={`Reps in reserve (RIR), set ${i + 1}`} data-testid={`rir-${ex.id}-${i}`}>
+                  <span aria-hidden="true">RIR</span>
+                  <span class="segmented">
+                    {RIR_CHOICES.map(([v, label]) => (
+                      <button type="button" class="press" aria-pressed={x.rir === v} onClick={() => setField(i, { rir: x.rir === v ? null : v })}>
+                        {label}
+                      </button>
+                    ))}
+                  </span>
+                </div>
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </div>
+      {ex.cue_en ? (
+        <p class="ex-card__cue" data-testid="cue">
+          {ex.cue_en}
+        </p>
+      ) : null}
+      <div class="l-row l-wrap l-gap-8">
+        <button type="button" class="clay press btn-sm t-muted" onClick={addSet}>
+          + Add set
+        </button>
+        {lastUndone >= 0 ? (
+          <button type="button" class="clay press btn-sm t-muted" onClick={removeSet}>
+            − Remove set
           </button>
         ) : null}
         {g.last ? (
-          <button type="button" class="copy" onClick={copyLast}>
+          <button type="button" class="clay press btn-sm t-muted" onClick={copyLast}>
             Same as last time
+          </button>
+        ) : null}
+        {extra && !sets.some((x) => x.done) ? (
+          <button type="button" class="clay press btn-sm t-muted" data-testid={`remove-${ex.id}`} onClick={() => void removeExtraExercise(session.id, ex.id)}>
+            Remove exercise
           </button>
         ) : null}
       </div>
     </article>
+  );
+}
+
+/** The set sheet: weight and reps (or seconds) with −/+ and typing, and the set's RIR. Changes save as they happen. */
+function SetEditor({
+  block,
+  i,
+  session,
+  g,
+  updateSets,
+  onDone,
+}: {
+  block: ExerciseBlock;
+  i: number;
+  session: WorkoutSession;
+  g: Guidance;
+  updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void;
+  onDone: () => void;
+}) {
+  const x = block.sets[i];
+  if (!x) return null;
+  const { ex, plan, extra } = block;
+  const isTime = plan.is_time;
+  const isBw = ex.equipment === "bodyweight";
+  const labels = fieldLabels(block, session.unit);
+  const defaults = setDefaults(block, g);
+  const setField = (patch: Partial<SetEntry>) => updateSets((list) => list.map((z, j) => (j === i ? { ...z, ...patch } : z)));
+  return (
+    <div class="l-col l-gap-14">
+      {isTime ? (
+        <div class="form-field">
+          <span class="form-field__label" aria-hidden="true">
+            Seconds
+          </span>
+          <Stepper
+            pulse
+            value={x.seconds}
+            placeholder={fmtNum(defaults.seconds)}
+            base={defaults.seconds}
+            step={5}
+            min={0}
+            decimals={false}
+            label={`Seconds, set ${i + 1}`}
+            testId="sheet-s"
+            onChange={(v) => setField({ seconds: v })}
+          />
+        </div>
+      ) : (
+        <>
+          <div class="form-field">
+            <span class="form-field__label" aria-hidden="true">
+              {labels.weight}
+            </span>
+            <Stepper
+              pulse
+              value={x.weight}
+              placeholder={defaults.weightText}
+              base={g.prefillWeight ?? 0}
+              step={g.step}
+              min={isBw ? undefined : 0}
+              label={`${labels.weight}, set ${i + 1}`}
+              testId="sheet-w"
+              onChange={(v) => setField({ weight: v })}
+            />
+          </div>
+          <div class="form-field">
+            <span class="form-field__label" aria-hidden="true">
+              {labels.reps}
+            </span>
+            <Stepper
+              pulse
+              value={x.reps}
+              placeholder={extra ? "–" : fmtNum(plan.reps_max)}
+              base={extra ? 0 : plan.reps_max}
+              step={1}
+              min={0}
+              decimals={false}
+              label={`${labels.reps}, set ${i + 1}`}
+              testId="sheet-r"
+              onChange={(v) => setField({ reps: v })}
+            />
+          </div>
+          <div class="l-row l-between l-gap-12">
+            <span class="form-field__label" id="sheet-rir-label">
+              Reps in reserve (RIR)
+            </span>
+            <span class="segmented" role="group" aria-labelledby="sheet-rir-label" data-testid="sheet-rir">
+              {RIR_CHOICES.map(([v, label]) => (
+                <button type="button" class="press" aria-pressed={x.rir === v} onClick={() => setField({ rir: x.rir === v ? null : v })}>
+                  {label}
+                </button>
+              ))}
+            </span>
+          </div>
+        </>
+      )}
+      <button type="button" class="clay press btn-lg t-pink l-full" onClick={onDone}>
+        Done
+      </button>
+    </div>
   );
 }

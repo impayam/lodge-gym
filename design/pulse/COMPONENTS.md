@@ -118,6 +118,44 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 - `--danger` (#FF6B6B) and `.t-danger`: destructive actions only, always with a text label and the confirm dialog.
 - `--model-*` and `--share-*`: the 3D model and the shared report image, values unchanged from the pre-Pulse app.
 
+### Active session (plan step 4)
+
+```html
+<div class="page page--session" style="--effort: #F472B6; --e: .5" data-resting="false">   <!-- set from effortColor(e) -->
+  <div class="session-glow" aria-hidden="true"></div>
+  <header class="screen-head">… <span class="effort-chip">Working</span> <button class="clay press btn t-effort">Finish</button></header>
+  <div class="effort-bar" role="progressbar" aria-valuenow="50"><span class="effort-bar__fill"></span></div>
+  <div class="swipe"><article class="card card--session card--grouped">                 <!-- --grouped: violet side line -->
+    <span class="ex-card__kicker">Exercise 5 of 6 · 3 × 12</span><span class="ex-card__group">A1 · Superset A</span>
+    <h2 class="big-num big-num--36">Lateral Raise</h2>
+    <span class="ex-card__meta">Last time …</span><span class="ex-card__suggest">Suggested: 140 lb</span>
+    <a class="btn-icon btn-icon--soft press" aria-label="Form video: …">▶</a>
+    <div class="set-head"><span>Set</span><span>Weight lb</span><span>Reps</span><span>Done</span></div>   <!-- set-head--timed / set-row--timed: 3 columns -->
+    <div class="set-row set-row--current"><span class="set-row__n">1</span>
+      <button class="set-value press" data-suggested="true">140</button><button class="set-value press">5</button>
+      <button class="set-check press" aria-pressed="false" aria-label="Set 1 done"></button></div>
+    <div class="rir-row" role="group"><span>RIR</span><span class="segmented"><button aria-pressed="false">0</button>…</span></div>
+    <p class="ex-card__cue">…</p>
+  </article></div>
+  <footer class="session-foot"><button class="clay press btn-icon btn-icon--lg">‹</button><button class="clay press btn-lg t-effort">Next: …</button><button class="clay press btn-icon btn-icon--lg" aria-label="More">…</button></footer>
+</div>
+<div class="rest" data-active="true" data-over="false" role="timer">
+  <svg class="rest__ring"><circle class="rest__track"/><circle class="rest__arc"/></svg>
+  <div class="rest__text"><span class="rest__label">Rest after …</span><span class="big-num big-num--30">1:30</span></div>
+  <button class="clay press btn t-effort">+30 s</button><button class="rest__skip press">Skip</button></div>
+
+<div class="scrim" data-open="true"></div>
+<div class="sheet" open role="dialog"><div class="sheet__head"><span class="sheet__grabber"></span><h2 class="sheet__title">…</h2></div>…</div>
+
+<div class="form-field"><label class="form-field__label" for="f">Note</label><textarea class="input" id="f"></textarea></div>
+<div class="num-stepper"><button class="clay press">−</button><input class="num-stepper__input well"><button class="clay press">+</button></div>
+```
+- `--effort` and `--e` are set on the session root (and on the rest pill) from `effortColor(e)`; nothing else sets a colour.
+- Session buttons use the purple clay of `.set-check` (same values) on the session background and in the rest pill.
+- `.segmented > button[aria-pressed]` is the toggle form of the segmented control (RIR, unit).
+- `.rest` is hidden from touch and screen readers when closed (`visibility` after the slide); `data-over` is the visual cue when rest is over.
+- `.input` text is 16 px so iOS does not zoom on focus.
+
 ## Don't
 
 - No new colors, no gradients other than the page background, clay and card fills.

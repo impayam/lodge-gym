@@ -26,3 +26,26 @@ export const IconPlanner = svg("M4 6h16v14H4zM4 10h16M9 14h6");
 export const IconSpark = svg("M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z");
 export const IconDownload = svg("M12 4v11M7 10l5 5 5-5M5 20h14");
 export const IconSettings = svg("M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3");
+
+/** Done mark on the set check (mockup 02: 3 px stroke). */
+export const IconCheck = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M5 12l5 5 9-10" />
+  </svg>
+);
+
+/** Form video (play), filled. */
+export const IconPlay = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
+/** More (three dots). */
+export const IconMore = ({ size = 22 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
+  </svg>
+);

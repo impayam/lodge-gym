@@ -154,7 +154,7 @@
 .tile-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: var(--r-btn-lg); text-align: left; font-weight: 600; color: var(--ink); }
 
 /* ---------- Toast: a short confirmation at the top, announced (role="status") ---------- */
-.toast { position: fixed; z-index: 3; left: var(--gutter); right: var(--gutter); top: calc(env(safe-area-inset-top) + 10px); padding: 12px 14px;
+.toast { position: fixed; z-index: 6; left: var(--gutter); right: var(--gutter); top: calc(env(safe-area-inset-top) + 10px); padding: 12px 14px;
   border-radius: 16px; background: var(--card-top); box-shadow: var(--sh-card); font-size: 14px; color: var(--ink); }
 
 /* ---------- A change over time in data (e.g. "+5.6% since Aug 24") ---------- */
@@ -243,8 +243,86 @@
 .photo-thumb__frame { position: relative; display: block; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; }
 .photo-thumb__frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
+/* ---------- Active session (SPEC-v8 §6.02). The session root sets --effort (effortColor(e)) and --e (0..1) ---------- */
+.page--session { position: relative; isolation: isolate; overflow-x: clip; }
+.page--session[data-resting="true"] { padding-bottom: calc(env(safe-area-inset-bottom) + 180px); }   /* rows scroll above the rest pill */
+.session-glow { position: absolute; z-index: -1; left: -80px; right: -80px; top: -120px; height: 420px; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--effort) 33%, transparent), transparent); }
+.page--session .clay:not(:active), .rest .clay:not(:active) { background: linear-gradient(180deg, #2E2838 0%, #201B29 100%); }   /* purple clay, as .set-check */
+.t-effort { color: var(--effort); }
+.effort-chip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--effort) 13%, transparent); font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.effort-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--effort); }
+.effort-bar { height: 6px; border-radius: var(--r-pill); background: rgba(255,255,255,.08); overflow: hidden; }
+.effort-bar__fill { display: block; height: 100%; background: linear-gradient(90deg, var(--effort-1), var(--effort-2), var(--effort-3));
+  clip-path: inset(0 calc(100% - max(4%, var(--e) * 100%)) 0 0 round var(--r-pill)); }
+.card--session { display: flex; flex-direction: column; gap: 12px; padding: 18px 16px 12px; border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--r-hero); background: var(--session-card); box-shadow: none; }
+.card--grouped { box-shadow: inset 3px 0 0 var(--violet); }                  /* grouped exercises: the violet side line */
+.swipe { touch-action: pan-y; transition: transform var(--t-sheet) var(--ease-out); }   /* follows the finger, springs back */
+.swipe[data-dragging="true"] { transition: none; -webkit-user-select: none; user-select: none; }
+.big-num--36 { font-size: 36px; font-weight: 700; }                            /* exercise title on the session card */
+.ex-card__kicker { font-size: 12px; color: var(--ink-2); }
+.ex-card__meta { font-size: 13px; color: var(--ink-2); }
+.ex-card__suggest { font-size: 13px; color: var(--orange); }                  /* the progression target */
+.ex-card__group { font-size: 12px; color: var(--violet-ink); }               /* A1 · Superset A */
+.ex-card__cue { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.btn-icon--soft { flex-shrink: 0; width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,.08); color: var(--ink); }
+.btn-icon--lg { flex-shrink: 0; width: 58px; height: 58px; border-radius: var(--r-btn-lg); }
+.set-head { display: grid; grid-template-columns: 36px 1fr 1fr 52px; gap: 8px; padding: 0 4px; font-size: 11px; color: var(--ink-3); }
+.set-head > :first-child, .set-head > :last-child { text-align: center; }
+.set-head--timed, .set-row--timed { grid-template-columns: 36px 1fr 52px; }
+.set-row__n { font: 600 20px var(--font-num); color: var(--ink-3); text-align: center; }
+.set-row--done .set-row__n { color: var(--ink-2); }                            /* stays >= 4.5:1 at the done row's opacity */
+.set-value { min-width: 0; min-height: 44px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--ink);
+  font: 600 24px var(--font-num); font-variant-numeric: tabular-nums; text-align: left; }
+.set-value[data-suggested="true"] { color: var(--ink-3); }                    /* not entered yet: the suggestion */
+.rir-row { display: flex; align-items: center; gap: 10px; padding: 0 4px 2px 48px; font-size: 12px; color: var(--ink-3); }
+.segmented > button[aria-pressed="true"] { background: linear-gradient(180deg, var(--clay-top), var(--clay-bottom)); box-shadow: var(--sh-clay); color: var(--pink); }
+.session-foot { position: fixed; z-index: 2; left: 0; right: 0; bottom: 0; display: flex; gap: 10px;
+  padding: 12px var(--gutter) calc(env(safe-area-inset-bottom) + 12px); background: linear-gradient(180deg, transparent 0%, var(--session-bg) 28%); }
+.session-foot > .btn-lg { flex: 1; min-width: 0; padding: 0 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ---------- Rest timer pill: ring countdown in the effort color; hidden from touch and screen readers when closed ---------- */
+.rest { z-index: 3; visibility: hidden; transition: transform var(--t-sheet) var(--ease-out), opacity 200ms, visibility 0s linear var(--t-sheet); }
+.rest[data-active="true"] { visibility: visible; transition-delay: 0s; }
+.rest[data-over="true"] { border-color: var(--effort); }                      /* the visual cue when rest is over (no vibration on iOS) */
+.rest__ring { flex-shrink: 0; width: 44px; height: 44px; transform: rotate(-90deg); }
+.rest__ring circle { fill: none; stroke-width: 4; }
+.rest__track { stroke: rgba(255,255,255,.12); }
+.rest__arc { stroke: var(--effort); stroke-linecap: round; transition: stroke-dashoffset 250ms linear; }
+.rest__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rest__label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; color: var(--ink-2); }
+.rest__skip { height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: none; color: var(--ink-2); font: 600 14px var(--font-ui); }
+
+/* ---------- Bottom sheet parts: scrim fades, sheet scrolls, the head drags it down ---------- */
+.scrim { z-index: 4; }
+.scrim:not([data-open="true"]) { opacity: 0; }
+.sheet { z-index: 5; display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+  overflow-y: auto; overscroll-behavior: contain; color: var(--ink); }
+.sheet[data-dragging="true"] { transition: none; }
+.sheet__head { display: flex; flex-direction: column; gap: 2px; touch-action: none; }
+.sheet__title { margin: 0; font-size: 17px; font-weight: 600; }
+.sheet__title:focus { outline: none; }
+
+/* ---------- Forms: a labelled field, a text input in a well, a number with -/+ ---------- */
+.form-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.form-field__label { font-size: 12px; color: var(--ink-3); }
+.input { width: 100%; min-width: 0; height: 44px; padding: 0 12px; border: 0; border-radius: var(--r-btn); background: var(--well); box-shadow: var(--sh-well);
+  color: var(--ink); font: 400 16px var(--font-ui); outline: none; -webkit-appearance: none; appearance: none; }   /* 16 px: iOS does not zoom */
+textarea.input { height: auto; min-height: 88px; padding: 10px 12px; line-height: 1.5; resize: vertical; }
+.input::placeholder { color: var(--ink-3); }
+.input:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.num-stepper { display: grid; grid-template-columns: 58px minmax(0, 1fr) 58px; gap: 10px; align-items: center; }
+.num-stepper > button { height: 58px; border-radius: var(--r-btn-lg); font-size: 26px; font-weight: 600; color: var(--ink);
+  touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+.num-stepper__input { min-width: 0; height: 58px; padding: 0 8px; border: 0; border-radius: var(--r-btn-lg); color: var(--ink);
+  font: 600 34px var(--font-num); font-variant-numeric: tabular-nums; text-align: center; outline: none; }
+.num-stepper__input::placeholder { color: var(--ink-3); }
+.num-stepper__input:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
 @media (prefers-reduced-motion: reduce) {
-  .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed { transition: none; }
+  .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed, .swipe, .rest__arc { transition: none; }
   .set-check[aria-pressed="true"] svg { animation: none; }
   .glow-once { animation: none; }
 }

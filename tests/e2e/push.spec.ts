@@ -56,7 +56,7 @@ test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, 
   expect(again.ends_at).toBe(body.ends_at + 30_000);
 
   const cancelled = page.waitForRequest((r) => r.url().endsWith("/api/push/rest/cancel"));
-  await page.getByTestId("rest-timer").getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
   expect(((await cancelled).postDataJSON() as { id: string }).id).toBe(body.id);
 
   // Deliver a push to the service worker and check the notification it shows.

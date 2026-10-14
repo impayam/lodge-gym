@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
+import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo, enterSet, openMore } from "./helpers";
 
 // SPEC-v3 M9a (AI session report) and M9c (Get advice) with a mocked model (scripts/e2e-ai-mock.mjs): the real
 // Anthropic API is never called. The mock writes its answer from the request's own input.
@@ -31,17 +31,17 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   await startDay1(page);
   // Bench: all 4 planned sets of 5 at 140 lb.
   for (let i = 0; i < 4; i++) {
-    await page.getByTestId(`w-bench-${i}`).locator("input").fill("140");
+    await enterSet(page, "bench", i, "w", "140");
     if (i > 0) await page.getByTestId(`check-bench-${i}`).click();
   }
   // One extra exercise, added during the session.
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   const picker = page.getByTestId("exercise-picker");
   await picker.getByTestId("picker-tab-search").click();
   await picker.getByRole("searchbox").fill("biceps curl");
   await picker.getByTestId("library-row").filter({ has: page.locator("b", { hasText: /^Dumbbell Biceps Curl$/ }) }).first().click();
-  await page.getByTestId("w-curl-0").locator("input").fill("30");
-  await page.getByTestId("r-curl-0").locator("input").fill("10");
+  await enterSet(page, "curl", 0, "w", "30");
+  await enterSet(page, "curl", 0, "r", "10");
   await page.getByTestId("check-curl-0").click();
 
   await page.getByTestId("finish").click();

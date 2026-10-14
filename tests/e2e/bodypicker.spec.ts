@@ -1,6 +1,6 @@
 import { BODY_AREAS } from "../../worker/lib/bodyAreas";
 import { expect, test, type Page } from "./fixtures";
-import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo, openMore } from "./helpers";
 
 // SPEC-v3 M9b with the SPEC-v6 3D model. "+ Add exercise" opens on the 3D body; the area and muscle chips do the same
 // as the model; a pick adds the exercise to the session as an extra. Both projects render WebGL 2 (WebKit and
@@ -63,7 +63,7 @@ async function startSession(page: Page) {
 }
 
 async function openPicker(page: Page, mode: "3d" | "fallback" = "3d") {
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   const step = page.getByTestId("body-step");
   await expect(step).toHaveAttribute("data-mode", mode, { timeout: 30_000 });
   return step;
@@ -109,16 +109,16 @@ test("chips: Arms → Triceps lists triceps-primary exercises first; picking one
   await step.getByTestId("muscle-triceps").click();
   await list.locator(`[data-testid="pick-row"][data-id="oh_tri"] .pickmain`).click();
   await expect(page.getByTestId("exercise-picker")).toHaveCount(0);
-  const card = page.locator(`article.ex[data-ex="oh_tri"]`);
-  await expect(card).toContainText("Extra");
-  await expect(card.locator(".setrow")).toHaveCount(3);
+  const card = page.locator(`[data-testid="ex-card"][data-ex="oh_tri"]`);
+  await expect(card).toContainText("Added today");
+  await expect(card.locator(".set-row")).toHaveCount(3);
   await waitForSynced(page);
   await expect
     .poll(() => sql("SELECT COUNT(*) AS n, SUM(is_extra) AS extra FROM set_entries WHERE exercise_id = 'oh_tri'"), { timeout: 20_000 })
     .toEqual([{ n: 3, extra: 3 }]);
 
   // Reopening the picker in the same session returns to the triceps list.
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   await expect(page.getByTestId("muscle-step")).toHaveAttribute("data-muscle", "triceps");
   await page.getByTestId("pick-back").click();
   await expect(page.getByTestId("body-step")).toHaveAttribute("data-mode", "3d", { timeout: 30_000 });

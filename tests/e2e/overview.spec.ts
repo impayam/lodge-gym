@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo } from "./helpers";
+import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo, enterSet } from "./helpers";
 
 // SPEC-v7 M9d: the training overview in Reports, rewritten after every finished session right after its report, and
 // the Session reports list. The model is mocked (scripts/e2e-ai-mock.mjs): the real Anthropic API is never called.
@@ -32,7 +32,7 @@ async function finishDay1(page: Page) {
   await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await page.getByTestId("start").click();
   for (let i = 0; i < 4; i++) {
-    await page.getByTestId(`w-bench-${i}`).locator("input").fill("140");
+    await enterSet(page, "bench", i, "w", "140");
     await page.getByTestId(`check-bench-${i}`).click();
   }
   await page.getByTestId("finish").click();

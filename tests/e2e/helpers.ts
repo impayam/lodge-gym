@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 /** Local D1 of the server the current project talks to (see scripts/e2e-server.mjs). */
 const persist = () => (test.info().project.name.startsWith("webkit") ? ".wrangler/e2e-https" : ".wrangler/e2e");
@@ -68,7 +68,15 @@ export function resetPrograms() {
 }
 
 export async function waitForSynced(page: Page) {
-  await page.getByTestId("sync-chip").filter({ hasText: "Synced" }).waitFor();
+  const chip = page.getByTestId("sync-chip");
+  // The session screen is full screen: its sync status is in the More sheet.
+  if ((await chip.count()) === 0 && (await page.getByTestId("more").count()) > 0) {
+    await openMore(page);
+    await chip.filter({ hasText: "Synced" }).waitFor();
+    await closeMore(page);
+    return;
+  }
+  await chip.filter({ hasText: "Synced" }).waitFor();
 }
 
 const AI_MOCK = `http://127.0.0.1:${process.env.E2E_AI_PORT ?? "8791"}`;
@@ -106,4 +114,69 @@ export async function goTo(page: Page, place: Place) {
   if (!inMe) return tab(place);
   await tab("Me");
   await page.getByTestId(inMe).click();
+}
+
+/* ---------------- active session (SPEC-v8 §6.02): one exercise card at a time ---------------- */
+
+const card = (page: Page) => page.getByTestId("ex-card");
+
+async function step(page: Page, dir: "prev" | "next") {
+  const before = await card(page).getAttribute("data-ex");
+  await page.getByTestId(dir).click();
+  await expect(card(page)).not.toHaveAttribute("data-ex", before!);
+}
+
+/** Shows an exercise on the session card with Prev / Next (the card holds one exercise at a time). */
+export async function showExercise(page: Page, exerciseId: string) {
+  await expect(card(page)).toBeVisible();
+  if ((await card(page).getAttribute("data-ex")) === exerciseId) return;
+  while (await page.getByTestId("prev").isEnabled()) {
+    await step(page, "prev");
+    if ((await card(page).getAttribute("data-ex")) === exerciseId) return;
+  }
+  while ((await card(page).getAttribute("data-ex")) !== exerciseId) {
+    if (!(await page.getByTestId("next").isEnabled())) throw new Error(`${exerciseId} is not in the session`);
+    await step(page, "next");
+  }
+}
+
+/** The active session's exercises in order, read by stepping through the card from the first. */
+export async function sessionOrder(page: Page): Promise<string[]> {
+  await expect(card(page)).toBeVisible();
+  while (await page.getByTestId("prev").isEnabled()) await step(page, "prev");
+  const ids = [(await card(page).getAttribute("data-ex"))!];
+  while (await page.getByTestId("next").isEnabled()) {
+    await step(page, "next");
+    ids.push((await card(page).getAttribute("data-ex"))!);
+  }
+  return ids;
+}
+
+/** Checks a set (showing its exercise first). */
+export async function checkSet(page: Page, exerciseId: string, set: number) {
+  await showExercise(page, exerciseId);
+  await page.getByTestId(`check-${exerciseId}-${set}`).click();
+}
+
+/** Types a set's weight (w), reps (r) or seconds (s) in the set sheet, then closes it. */
+export async function enterSet(page: Page, exerciseId: string, set: number, field: "w" | "r" | "s", value: string) {
+  await showExercise(page, exerciseId);
+  await page.getByTestId(`${field}-${exerciseId}-${set}`).click();
+  const sheet = page.getByTestId("set-sheet");
+  await sheet.getByTestId(`sheet-${field}`).locator("input").fill(value);
+  await sheet.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
+/** Opens the session's More sheet (date and time, unit, note, body weight, add exercise, reorder, delete). */
+export async function openMore(page: Page) {
+  await page.getByTestId("more").click();
+  await expect(page.getByTestId("more-sheet")).toHaveAttribute("open", "");
+  return page.getByTestId("more-sheet");
+}
+
+/** Closes the More sheet with Escape. */
+export async function closeMore(page: Page) {
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("more-sheet")).toHaveCount(0);
 }

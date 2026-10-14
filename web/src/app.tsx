@@ -101,6 +101,8 @@ export function App() {
   const view = useStore((s) => s.view);
   const tab = useStore((s) => s.tab);
   const flashMsg = useStore((s) => s.flash);
+  // The rest pill sits where the Coach button is: the button steps aside while resting.
+  const resting = useStore((s) => s.rest !== null);
   const hasBoot = useStore((s) => s.boot !== null);
   useRelock();
 
@@ -114,9 +116,7 @@ export function App() {
 
   const screen =
     view.name === "session" && view.sessionId ? (
-      <Legacy>
-        <Session key={view.sessionId} id={view.sessionId} />
-      </Legacy>
+      <Session key={view.sessionId} id={view.sessionId} />
     ) : view.name === "report" && view.sessionId ? (
       <Legacy>
         <SessionReportScreen key={view.sessionId} id={view.sessionId} fresh={!!view.fresh} />
@@ -187,10 +187,8 @@ export function App() {
       ) : (
         screen
       )}
-      <div class="legacy legacy--overlay">
-        <RestTimer />
-      </div>
-      {showsCoachButton(view.name) ? (
+      <RestTimer />
+      {showsCoachButton(view.name) && !resting ? (
         <button type="button" class="clay press fab" aria-label="Ask the coach" data-testid="coach-button" onClick={() => navigate("coach")}>
           <IconCoach size={22} />
         </button>

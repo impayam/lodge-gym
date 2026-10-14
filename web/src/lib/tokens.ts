@@ -5,3 +5,8 @@
 export function token(name: `--${string}`): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
+
+/** The three --effort-* token values, for effortColor (web/src/lib/effort.ts). */
+export function effortStops(): [string, string, string] {
+  return [token("--effort-1"), token("--effort-2"), token("--effort-3")];
+}

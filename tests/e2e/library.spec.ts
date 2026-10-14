@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo, enterSet, openMore, closeMore } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -75,23 +75,23 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
   await page.getByTestId("start").click();
   await setOffline(context, page, true);
 
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   const picker = page.getByTestId("exercise-picker");
   // The picker opens on the body map (SPEC-v3 M9b); search is its second tab.
   await picker.getByTestId("picker-tab-search").click();
   await picker.getByRole("searchbox").fill("hack squat");
   await picker.getByTestId("library-row").filter({ hasText: /^Hack Squat/ }).click();
   const card = page.locator('[data-ex="fedb-Hack_Squat"]');
-  await expect(card).toContainText("Extra");
+  await expect(card).toContainText("Added today");
   await expect(card).toContainText("no target");
-  await expect(card.locator(".setrow")).toHaveCount(3);
-  await card.getByTestId("w-fedb-Hack_Squat-0").locator("input").fill("90");
-  await card.getByTestId("r-fedb-Hack_Squat-0").locator("input").fill("10");
+  await expect(card.locator(".set-row")).toHaveCount(3);
+  await enterSet(page, "fedb-Hack_Squat", 0, "w", "90");
+  await enterSet(page, "fedb-Hack_Squat", 0, "r", "10");
   await page.getByTestId("check-fedb-Hack_Squat-0").click();
   await expect(card.getByRole("button", { name: "Remove exercise" })).toHaveCount(0);
 
   // A second extra exercise, removed before any set is done.
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   // The picker remembers the tab it was left on in this session.
   await expect(picker.getByTestId("picker-tab-search")).toHaveAttribute("aria-selected", "true");
   await picker.getByRole("searchbox").fill("leg extensions");
@@ -103,7 +103,9 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
   await setOffline(context, page, false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await waitForSynced(page);
-  await page.getByTestId("sync-chip").click();
+  // Sync again by hand (the session's sync status is in its More sheet): nothing is duplicated.
+  await (await openMore(page)).getByTestId("sync-chip").click();
+  await closeMore(page);
   await page.reload();
   await waitForSynced(page);
   expect(sql("SELECT exercise_id, COUNT(*) AS n, SUM(done) AS done, MIN(position) AS pos FROM set_entries WHERE is_extra = 1 GROUP BY exercise_id")).toEqual([

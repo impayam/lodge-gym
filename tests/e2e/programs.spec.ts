@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { resetPrograms, resetWorkouts, signIn, sql, waitForSynced, goTo, type Place } from "./helpers";
+import { openMore, resetPrograms, resetWorkouts, signIn, sql, waitForSynced, goTo, type Place } from "./helpers";
 
 // SPEC-v2 §8.8 E2E: generate a program, swap an exercise, approve it; old sessions still show under the archived
 // program; bench press progression continues from the old weights. Then switch back to the seed program.
@@ -115,14 +115,15 @@ test("bench press progression continues from the old weights (SPEC-v2 §8.8 E2E 
   // Bench is the main lift of the new program's chest day.
   const day = page.getByTestId("day-option").filter({ hasText: "Barbell Bench Press" });
   await day.click();
-  const bench = page.locator('article.ex[data-ex="bench"]');
+  const bench = page.locator('[data-testid="ex-card"][data-ex="bench"]');
   await expect(bench).toBeVisible();
   await expect(bench.getByTestId("last-perf")).toContainText("135");
-  await expect(bench.locator(".target")).toContainText("RIR 1–3");
+  await expect(bench.getByTestId("target")).toContainText("RIR 1–3");
   // 4 × 5 at 135 lb is below the new 5–8 range's top, so the same weight is suggested: no reset, no 90 % cut.
-  await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "135");
-  await page.getByRole("button", { name: "Delete session" }).click();
-  await page.getByRole("button", { name: "Yes, delete" }).click();
+  await expect(bench.getByTestId("w-bench-0")).toHaveText("135");
+  await expect(bench.getByTestId("w-bench-0")).toHaveAttribute("data-suggested", "true");
+  await (await openMore(page)).getByRole("button", { name: "Delete session" }).click();
+  await page.getByTestId("delete-sheet").getByRole("button", { name: "Yes, delete" }).click();
   // The delete goes through the outbox: wait until the server has it, not only for the sync chip (it can still read
   // "Synced" before the delete is queued), so the next test starts with no open session.
   await expect.poll(() => (sql("SELECT COUNT(*) AS n FROM workout_sessions WHERE status = 'active'") as { n: number }[])[0].n, { timeout: 20_000 }).toBe(0);
