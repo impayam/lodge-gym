@@ -57,6 +57,8 @@ Build every screen from these. Markup shows the intended HTML; write it as Preac
 ```
 - Icons only (no labels), 24 px, 2 px stroke. Icon paths are in mockup 01 (`icons` object).
 - `--i` = index of the current tab (0–4).
+- The tab bar and the Coach button are `position: fixed`. `:root { overscroll-behavior-y: none }` keeps them in place on iOS: WebKit takes the page's rubber-band setting from the root element only (a value on `body` is ignored), and while the page bounces the fixed layer moves with it.
+- `.page` ends 164 px (plus the safe area) above the bottom edge, so the last control of every screen clears both the tab bar and the Coach button (`tests/e2e/layout.spec.ts`).
 
 ## Coach button
 

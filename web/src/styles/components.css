@@ -4,13 +4,18 @@
    If a screen needs something not here, stop and ask Payam before inventing it. */
 
 /* ---------- Page ---------- */
+/* No rubber-band at the ends of the page. WebKit reads the viewport's overscroll-behavior from the root element only
+   (LocalFrameView::verticalOverscrollBehavior → documentElement), and on iOS the layout viewport, which fixed elements are
+   positioned in, stays clamped to the document while the page bounces, so the tab bar and the Coach button would move with it. */
+:root { overscroll-behavior-y: none; }
 .page {
   min-height: 100dvh;
   background: var(--bg);
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-ui);
-  padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) calc(env(safe-area-inset-bottom) + 120px);
+  /* The end of the content clears the tab bar (bottom 10 + 68) and the Coach button or rest pill above it (top 152-158). */
+  padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) calc(env(safe-area-inset-bottom) + 164px);
   display: flex; flex-direction: column; gap: var(--gap);
 }
 .page--session { background: var(--session-bg); padding-bottom: calc(env(safe-area-inset-bottom) + 100px); }
