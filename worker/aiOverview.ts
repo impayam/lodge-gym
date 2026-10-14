@@ -53,9 +53,15 @@ interface OverviewRow {
  * that asked for it, or null (Regenerate).
  */
 export async function generateOverview(env: Env, triggerSessionId: string | null): Promise<OverviewRow> {
-  const [d, plans, infos] = await Promise.all([loadReportData(env), readAllPlans(env), readProgramInfos(env)]);
+  const [d, plans, infos, earlier] = await Promise.all([
+    loadReportData(env),
+    readAllPlans(env),
+    readProgramInfos(env),
+    // The motivational line gives last week's result unless an overview did last weekend (or earlier this week).
+    env.DB.prepare("SELECT created_at FROM training_overviews WHERE status = 'ok' AND created_at >= ?").bind(new Date(Date.now() - 16 * 86_400_000).toISOString()).all<{ created_at: string }>(),
+  ]);
   const today = localDate(d.settings.timezone);
-  const input = buildOverviewInput(d, plans, today, infos.find((p) => p.status === "active")?.style ?? null);
+  const input = buildOverviewInput(d, plans, today, infos.find((p) => p.status === "active")?.style ?? null, earlier.results.map((r) => r.created_at));
   const row: OverviewRow = {
     id: ulid(),
     created_at: nowISO(),

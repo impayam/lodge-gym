@@ -18,6 +18,12 @@ test.afterAll(async () => {
 });
 
 const card = (page: Page) => page.getByTestId("training-overview");
+/** The motivational line's phase today, in the app's time zone. */
+function phaseToday() {
+  const tz = (sql("SELECT value FROM settings WHERE key = 'timezone'")[0] as { value?: string } | undefined)?.value ?? "America/Denver";
+  const dow = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date())}T12:00:00Z`).getUTCDay();
+  return dow === 1 || dow === 2 ? "start" : dow === 0 || dow === 6 ? "end" : "mid";
+}
 const toReports = (page: Page) => page.getByRole("navigation").getByRole("button", { name: "Reports" }).click();
 
 /** Logs Day 1's bench (4 × 5 at 140 lb) and finishes; returns once the session's report is on screen. */
@@ -65,6 +71,12 @@ test("the overview updates after a finished session, keeps the old one on failur
   await expect(page.getByTestId("overview-warnings")).toHaveCount(0);
   await expect(card(page)).not.toContainText("۹۹۹۹");
   await expect(card(page)).toContainText("claude-opus-5-5");
+  // The weekly motivational line: Persian, right-to-left, with the week's numbers, labeled by today's phase
+  // (Monday–Tuesday start, Wednesday–Friday mid, Saturday–Sunday end).
+  const motivation = page.getByTestId("overview-motivation");
+  await expect(motivation).toHaveAttribute("data-phase", phaseToday());
+  await expect(motivation.locator("p")).toHaveAttribute("dir", "rtl");
+  await expect(motivation.locator("p")).toContainText("جلسه از");
   const calls = await aiCalls();
   expect(calls.by_kind.overview).toMatchObject({ model: "claude-opus-5-5", effort: "medium", max_tokens: 4000, key_set: true });
   const afterSession = await card(page).getAttribute("data-overview");

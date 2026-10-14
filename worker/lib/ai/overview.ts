@@ -13,6 +13,7 @@ import { activeSince, balanceStatus, bestSet, convertWeight, epley, firstActivat
 import { TARGET_GROUPS } from "../muscles";
 import { addDays } from "../time";
 import type { Exercise, SetEntry, Unit, WorkoutSession } from "../types";
+import { buildMotivation, MOTIVATION_MAX, PRAISE_FA, type MotivationInput, type WeekKey, type WeekPhase } from "./motivation";
 import { GROUP_NAME, sessionDay } from "./report";
 
 /** This week and the previous 4 (approved 2026-10-13). */
@@ -64,6 +65,8 @@ export interface OverviewInput {
   stalls: { exercise_id: string; name: string; exposures: number; best_e1rm: number; last_e1rm: number }[];
   drops: { exercise_id: string; name: string; best_e1rm: number; latest_e1rm: number; change_pct: number }[];
   skipped: { name: string; day: string; skipped: number; of: number }[];
+  /** The weekly motivational line's facts (worker/lib/ai/motivation.ts); null when there is nothing to report. */
+  motivation: MotivationInput | null;
 }
 
 /** A done set as compact text: "135×5 RIR 2", "45 s", "×8" (bodyweight). */
@@ -87,9 +90,10 @@ function e1rmIn(s: WorkoutSession, exerciseId: string, unit: Unit): number | nul
 
 /**
  * The model's input for the overview on local `today`. `plans` are the session plans (SPEC-v3 M9c), so skipped
- * exercises are counted against what was planned for each session.
+ * exercises are counted against what was planned for each session. `previousOverviews` are the creation times of
+ * earlier ok overviews (for the motivational line: was last week's result already given).
  */
-export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: string, style: string | null): OverviewInput {
+export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: string, style: string | null, previousOverviews: string[] = []): OverviewInput {
   const unit = d.settings.unit;
   const ex = new Map<string, Exercise>(d.exercises.map((e) => [e.id, e]));
   const name = (id: string) => ex.get(id)?.name_en ?? id;
@@ -210,6 +214,7 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
     stalls,
     drops,
     skipped,
+    motivation: buildMotivation(d, today, previousOverviews),
   };
 }
 
@@ -270,6 +275,9 @@ export const OverviewOutput = z.object({
   consistency_fa: fa(1200, "Persian").nullable().describe("Sessions per week against the program's days, and any pattern of skipped exercises."),
   focus_next: z.array(fa(400, "Persian")).describe("1–3 concrete priorities for the coming sessions."),
   warnings: z.array(fa(400, "Persian")).describe("Only real issues: stalls, drops, pain in a note. Usually empty. At most 3."),
+  motivation_fa: fa(MOTIVATION_MAX, "Persian")
+    .nullable()
+    .describe("1–2 short sentences from the motivation block only; it states sessions_done and sessions_planned of every week in motivation.cover. Null when motivation is null."),
 });
 export type OverviewOutput = z.infer<typeof OverviewOutput>;
 
@@ -287,8 +295,37 @@ export interface TrainingOverview {
   /** The app's numbers for the main lifts over the window, in `unit`. */
   lifts: { exercise_id: string; name: string; latest_e1rm: number | null; change_pct: number | null; sessions: number }[];
   unit: string;
-  /** Prose items dropped because they had numbers the app did not supply. */
+  /** The weekly motivational line and the app's facts behind its label; null when there is none or it was dropped. */
+  motivation: StoredMotivation | null;
+  /** Prose items dropped because they had numbers the app did not supply (or a motivational line that broke its rules). */
   dropped: number;
+}
+
+export interface StoredMotivation {
+  phase: WeekPhase;
+  announce_last_week: boolean;
+  cover: { week: WeekKey; sessions_done: number; sessions_planned: number; bad: boolean }[];
+  /** A week it reports went badly (fewer than half the planned sessions). */
+  bad: boolean;
+  text_fa: string;
+}
+
+const noZwnj = (t: string) => t.replace(/\u200c/g, "");
+
+/**
+ * Why a motivational line breaks its rules, or null when it keeps them: only the app's numbers; the sessions done and
+ * planned of every week it reports; no generic praise when one of those weeks went badly.
+ */
+export function checkMotivation(text: string, m: MotivationInput, supplied: Supplied): string | null {
+  if (text.length > MOTIVATION_MAX) return "too long";
+  if (!onlySupplied(text, supplied)) return "a number the app did not supply";
+  const nums = numbersIn(text);
+  for (const k of m.cover) {
+    const w = m[k];
+    if (!nums.includes(w.sessions_done) || !nums.includes(w.sessions_planned)) return `${k}: sessions done and planned not stated`;
+  }
+  if (m.cover.some((k) => m[k].bad) && PRAISE_FA.some((p) => noZwnj(text).includes(noZwnj(p)))) return "praise on a bad week";
+  return null;
 }
 
 /** A reply whose summary has a number the app did not supply is invalid (retried once, then an error). */
@@ -307,6 +344,15 @@ export function normalizeOverview(out: OverviewOutput, input: OverviewInput): Tr
     return null;
   };
   const list = (xs: string[], max: number) => xs.map(keep).filter((x): x is string => x != null).slice(0, max);
+  const m = input.motivation;
+  const line = out.motivation_fa?.trim() || null;
+  let motivation: StoredMotivation | null = null;
+  if (m && line) {
+    if (checkMotivation(line, m, supplied) == null) {
+      const cover = m.cover.map((k) => ({ week: k, sessions_done: m[k].sessions_done, sessions_planned: m[k].sessions_planned, bad: m[k].bad }));
+      motivation = { phase: m.phase, announce_last_week: m.announce_last_week, cover, bad: cover.some((c) => c.bad), text_fa: line };
+    } else dropped++;
+  }
   return {
     summary_fa: out.summary_fa.trim(),
     trends: list(out.trends, OVERVIEW_LIST_MAX.trends),
@@ -316,6 +362,7 @@ export function normalizeOverview(out: OverviewOutput, input: OverviewInput): Tr
     warnings: list(out.warnings, OVERVIEW_LIST_MAX.warnings),
     lifts: input.lifts.map((l) => ({ exercise_id: l.exercise_id, name: l.name, latest_e1rm: l.latest_e1rm, change_pct: l.change_pct, sessions: l.points.length })),
     unit: input.window.unit,
+    motivation,
     dropped,
   };
 }
@@ -364,4 +411,10 @@ Rules:
 - focus_next: 1–3 concrete priorities for the coming sessions, for strength and balance.
 - warnings: only real issues: stalls, drops, pain or injury in a note. Usually none.
 - Never suggest a deload, a light week or less volume, unless a session note says he is tired. This is his stated preference.
-- No medical advice; if a note mentions pain, suggest rest or seeing a professional, nothing more.`;
+- No medical advice; if a note mentions pain, suggest rest or seeing a professional, nothing more.
+- motivation_fa: one or two short Persian sentences built only from the motivation block (null when it is null). Weeks run Monday to Sunday. Follow motivation.phase:
+  start (Monday–Tuesday): an encouraging start to the week, from last week's numbers and today's session (today_session) if there is one;
+  mid (Wednesday–Friday): progress so far this week: sessions done against planned up to today, records and e1RM gains;
+  end (Saturday–Sunday): the week's result: sessions done against planned for the week, records and main-lift changes.
+  If announce_last_week is true, also give last week's result. For every week in motivation.cover, write its sessions_done and sessions_planned as numbers, for example "3 از 4 جلسه".
+  No generic praise: every encouraging word must rest on a number from the block. A week is bad only when bad is true (fewer than half the planned sessions); then say so plainly, without praise, and end with exactly one concrete next step, such as next_session. Lift drops never make a week bad; they belong in warnings.`;

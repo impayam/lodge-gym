@@ -6,6 +6,8 @@ import { aiTransport } from "../../worker/ai";
 export type MockReply =
   | { json: unknown; stop_reason?: string; usage?: { input_tokens: number; output_tokens: number }; model?: string }
   | { text: string; stop_reason?: string; usage?: { input_tokens: number; output_tokens: number } }
+  /** A JSON reply built from the request's input (the user message), like the model writing from what it was given. */
+  | { build: (input: any) => unknown; stop_reason?: string; usage?: { input_tokens: number; output_tokens: number } }
   | { status: number; type: string; message: string };
 
 export interface MockCall {
@@ -25,7 +27,8 @@ export function mockAnthropic(replies: MockReply[]) {
     if (!r) throw new Error("mockAnthropic: no reply queued");
     if ("status" in r)
       return new Response(JSON.stringify({ type: "error", error: { type: r.type, message: r.message } }), { status: r.status, headers: { "content-type": "application/json", "request-id": "req_mock" } });
-    const text = "json" in r ? JSON.stringify(r.json) : r.text;
+    const body = calls[calls.length - 1].body as { messages: { content: string }[] };
+    const text = "json" in r ? JSON.stringify(r.json) : "build" in r ? JSON.stringify(r.build(JSON.parse(body.messages[0].content))) : r.text;
     return new Response(
       JSON.stringify({
         id: `msg_mock_${calls.length}`,
@@ -68,4 +71,5 @@ export const OVERVIEW_REPLY = {
   consistency_fa: "جلسه‌ها طبق برنامه انجام شده‌اند.",
   focus_next: ["روی حرکت‌های سینه تمرکز کن."],
   warnings: [],
+  motivation_fa: null as string | null,
 };

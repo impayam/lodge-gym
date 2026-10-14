@@ -295,6 +295,16 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   the input does not have (percentages: only the app's `*_pct` values, as given or rounded) is dropped; a summary with
   one makes the reply invalid (retried once, then an error row). Same rules as the report: chest first, no deload or
   light week unless a note says he is tired, no medical advice.
+- **Motivational line** (Payam, 2026-10-14): a short Persian line under the summary, from his real numbers only. Weeks
+  run Monday–Sunday and the tone follows the local day the overview is written: Monday–Tuesday "New week" (last week's
+  numbers and today's session), Wednesday–Friday "This week so far" (sessions done against planned up to today,
+  records, e1RM gains), Saturday–Sunday "This week's result" (sessions done against planned for the week, records,
+  main-lift changes). The first overview of a week also gives last week's result when none was written last Saturday
+  or Sunday. A week is bad only with fewer than half its planned sessions (lift drops stay warnings): the line says so
+  plainly, without praise, and ends with one concrete next step (the next program day). The app builds the facts
+  (`worker/lib/ai/motivation.ts`: weeks, planned sessions by the overview's rule, records, main lifts, next day) and
+  checks the line: only supplied numbers, the sessions done and planned of every week it reports, no praise word on a
+  bad week, at most 400 characters. A line that breaks a rule is dropped (the rest of the overview stays).
 - Config in `wrangler.toml` `[vars]`: `OVERVIEW_EFFORT` (medium, Payam 2026-10-13), `OVERVIEW_MAX_TOKENS` (4000; thinking counts toward
   it). Limit: 10 overviews per local day. Settings: "This month: N reports, M overviews, ~$X" and today's counts.
 - Every update inserts a row in `training_overviews` (migration 0010); the latest `ok` row is shown and older rows are

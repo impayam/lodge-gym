@@ -2,6 +2,10 @@ import { env, runDurableObjectAlarm } from "cloudflare:test";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { OverviewResponse, OverviewView, SessionReportItem } from "../../worker/lib/ai/overview";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
+import { phaseOf, type MotivationInput } from "../../worker/lib/ai/motivation";
+import type { OverviewInput } from "../../worker/lib/ai/overview";
+import { weekRange } from "../../worker/lib/cycle";
+import { addDays, localDate } from "../../worker/lib/time";
 import type { SetEntry, WeeklyReview, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
 import { mockAnthropic, OVERVIEW_REPLY, REPORT_REPLY } from "../fixtures/anthropic-mock";
@@ -203,6 +207,49 @@ describe("weekly reviews history", () => {
       ["w2", "2026-09-21", "دوم", ["خوب"]],
       ["w1", "2026-09-14", "اول", []],
     ]);
+  });
+});
+
+describe("the weekly motivational line", () => {
+  /** A line the way the prompt asks: each reported week's sessions done and planned; on a bad week, the next session. */
+  const lineFrom = (m: MotivationInput) => {
+    const weeks = m.cover.map((k) => `${k === "last_week" ? "هفتهٔ گذشته" : "این هفته"} ${m[k].sessions_done} جلسه از ${m[k].sessions_planned} جلسه`);
+    const bad = m.cover.some((k) => m[k].bad);
+    return `${weeks.join("؛ ")}.${bad ? ` کمتر از نصف برنامه بود؛ قدم بعدی: ${m.next_session}.` : ""}`;
+  };
+
+  it("the app's facts go to the model, a line that states them is kept, and last week's result is announced unless an overview was written last weekend", async () => {
+    await env.DB.prepare("DELETE FROM weekly_reviews").run();
+    mock = mockAnthropic([{ build: (input: OverviewInput) => ({ ...OVERVIEW_REPLY, motivation_fa: input.motivation ? lineFrom(input.motivation) : null }) }]);
+    await client.post("/api/overview");
+    await settled();
+    const first = JSON.parse((mock.calls[0].body.messages as { content: string }[])[0].content) as OverviewInput;
+    const tz = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'timezone'").first<{ value: string }>())?.value ?? "America/Denver";
+    const today = localDate(tz);
+    // The seed program was activated on Sep 27, so this week always has sessions planned.
+    const m = first.motivation!;
+    expect(m.phase).toBe(phaseOf(today).phase);
+    expect(m.this_week.start).toBe(weekRange(today, "mon").start);
+    // No overview before: the first one of the week gives last week's result too (Monday–Tuesday report last week anyway).
+    expect(m.announce_last_week).toBe(true);
+    expect(m.cover).toEqual(m.phase === "start" ? ["last_week"] : ["last_week", "this_week"]);
+    const stored = (await overview()).overview!.overview.motivation!;
+    expect(stored).toMatchObject({ phase: m.phase, announce_last_week: true, text_fa: lineFrom(m), bad: m.cover.some((k) => m[k].bad) });
+
+    // An overview written last Saturday (17:00 local): Wednesday–Sunday report this week only.
+    const lastSaturday = addDays(weekRange(today, "mon").start, -2);
+    await env.DB.prepare("UPDATE training_overviews SET created_at = ?").bind(`${lastSaturday}T23:00:00.000Z`).run();
+    mock.restore();
+    mock = mockAnthropic([{ json: { ...OVERVIEW_REPLY, motivation_fa: "هفتهٔ خوبی بود، ادامه بده!" } }]);
+    await client.post("/api/overview");
+    await settled();
+    const second = JSON.parse((mock.calls[0].body.messages as { content: string }[])[0].content) as OverviewInput;
+    expect(second.motivation!.announce_last_week).toBe(false);
+    expect(second.motivation!.cover).toEqual(second.motivation!.phase === "start" ? ["last_week"] : ["this_week"]);
+    // Generic praise without the week's numbers is dropped.
+    const latest = (await overview()).overview!.overview;
+    expect(latest.motivation).toBeNull();
+    expect(latest.dropped).toBe(1);
   });
 });
 

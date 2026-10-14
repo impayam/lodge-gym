@@ -86,3 +86,26 @@ CREATE INDEX training_overviews_created ON training_overviews(created_at);
   session gets a ◆ marker on its date; the List view shows all three types. Every report opens read-only. A weekly
   review sits on the last day of the week it covers (`week_start` + 6; the production rows are Monday–Sunday weeks).
   Endpoints approved: `GET /api/report-timeline` (dates, kinds, ids only) and `GET /api/overviews/:id`.
+
+## 9. Motivational line (Payam, 2026-10-14)
+- A short Persian line (`motivation_fa`, RTL) under the overview's summary, built only from his real numbers. Weeks run
+  Monday–Sunday; the tone follows the local day the overview is written:
+  - Monday–Tuesday (`start`, label "New week"): an encouraging start from last week's numbers and today's session.
+  - Wednesday–Friday (`mid`, "This week so far"): sessions done against planned up to today, records, e1RM gains.
+  - Saturday–Sunday (`end`, "This week's result"): sessions done against planned for the whole week, records, main-lift
+    changes against the week before.
+  - The first overview of a week also gives last week's result when no ok overview was written last Saturday or Sunday
+    (label prefixed "Last week's result ·"). Overviews written earlier the same day do not count, so a Regenerate keeps
+    the announcement.
+- Bad week = fewer than half its planned sessions (`done × 2 < planned`, never with nothing planned). Lift drops never
+  make a week bad; they stay warnings. On a bad week the line says so plainly, without praise, and ends with one
+  concrete next step (the next program day by the app's rotation); the label adds "· under half of plan" and the block
+  uses the warning colour.
+- The app supplies the facts (`worker/lib/ai/motivation.ts`, pure): planned sessions by the overview's rule (first
+  activation, the program active each day, whole sessions), records by the weekly report's rule (best e1RM beats the
+  best before the week), main lifts against the previous week, today's session, the next day. A week with nothing
+  planned or done is not reported; with no week to report there is no line.
+- Checks (`checkMotivation`): at most 400 characters; only numbers the app supplied; the sessions done and planned of
+  every week it reports; none of the praise words (آفرین، عالی، فوق‌العاده، …) when one of those weeks is bad. A line
+  that breaks a rule is dropped (counted in `dropped`); the overview itself is kept, no retry.
+- No change to the data model or API: the line and its label facts are stored inside `overview_json` (`motivation`).

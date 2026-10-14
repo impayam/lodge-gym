@@ -140,7 +140,7 @@ export function bestSet(s: WorkoutSession, exerciseId: string, unit: Unit): SetR
   return best;
 }
 
-function bestIn(sessions: WorkoutSession[], exerciseId: string, unit: Unit): SetResult | null {
+export function bestIn(sessions: WorkoutSession[], exerciseId: string, unit: Unit): SetResult | null {
   let best: SetResult | null = null;
   for (const s of sessions) {
     const b = bestSet(s, exerciseId, unit);

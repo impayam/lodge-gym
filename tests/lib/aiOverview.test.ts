@@ -159,14 +159,15 @@ describe("numbers from the app only", () => {
   it("reads Latin, Persian and Arabic-Indic digits and decimals", () => {
     expect(numbersIn("پرس سینه ۳٫۸٪ بالا رفت و اسکوات 18.9 درصد افت کرد؛ ٤ جلسه")).toEqual([3.8, 18.9, 4]);
     expect(percentsIn("بنچ ۴٪ و اسکوات ۱۸٫۹ درصد، ۳ جلسه")).toEqual([4, 18.9]);
-    // Percentages: only those the app computed (change_pct), as given or rounded.
-    expect([...supplied.pct].sort((a, b) => a - b)).toEqual([4, 18.9, 19, 3.8].sort((a, b) => a - b));
+    // Percentages: only those the app computed (change_pct, here also the motivation block's 0% week-on-week bench
+    // change), as given or rounded.
+    expect([...supplied.pct].sort((a, b) => a - b)).toEqual([0, 4, 18.9, 19, 3.8].sort((a, b) => a - b));
     expect(supplied.all.has(157.5)).toBe(true);
     expect(supplied.all.has(9999)).toBe(false);
   });
 
   const out = (o: Partial<OverviewOutput>) =>
-    OverviewOutput.parse({ summary_fa: "روند خوب است.", trends: [], volume_fa: null, consistency_fa: null, focus_next: [], warnings: [], ...o });
+    OverviewOutput.parse({ summary_fa: "روند خوب است.", trends: [], volume_fa: null, consistency_fa: null, focus_next: [], warnings: [], motivation_fa: null, ...o });
 
   it("keeps prose with the app's numbers and drops prose with others", () => {
     const r = normalizeOverview(

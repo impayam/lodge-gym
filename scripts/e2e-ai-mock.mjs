@@ -3,10 +3,43 @@
 //   session report:    a short Persian report that names the extra exercises and copies the volume rows given
 //   plan advice:       "add" the first candidate not in the plan, at position 2
 //   training overview: Persian prose using only the input's numbers, plus one warning with a number the input lacks
-//                      (the app must drop it)
+//                      (the app must drop it), and the weekly motivational line from the motivation block
 // Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth and read
 // GET /__calls (the count, the last call and the last call of each kind).
 import { createServer } from "node:http";
+
+/**
+ * The weekly motivational line as the prompt asks for it, from the input's motivation block only: each reported week's
+ * sessions done and planned; on a bad week, plainly so and one next step; otherwise a record or a main-lift gain.
+ */
+export function motivationLine(m) {
+  if (!m) return null;
+  const weeks = m.cover.map((k) => {
+    const w = m[k];
+    const label = k === "last_week" ? "هفتهٔ گذشته" : m.phase === "end" ? "این هفته" : "این هفته تا امروز";
+    return `${label} ${w.sessions_done} جلسه از ${w.sessions_planned} جلسهٔ برنامه انجام شد`;
+  });
+  if (m.cover.some((k) => m[k].bad)) return `${weeks.join("؛ ")}، یعنی کمتر از نصف برنامه. قدم بعدی: ${m.next_session ?? "جلسهٔ بعدی برنامه"} را در اولین فرصت انجام بده.`;
+  const week = m.phase === "start" ? m.last_week : m.this_week;
+  const record = (m.phase === "start" && m.today_session?.records[0]) || week.records[0];
+  const gain = week.main_lifts.find((l) => l.change_pct != null && l.change_pct > 0);
+  const extra = record ? `، با رکورد تازه در ${record.name} (${record.weight}×${record.reps})` : gain ? `، و ${gain.name} ${gain.change_pct}٪ بهتر از هفتهٔ قبل` : "";
+  const today = m.phase === "start" && m.today_session ? ` امروز هفته با ${m.today_session.day} و ${m.today_session.sets_done} ست شروع شد.` : "";
+  return `${weeks.join("؛ ")}${extra}.${today}`;
+}
+
+/** The training overview reply: Persian prose using only the input's numbers, plus one warning with a number the input lacks (dropped by the app). */
+export function overviewReply(input) {
+  return {
+    summary_fa: `در ${input.window.weeks} هفتهٔ اخیر ${input.totals.sessions_done} جلسه از ${input.totals.sessions_planned} جلسهٔ برنامه انجام شد و روند کلی خوب است.`,
+    trends: input.lifts.filter((l) => l.change_pct != null).map((l) => `${l.name}: ${l.change_pct}٪ تغییر در این بازه.`),
+    volume_fa: "سینه اولویت توست؛ حجم آن را با هدف هفتگی هماهنگ نگه دار.",
+    consistency_fa: "جلسه‌ها را طبق برنامه ادامه بده.",
+    focus_next: ["روی حرکت‌های سینه با فرم درست تمرکز کن."],
+    warnings: ["۹۹۹۹ ست اضافه بزن."],
+    motivation_fa: motivationLine(input.motivation),
+  };
+}
 
 export function startAiMock(port) {
   const mode = { report: "ok", advice: "ok", overview: "ok" };
@@ -50,15 +83,7 @@ export function startAiMock(port) {
     };
   };
 
-  const overview = (input) => ({
-    summary_fa: `در ${input.window.weeks} هفتهٔ اخیر ${input.totals.sessions_done} جلسه از ${input.totals.sessions_planned} جلسهٔ برنامه انجام شد و روند کلی خوب است.`,
-    trends: input.lifts.filter((l) => l.change_pct != null).map((l) => `${l.name}: ${l.change_pct}٪ تغییر در این بازه.`),
-    volume_fa: "سینه اولویت توست؛ حجم آن را با هدف هفتگی هماهنگ نگه دار.",
-    consistency_fa: "جلسه‌ها را طبق برنامه ادامه بده.",
-    focus_next: ["روی حرکت‌های سینه با فرم درست تمرکز کن."],
-    // A number the input does not have: the app drops this item.
-    warnings: ["۹۹۹۹ ست اضافه بزن."],
-  });
+  const overview = overviewReply;
 
   const server = createServer((req, res) => {
     const url = new URL(req.url, `http://localhost:${port}`);
