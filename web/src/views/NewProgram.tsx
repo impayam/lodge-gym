@@ -39,6 +39,7 @@ import { activeProgramInfo, activeSession, programName, recentSwitch } from "../
 import { IconSearch } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
+import { LoadError, Loading } from "../components/States";
 import { allExercises, flash, generateProposal, loadLibrary, loadProgramVersions, navigate, saveProgramDraft, switchProgram, useStore } from "../store";
 import { EquipmentIcon, equipmentLabel } from "./Library";
 import { rirText, targetText } from "./Program";
@@ -86,11 +87,17 @@ export function NewProgram() {
   const [msg, setMsg] = useState("");
   const [swapAt, setSwapAt] = useState<{ day: number; index: number } | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Opening a saved draft: loading, or why it failed (with Retry).
+  const [draftLoading, setDraftLoading] = useState(Boolean(programId));
+  const [draftFailure, setDraftFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
 
   useEffect(() => {
     void loadLibrary();
     if (!programId) return;
     setBusy(true);
+    setDraftLoading(true);
+    setDraftFailure(null);
     loadProgramVersions()
       .then((list) => {
         const p = list.find((x) => x.id === programId);
@@ -99,9 +106,12 @@ export function NewProgram() {
         setParams(p.params);
         setDays(p.days.map((d) => ({ exercises: d.exercises.map((x) => toEdited({ ...x, slot: x.slot ?? "accessory" })) })));
       })
-      .catch((e) => setMsg(errorText(e)))
-      .finally(() => setBusy(false));
-  }, [programId]);
+      .catch((e) => setDraftFailure(e))
+      .finally(() => {
+        setBusy(false);
+        setDraftLoading(false);
+      });
+  }, [programId, round]);
 
   const exMap = allExercises();
   let plan: Plan | null = null;
@@ -181,7 +191,13 @@ export function NewProgram() {
     return (
       <main class="page" data-testid="new-program-screen">
         <ScreenHead title="New program" sub="Settings" onBack={() => navigate("settings")} />
-        <Inputs input={input} setInput={setInput} exMap={exMap} />
+        {draftFailure !== null ? (
+          <LoadError what="Couldn't open this draft." error={draftFailure} onRetry={() => setRound((n) => n + 1)} />
+        ) : draftLoading ? (
+          <Loading label="Opening the draft" heights={[220, 160]} />
+        ) : (
+          <Inputs input={input} setInput={setInput} exMap={exMap} />
+        )}
         {msg ? (
           <p class="callout l-m0 ex-card__meta" data-bad="true" role="alert">
             <b class="t-orange">{msg}</b>
@@ -191,7 +207,7 @@ export function NewProgram() {
           type="button"
           class="clay press btn-lg t-pink"
           data-testid="np-generate"
-          disabled={busy || !resolveStyle(input.style, input.days_per_week) || (input.style === "strength" && input.equipment !== "full_gym")}
+          disabled={busy || draftFailure !== null || !resolveStyle(input.style, input.days_per_week) || (input.style === "strength" && input.equipment !== "full_gym")}
           onClick={() => void generate({ ...input, seed: newSeed() })}
         >
           {busy ? "Working…" : "Make a proposal"}

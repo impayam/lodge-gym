@@ -12,6 +12,7 @@ import { addDays } from "../../../worker/lib/time";
 import type { Photo } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
 import { Columns } from "../components/Columns";
+import { Empty, LoadError, Loading } from "../components/States";
 import { MUSCLE_NAME, MuscleMap } from "../components/MuscleMap";
 import { IconBack, IconChevron } from "../components/PulseIcons";
 import { TimeChart, type ChartSeries, type Pick as ChartPick } from "../components/TimeChart";
@@ -22,7 +23,7 @@ import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWin
 import * as ldb from "../localdb";
 import { daysPerWeek } from "../model";
 import { fetchFile, reportCard, shareOrDownload } from "../share";
-import { loadAllHistory, photoSrc, today, useStore } from "../store";
+import { getState, loadAllHistory, photoSrc, today, useStore } from "../store";
 import { SessionReportsList, TrainingOverviewCard } from "./Overview";
 import { poseLabel } from "./Photos";
 
@@ -30,20 +31,22 @@ type Week = ReturnType<typeof weeklyReport>;
 type Month = ReturnType<typeof monthlyReport>;
 type Progress = ReturnType<typeof progressReport>;
 
-/** Loads a report, caching it for offline use. */
+/** Loads a report, caching it for offline use; `retry` loads it again after a failure. */
 function useReport<T>(path: string): {
   data: T | null;
-  err: string;
+  error: unknown;
   offline: boolean;
+  retry: () => void;
 } {
   const [data, setData] = useState<T | null>(null);
-  const [err, setErr] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const [offline, setOffline] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
-    setErr("");
+    setError(null);
     void (async () => {
-      const cached = await ldb.kvGet<T>(`report:${path}`);
+      const cached = await ldb.kvGet<T>(`report:${path}`).catch(() => undefined);
       if (cached && alive) setData(cached);
       try {
         const fresh = await api<T>("GET", path);
@@ -55,19 +58,20 @@ function useReport<T>(path: string): {
       } catch (e) {
         if (!alive) return;
         if (cached) setOffline(true);
-        else setErr(errorText(e));
+        else setError(e);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [path]);
-  return { data, err, offline };
+  }, [path, attempt]);
+  return { data, error, offline, retry: () => setAttempt((n) => n + 1) };
 }
 
-/** The phone keeps 60 days of sessions; longer charts load the rest once (online). */
-let history: Promise<void> | null = null;
-const ensureHistory = () => (history ??= loadAllHistory());
+/** The phone keeps 60 days of sessions; longer charts load the rest once (after a failure, Retry loads it). */
+const ensureHistory = () => {
+  if (!getState().loads.history) void loadAllHistory();
+};
 
 const signed = (n: number | null, suffix = "") => (n == null ? "–" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmtNum(Math.abs(n), 1)}${suffix}`);
 const setText = (s: { weight: number; reps: number } | null) => (s ? `${fmtNum(s.weight, 1)}×${fmtNum(s.reps)}` : "–");
@@ -129,17 +133,14 @@ function PeriodNav({ label, prev, next, unit, canNext }: { label: string; prev: 
   );
 }
 
-/** Loading (skeleton in card shape), or what failed. */
-function Pending({ err }: { err: string }) {
-  return err ? (
-    <p class="state card" role="alert">
-      {err}
-    </p>
+/** Loading (skeleton in card shape), or what failed with Retry. */
+function Pending({ error, what, onRetry }: { error: unknown; what: string; onRetry: () => void }) {
+  return error ? (
+    <section class="card">
+      <LoadError what={`Couldn't load ${what}.`} error={error} onRetry={onRetry} />
+    </section>
   ) : (
-    <div class="l-col l-gap-12" aria-label="Loading the report">
-      <span class="skeleton" style={{ height: "84px" }} />
-      <span class="skeleton" style={{ height: "220px" }} />
-    </div>
+    <Loading label="Loading the report" heights={[84, 220]} />
   );
 }
 
@@ -147,11 +148,13 @@ function Pending({ err }: { err: string }) {
 function E1rmCard({ period, end }: { period: Period; end: string }) {
   const sessions = useStore((s) => s.sessions);
   const unit = useStore((s) => s.boot!.settings.unit);
+  const older = useStore((s) => s.loads.history);
   const all = Object.values(sessions);
   const first = all.filter((s) => s.status === "done").reduce<string | null>((m, s) => (m === null || s.local_date < m ? s.local_date : m), null);
   const from = chartFrom(period, end, first);
+  const needsOlder = from < addDays(today(), -59) || period === "all";
   useEffect(() => {
-    if (from < addDays(today(), -59) || period === "all") void ensureHistory();
+    if (needsOlder) ensureHistory();
   }, [from, period]);
   const series: ChartSeries[] = CHART_LIFTS.map((l) => ({
     label: liftName(l.id),
@@ -166,9 +169,12 @@ function E1rmCard({ period, end }: { period: Period; end: string }) {
     <Card title="Estimated 1RM" sub={`${unit}, ${window}`} testid="e1rm-trend">
       {series.length ? (
         <TimeChart series={series} height={170} yAxis label={`Estimated 1RM in ${unit}, ${window}; latest ${latest}`} unit={unit} />
-      ) : (
-        <p class="state l-m0">No bench press, squat or deadlift logged in this period.</p>
+      ) : needsOlder && older?.status !== "done" && older?.status !== "error" ? (
+        <Loading label="Loading older sessions" heights={[170]} />
+      ) : older?.status === "error" && needsOlder ? null : (
+        <Empty>No bench press, squat or deadlift logged in this period.</Empty>
       )}
+      {needsOlder && older?.status === "error" ? <LoadError what="Couldn't load sessions older than 60 days." error={older.error} onRetry={() => void loadAllHistory()} /> : null}
     </Card>
   );
 }
@@ -425,7 +431,7 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
   const [anchor, setAnchor] = useState(today());
   const ws = useStore((s) => s.boot!.settings.week_start);
   const range = weekRange(anchor, ws);
-  const { data: r, err, offline } = useReport<Week>(`/reports/week?start=${range.start}`);
+  const { data: r, error, offline, retry } = useReport<Week>(`/reports/week?start=${range.start}`);
   const nav = (
     <PeriodNav
       unit="week"
@@ -439,7 +445,7 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
     return (
       <>
         {nav}
-        <Pending err={err} />
+        <Pending error={error} what="this week's report" onRetry={retry} />
         {reports}
       </>
     );
@@ -606,7 +612,7 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
   const [key, setKey] = useState(monthKeyOf(today()));
   const ws = useStore((s) => s.boot!.settings.week_start);
   const target = useStore((s) => daysPerWeek(s.boot!));
-  const { data: r, err, offline } = useReport<Month>(`/reports/month?month=${key}`);
+  const { data: r, error, offline, retry } = useReport<Month>(`/reports/month?month=${key}`);
   const current = monthKeyOf(today());
   const range = monthRange(key);
   const nav = <PeriodNav unit="month" label={monthLabel(`${key}-01`)} prev={() => setKey(shiftMonth(key, -1))} next={() => setKey(shiftMonth(key, 1))} canNext={key < current} />;
@@ -614,7 +620,7 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
     return (
       <>
         {nav}
-        <Pending err={err} />
+        <Pending error={error} what="this month's report" onRetry={retry} />
         {reports}
       </>
     );
@@ -750,13 +756,13 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
 /* ---------------- All ---------------- */
 
 function AllView({ reports }: { reports: ComponentChildren }) {
-  const { data: r, err, offline } = useReport<Progress>("/reports/progress");
+  const { data: r, error, offline, retry } = useReport<Progress>("/reports/progress");
   const ws = useStore((s) => s.boot!.settings.week_start);
   const [scope, setScope] = useState<"since" | "last4">("since");
   if (!r)
     return (
       <>
-        <Pending err={err} />
+        <Pending error={error} what="your progress report" onRetry={retry} />
         {reports}
       </>
     );

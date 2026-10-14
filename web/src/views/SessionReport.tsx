@@ -10,6 +10,7 @@ import { fetchReport, lastReport, requestReport, sessionUnsynced, unavailableRea
 import { ApiError, errorText, NetworkError } from "../api";
 import { STATUS_ICON, STATUS_NAME } from "../components/MuscleMap";
 import { IconBack } from "../components/PulseIcons";
+import { LoadError } from "../components/States";
 import { SyncStatus } from "../components/SyncStatus";
 import { dateLong, fmtNum, hm, instantShort } from "../format";
 import { dayTitle } from "../lib/lifts";
@@ -36,6 +37,7 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [round, setRound] = useState(0);
+  const [failure, setFailure] = useState<unknown>(null);
   const grace = useRef(0);
 
   useEffect(() => {
@@ -67,7 +69,10 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
       } catch (e) {
         if (stop) return;
         if (e instanceof ApiError && e.status === 404) setPhase("unsynced");
-        else setPhase((p) => (p === "ready" ? p : "offline"));
+        else {
+          setFailure(e);
+          setPhase((p) => (p === "ready" ? p : "offline"));
+        }
       }
     };
     void run();
@@ -124,7 +129,7 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
           <span class="skeleton skeleton--line" />
         </div>
       ) : null}
-      {phase === "offline" ? <p class="state l-m0">The report needs a connection.</p> : null}
+      {phase === "offline" ? <LoadError what="Couldn't load the report." error={failure} onRetry={() => setRound((n) => n + 1)} /> : null}
       {phase === "none" ? (
         <>
           <p class="state l-m0">No report for this session yet.</p>

@@ -27,6 +27,10 @@ export interface SyncState {
   lastSync: string | null;
 }
 
+/** A server load that screens wait on (SPEC-v8 §7 states): running, failed with its error, or done in this run. */
+export type Load = { status: "loading" } | { status: "error"; error: unknown } | { status: "done" };
+export type LoadName = "history" | "photos" | "library";
+
 export interface State {
   auth: AuthState;
   boot: BootData | null;
@@ -59,6 +63,8 @@ export interface State {
   library: Exercise[] | null;
   /** Session plans (SPEC-v3 M9c) by id: open plans and the plans of recent sessions. */
   plans: Record<string, SessionPlan>;
+  /** The full history, the photo list and the library: absent until first asked for. */
+  loads: Partial<Record<LoadName, Load>>;
 }
 
 let state: State = {
@@ -74,6 +80,7 @@ let state: State = {
   pendingPhotos: {},
   library: null,
   plans: {},
+  loads: {},
 };
 
 const listeners = new Set<() => void>();
@@ -282,14 +289,29 @@ async function mergeServerPlans(server: SessionPlan[]) {
   setState({ plans: next });
 }
 
-/** Loads the full history (all dates) when online. */
-export async function loadAllHistory() {
+/**
+ * Runs a server load and records its state for the screens; a 401 goes to sign-in. Once a load has worked in this run,
+ * later ones refresh quietly: the screens keep what they have.
+ */
+async function tracked(name: LoadName, run: () => Promise<void>) {
+  const refresh = state.loads[name]?.status === "done";
+  if (!refresh) setState((s) => ({ loads: { ...s.loads, [name]: { status: "loading" } } }));
+  let next: Load = { status: "done" };
   try {
-    const r = await api<{ sessions: WorkoutSession[] }>("GET", "/sessions");
-    await mergeServerSessions(r.sessions, null);
+    await run();
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
+    if (!refresh) next = { status: "error", error: e };
   }
+  setState((s) => ({ loads: { ...s.loads, [name]: next } }));
+}
+
+/** Loads the full history (all dates); the last 60 days come with /bootstrap. */
+export function loadAllHistory() {
+  return tracked("history", async () => {
+    const r = await api<{ sessions: WorkoutSession[] }>("GET", "/sessions");
+    await mergeServerSessions(r.sessions, null);
+  });
 }
 
 /* ---------------- writes ---------------- */
@@ -425,8 +447,8 @@ function sortPhotos(list: Photo[]) {
 }
 
 /** Loads the photo list from the server (keeps photos still waiting for upload). */
-export async function loadPhotos() {
-  try {
+export function loadPhotos() {
+  return tracked("photos", async () => {
     const r = await api<{ photos: Photo[] }>("GET", "/photos");
     const deleting = new Set((await ldb.outboxAll()).filter((e) => e.op === "delete_photo").map((e) => (e as { id: string }).id));
     const server = r.photos.filter((p) => !deleting.has(p.id));
@@ -434,9 +456,7 @@ export async function loadPhotos() {
     const ids = new Set(server.map((p) => p.id));
     const pending = state.photos.filter((p) => state.pendingPhotos[p.id] && !ids.has(p.id));
     setState({ photos: sortPhotos([...pending, ...server]) });
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
-  }
+  });
 }
 
 function photoUploaded(id: string) {
@@ -492,14 +512,12 @@ export const photoSrc = (p: Photo, size: "thumb" | "full") => state.pendingPhoto
 /* ---------------- exercise library (SPEC-v2 §7) ---------------- */
 
 /** Loads the library list; the cached copy serves offline. */
-export async function loadLibrary() {
-  try {
+export function loadLibrary() {
+  return tracked("library", async () => {
     const r = await api<{ exercises: Exercise[] }>("GET", "/exercises");
     await ldb.kvSet("library", r.exercises);
     setState({ library: r.exercises });
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
-  }
+  });
 }
 
 /** Every exercise the app knows: the cached library plus the bootstrap set (program, history, custom). */

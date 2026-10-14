@@ -8,6 +8,7 @@ import { dateLong, dateShort, fmtNum } from "../format";
 import { IconCamera } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { SyncStatus } from "../components/SyncStatus";
+import { Empty, isOffline, LoadError, Loading } from "../components/States";
 import { addPhoto, deletePhoto, loadPhotos, photoSrc, today, useStore } from "../store";
 
 export const POSES: [Pose, string][] = [
@@ -182,6 +183,7 @@ export function Photos({ compare = false, open: openFirst }: { compare?: boolean
   const [comparing, setComparing] = useState(compare);
   const [picked, setPicked] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(openFirst ?? null);
+  const load = useStore((s) => s.loads.photos);
   useEffect(() => {
     void loadPhotos();
   }, []);
@@ -257,7 +259,16 @@ export function Photos({ compare = false, open: openFirst }: { compare?: boolean
           </button>
         ))}
       </div>
-      {!shown.length ? <p class="state l-m0">No photos yet. After each session you can take a front, side and back photo.</p> : null}
+      {photos.length && load?.status === "error" ? <p class="caption l-m0">{isOffline(load.error) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
+      {shown.length ? null : photos.length ? (
+        <Empty action={{ label: "Show all poses", onClick: () => setFilter("all"), testId: "photos-all-poses" }}>No {poseLabel(filter as Pose).toLowerCase()} photos yet.</Empty>
+      ) : load?.status === "error" ? (
+        <LoadError what="Couldn't load your photos." error={load.error} onRetry={() => void loadPhotos()} />
+      ) : load?.status !== "done" ? (
+        <Loading label="Loading your photos" heights={[150, 150]} />
+      ) : (
+        <Empty>No photos yet. After each session you can take a front, side and back photo.</Empty>
+      )}
       {[...groups].map(([date, list]) => (
         <section class="l-col l-gap-8" aria-label={dateLong(date)}>
           <h2 class="section-label num">{dateLong(date)}</h2>

@@ -9,6 +9,7 @@ import { dateLong, dateShort, hm } from "../format";
 import { dayInfo, sortedSessions } from "../model";
 import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
+import { Empty, LoadError, Loading } from "../components/States";
 import { navigate, upsertWatch, useStore } from "../store";
 
 interface TokenRow {
@@ -77,6 +78,8 @@ export function Watch() {
   const [fresh, setFresh] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [err, setErr] = useState("");
+  // Loading the tokens and the status failed (actions report their own errors in `err`).
+  const [failure, setFailure] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
   const [pick, setPick] = useState<Record<string, string>>({});
@@ -84,13 +87,14 @@ export function Watch() {
 
   const load = async () => {
     setErr("");
+    setFailure(null);
     try {
       const [t, s] = await Promise.all([api<{ tokens: TokenRow[] }>("GET", "/tokens"), api<Status>("GET", "/health/status")]);
       setTokens(t.tokens);
       setStatus(s);
       await upsertWatch(s.workouts.filter((w) => w.matched_session_id));
     } catch (e) {
-      setErr(errorText(e));
+      setFailure(e);
     }
   };
   useEffect(() => {
@@ -182,8 +186,12 @@ export function Watch() {
             ))}
           </div>
         ) : tokens ? (
-          <p class="state l-m0">You haven't created a token yet.</p>
-        ) : null}
+          <Empty>You haven't created a token yet.</Empty>
+        ) : failure !== null ? (
+          <LoadError what="Couldn't load your shortcut tokens." error={failure} onRetry={() => void load()} />
+        ) : (
+          <Loading label="Loading your shortcut tokens" heights={[56]} />
+        )}
         <button type="button" class="clay press btn t-pink" disabled={busy} onClick={() => void create()}>
           Create new token
         </button>
@@ -301,12 +309,18 @@ export function Watch() {
 
       {step(5, "Status")}
       <section class="card l-col l-gap-10" data-testid="watch-status" aria-label="Status">
-        <div class="list-row">
-          <span class="list-row__text ex-card__meta">Last received</span>
-          <span class="list-row__value" data-testid="last-received">
-            {status?.last_received_at ? `${dateLong(localDate(tz, status.last_received_at))} · ${hm(status.last_received_at, tz)}` : "Nothing yet"}
-          </span>
-        </div>
+        {status ? (
+          <div class="list-row">
+            <span class="list-row__text ex-card__meta">Last received</span>
+            <span class="list-row__value" data-testid="last-received">
+              {status.last_received_at ? `${dateLong(localDate(tz, status.last_received_at))} · ${hm(status.last_received_at, tz)}` : "Nothing yet"}
+            </span>
+          </div>
+        ) : failure !== null ? (
+          <LoadError what="Couldn't load the watch status." error={failure} onRetry={() => void load()} />
+        ) : (
+          <Loading label="Loading the watch status" heights={[44]} />
+        )}
         {status?.last_result ? (
           <div class="l-col l-gap-6 ex-card__meta num">
             <span>
@@ -319,14 +333,17 @@ export function Watch() {
             ))}
           </div>
         ) : null}
-        <button type="button" class="clay press btn t-muted" onClick={() => void load()}>
-          Check again
-        </button>
+        {status ? (
+          <button type="button" class="clay press btn t-muted" onClick={() => void load()}>
+            Check again
+          </button>
+        ) : null}
       </section>
 
       <h2 class="section-label">Last 10 watch records</h2>
       <div class="l-col l-gap-8" data-testid="watch-list">
-        {status && !status.workouts.length ? <p class="state l-m0">No watch data has arrived for your sessions yet.</p> : null}
+        {status && !status.workouts.length ? <Empty>No watch data has arrived for your sessions yet.</Empty> : null}
+        {!status && failure === null ? <Loading label="Loading the watch records" heights={[96]} /> : null}
         {status?.workouts.map((w) => {
           const s = w.matched_session_id ? sessions[w.matched_session_id] : null;
           const d = localDate(tz, w.started_at);

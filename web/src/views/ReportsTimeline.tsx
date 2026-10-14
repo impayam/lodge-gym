@@ -11,13 +11,14 @@ import type { OverviewView } from "../../../worker/lib/ai/overview";
 import type { WeeklyReview } from "../../../worker/lib/types";
 import { addDays } from "../../../worker/lib/time";
 import { cachedReviews, cachedSavedOverview, cachedTimeline, fetchReport, fetchReviews, fetchSavedOverview, fetchTimeline, lastReport } from "../ai";
-import { ApiError, NetworkError } from "../api";
+import { ApiError } from "../api";
 import { dateLong, dateShort, dayMonth, hm, instantShort, monthLabel, plural } from "../format";
 import * as ldb from "../localdb";
 import type { BootData } from "../localdb";
 import { dayInfo } from "../model";
-import { navigate, openSaved, setState, useStore } from "../store";
+import { goBack, navigate, openSaved, setState, useStore } from "../store";
 import { IconBack, IconChevron } from "../components/PulseIcons";
+import { Empty, isOffline, LoadError } from "../components/States";
 import { OverviewBody } from "./Overview";
 import { WeeklyReviewCard } from "./Review";
 import { ReportBody } from "./SessionReport";
@@ -55,7 +56,8 @@ export function ReportsTimeline() {
   const online = useStore((s) => s.sync.online);
   const syncPending = useStore((s) => s.sync.pending);
   const [items, setItems] = useState<TimelineItem[] | null>(null);
-  const [offline, setOffline] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
   const [mode, setMode] = useState<"timeline" | "list">("timeline");
   const [sel, setSel] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -74,19 +76,19 @@ export function ReportsTimeline() {
         const r = await fetchTimeline();
         if (stop) return;
         setItems(r);
-        setOffline(false);
+        setFailure(null);
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) return setState({ auth: "login" });
         const cached = await cachedTimeline();
         if (stop) return;
         setItems((cur) => cur ?? cached ?? null);
-        setOffline(true);
+        setFailure(e);
       }
     })();
     return () => {
       stop = true;
     };
-  }, [online, syncPending]);
+  }, [online, syncPending, round]);
 
   const dates = items ? timelineDates(items) : [];
   const columns = [...dates].reverse();
@@ -125,15 +127,15 @@ export function ReportsTimeline() {
           </span>
         ) : null}
       </div>
-      {offline && items ? <p class="caption l-m0">Offline: showing the last saved copy.</p> : null}
+      {failure !== null && items ? <p class="caption l-m0">{isOffline(failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
       {!items ? (
-        offline ? (
-          <p class="state l-m0">The reports timeline needs a connection.</p>
+        failure !== null ? (
+          <LoadError what="Couldn't load the reports timeline." error={failure} onRetry={() => setRound((n) => n + 1)} />
         ) : (
           <span class="skeleton" style={{ height: "120px" }} aria-label="Loading the reports timeline" />
         )
       ) : !items.length ? (
-        <p class="state l-m0">No saved reports yet. Session reports, training overviews and weekly reviews show up here.</p>
+        <Empty>No saved reports yet. Session reports, training overviews and weekly reviews show up here.</Empty>
       ) : mode === "timeline" ? (
         <>
           <div class="timeline">
@@ -211,34 +213,35 @@ export function ReportsTimeline() {
   );
 }
 
-type Load<T> = { state: "loading" } | { state: "ok"; data: T; offline: boolean } | { state: "gone" } | { state: "offline" };
+type Load<T> = { state: "loading" } | { state: "ok"; data: T; failure: unknown } | { state: "gone" } | { state: "failed"; error: unknown };
 
-/** Loads a saved report: the device's copy first, then the server's. */
-function useSaved<T>(cached: () => Promise<T | null | undefined> | T | null | undefined, fresh: () => Promise<T | null>): Load<T> {
+/** Loads a saved report: the device's copy first, then the server's; `retry` asks the server again. */
+function useSaved<T>(cached: () => Promise<T | null | undefined> | T | null | undefined, fresh: () => Promise<T | null>): { load: Load<T>; retry: () => void } {
   const [load, setLoad] = useState<Load<T>>({ state: "loading" });
+  const [round, setRound] = useState(0);
   useEffect(() => {
     let stop = false;
+    setLoad((cur) => (cur.state === "failed" ? { state: "loading" } : cur));
     void (async () => {
       const c = (await cached()) ?? null;
-      if (c && !stop) setLoad({ state: "ok", data: c, offline: false });
+      if (c && !stop) setLoad({ state: "ok", data: c, failure: null });
       try {
         const f = await fresh();
-        if (!stop) setLoad(f ? { state: "ok", data: f, offline: false } : { state: "gone" });
+        if (!stop) setLoad(f ? { state: "ok", data: f, failure: null } : { state: "gone" });
       } catch (e) {
         if (stop) return;
         if (e instanceof ApiError && e.status === 404) setLoad({ state: "gone" });
-        else if (e instanceof NetworkError || !(e instanceof ApiError)) setLoad(c ? { state: "ok", data: c, offline: true } : { state: "offline" });
-        else setLoad({ state: "gone" });
+        else setLoad(c ? { state: "ok", data: c, failure: e } : { state: "failed", error: e });
       }
     })();
     return () => {
       stop = true;
     };
-  }, []);
-  return load;
+  }, [round]);
+  return { load, retry: () => setRound((n) => n + 1) };
 }
 
-function Status({ load }: { load: Load<unknown> }) {
+function Status({ load, retry }: { load: Load<unknown>; retry: () => void }) {
   if (load.state === "loading")
     return (
       <div class="card l-col l-gap-8" aria-label="Loading the saved report">
@@ -246,9 +249,15 @@ function Status({ load }: { load: Load<unknown> }) {
         <span class="skeleton skeleton--line" />
       </div>
     );
-  if (load.state === "offline") return <p class="state l-m0">Opening a saved report needs a connection.</p>;
-  if (load.state === "gone") return <p class="state l-m0">This report is no longer available.</p>;
-  return load.offline ? <p class="caption l-m0">Offline: showing the last saved copy.</p> : null;
+  if (load.state === "failed")
+    return (
+      <section class="card">
+        <LoadError what="Couldn't open this report." error={load.error} onRetry={retry} />
+      </section>
+    );
+  if (load.state === "gone")
+    return <Empty action={{ label: "Back to History", onClick: goBack, testId: "saved-gone-back" }}>This report is no longer available.</Empty>;
+  return load.failure !== null ? <p class="caption l-m0">{isOffline(load.failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null;
 }
 
 /** The screen: one saved report, read-only, opened from the History timeline. */
@@ -280,7 +289,7 @@ const Written = ({ at, model, tz }: { at: string; model: string; tz: string }) =
 );
 
 function SavedSession({ id, tz }: { id: string; tz: string }) {
-  const load = useSaved<ReportView>(
+  const { load, retry } = useSaved<ReportView>(
     () => (lastReport(id)?.report?.status === "ok" ? lastReport(id)!.report : null),
     async () => {
       const r = await fetchReport(id);
@@ -289,7 +298,7 @@ function SavedSession({ id, tz }: { id: string; tz: string }) {
   );
   return (
     <>
-      <Status load={load} />
+      <Status load={load} retry={retry} />
       {load.state === "ok" ? (
         <section class="card l-col l-gap-12" data-testid="saved-body" aria-label="Session report">
           <Written at={load.data.created_at} model={load.data.model} tz={tz} />
@@ -301,10 +310,10 @@ function SavedSession({ id, tz }: { id: string; tz: string }) {
 }
 
 function SavedOverview({ id, tz }: { id: string; tz: string }) {
-  const load = useSaved<OverviewView>(() => cachedSavedOverview(id), () => fetchSavedOverview(id));
+  const { load, retry } = useSaved<OverviewView>(() => cachedSavedOverview(id), () => fetchSavedOverview(id));
   return (
     <>
-      <Status load={load} />
+      <Status load={load} retry={retry} />
       {load.state === "ok" ? (
         <section class="card l-col l-gap-12" data-testid="saved-body" aria-label="Training overview">
           <Written at={load.data.created_at} model={load.data.model} tz={tz} />
@@ -316,13 +325,13 @@ function SavedOverview({ id, tz }: { id: string; tz: string }) {
 }
 
 function SavedReview({ id }: { id: string }) {
-  const load = useSaved<WeeklyReview>(
+  const { load, retry } = useSaved<WeeklyReview>(
     async () => (await cachedReviews())?.find((r) => r.id === id) ?? null,
     async () => (await fetchReviews()).find((r) => r.id === id) ?? null
   );
   return (
     <>
-      <Status load={load} />
+      <Status load={load} retry={retry} />
       {load.state === "ok" ? (
         <div class="l-col" data-testid="saved-body">
           <WeeklyReviewCard review={load.data} />

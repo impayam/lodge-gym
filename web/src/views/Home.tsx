@@ -6,6 +6,7 @@ import { liveItems, planMinutes, itemAsDayExercise } from "../../../worker/lib/p
 import { addDays, daysBetween } from "../../../worker/lib/time";
 import type { DayExercise, ProgramDay } from "../../../worker/lib/types";
 import { SessionCard } from "../components/SessionCard";
+import { Empty } from "../components/States";
 import { SyncStatus } from "../components/SyncStatus";
 import { TimeChart, type Pick } from "../components/TimeChart";
 import { dateShort, dayMonth, fmtNum, hm, plural } from "../format";
@@ -138,7 +139,8 @@ function Hero() {
       </div>
       <p class="caption l-m0">{why}</p>
       {m.rest ? <p class="caption l-m0 t-orange">Rest is better today. You trained yesterday and the day before; the program allows at most two training days in a row.</p> : null}
-      <NextTable exercises={items} />
+      {/* A program day always has exercises; an open plan can have none yet ("Open plan" below adds them). */}
+      {items.length ? <NextTable exercises={items} /> : <Empty>No exercises in this plan yet.</Empty>}
       {nextPlan ? (
         <button type="button" class={`clay press btn-lg t-pink l-full${glow ? " glow-once" : ""}`} data-testid="open-plan" onClick={() => openPlan(nextPlan.id)}>
           Open plan

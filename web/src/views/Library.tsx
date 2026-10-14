@@ -13,6 +13,7 @@ import { BodyPicker } from "../components/BodyPicker";
 import { Pushed } from "../components/Pushed";
 import { IconBack, IconBarbell, IconBody, IconCable, IconDumbbell, IconPlay, IconSearch } from "../components/PulseIcons";
 import { Select } from "../components/Select";
+import { Empty, LoadError, Loading } from "../components/States";
 import { TimeChart } from "../components/TimeChart";
 import { dateLong, dayMonth, fmtNum, ytLink } from "../format";
 import { BIG_THREE } from "../lib/lifts";
@@ -145,6 +146,7 @@ function matches(ex: Exercise, f: Filters): boolean {
 }
 
 const PAGE = 60;
+const NO_FILTERS: Filters = { q: "", group: "all", muscle: "", equipment: "", pattern: "" };
 
 /**
  * The searchable exercise list (mockup 05): search, muscle-group chips, the count, more filters (muscle, equipment,
@@ -165,8 +167,9 @@ export function ExerciseList({
   testId?: string;
 }) {
   const library = useStore((s) => s.library);
+  const load = useStore((s) => s.loads.library);
   const facts = useRowFacts();
-  const [f, setF] = useState<Filters>({ q: "", group: "all", muscle: "", equipment: "", pattern: "" });
+  const [f, setF] = useState<Filters>(NO_FILTERS);
   const [more, setMore] = useState(false);
   const [limit, setLimit] = useState(PAGE);
   useEffect(() => {
@@ -235,11 +238,10 @@ export function ExerciseList({
           ) : null}
         </div>
       ) : null}
-      {library === null ? (
-        <div class="l-col l-gap-8" aria-label="Loading the library">
-          <span class="skeleton" style={{ height: "76px" }} />
-          <span class="skeleton" style={{ height: "76px" }} />
-        </div>
+      {library === null && load?.status === "error" ? (
+        <LoadError what="Couldn't load the exercise library." error={load.error} onRetry={() => void loadLibrary()} />
+      ) : library === null ? (
+        <Loading label="Loading the library" />
       ) : (
         <>
           {list.slice(0, limit).map((ex, i) => (
@@ -250,7 +252,11 @@ export function ExerciseList({
               Show more
             </button>
           ) : null}
-          {!list.length ? <p class="state l-m0">No exercise matches.</p> : null}
+          {!list.length ? (
+            <Empty action={f.q.trim() || f.group !== "all" || extra ? { label: "Clear search and filters", onClick: () => set(NO_FILTERS), testId: "library-clear" } : undefined}>
+              No exercise matches.
+            </Empty>
+          ) : null}
         </>
       )}
     </div>
@@ -263,17 +269,19 @@ const setLine = (x: SetEntry, unit: string) => (x.seconds != null ? `${fmtNum(x.
 function ExerciseHistory({ ex }: { ex: Exercise }) {
   const sessions = useStore((s) => s.sessions);
   const unit = useStore((s) => s.boot!.settings.unit);
+  const older = useStore((s) => s.loads.history);
   useEffect(() => {
     void loadAllHistory();
   }, []);
+  const olderFailed = older?.status === "error" ? <LoadError what="Couldn't load sessions older than 60 days." error={older.error} onRetry={() => void loadAllHistory()} /> : null;
   const withEx = Object.values(sessions)
     .filter((s) => s.sets.some((x) => x.exercise_id === ex.id && x.done))
     .sort((a, b) => (a.local_date + a.started_at).localeCompare(b.local_date + b.started_at));
   if (!withEx.length)
     return (
-      <p class="state l-m0" data-testid="exercise-history">
-        No sets logged with this exercise yet.
-      </p>
+      <div class="l-col l-gap-12" data-testid="exercise-history">
+        {olderFailed ?? (older?.status !== "done" ? <Loading label="Loading your history with this exercise" heights={[140]} /> : <Empty>No sets logged with this exercise yet.</Empty>)}
+      </div>
     );
   const last: WorkoutSession = withEx[withEx.length - 1];
   const lastSets = last.sets.filter((x) => x.exercise_id === ex.id && x.done).sort((a, b) => a.set_index - b.set_index);
@@ -313,6 +321,7 @@ function ExerciseHistory({ ex }: { ex: Exercise }) {
           unit={unit}
         />
       ) : null}
+      {olderFailed}
     </div>
   );
 }

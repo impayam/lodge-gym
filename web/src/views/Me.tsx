@@ -5,6 +5,7 @@ import { useEffect, useState } from "preact/hooks";
 import { fetchUsage, type AiUsage } from "../ai";
 import { BodyCard } from "../components/BodyCard";
 import { IconChevron, IconDownload, IconPlanner, IconProgram, IconSettings, IconSpark } from "../components/PulseIcons";
+import { Empty, LoadError, Loading } from "../components/States";
 import { dayMonth, plural } from "../format";
 import { activeProgramInfo, homeModel, programName, trainingSince } from "../model";
 import { loadPhotos, navigate, openPhotos, photoSrc, today, useStore, type ViewName } from "../store";
@@ -28,6 +29,7 @@ function Row({ icon, tone, title, sub, onOpen, testid }: { icon: preact.JSX.Elem
 
 function PhotosCard() {
   const photos = useStore((s) => s.photos);
+  const load = useStore((s) => s.loads.photos);
   useEffect(() => {
     void loadPhotos();
   }, []);
@@ -50,8 +52,12 @@ function PhotosCard() {
             </button>
           ))}
         </div>
+      ) : load?.status === "error" ? (
+        <LoadError what="Couldn't load your photos." error={load.error} onRetry={() => void loadPhotos()} />
+      ) : load?.status !== "done" ? (
+        <Loading label="Loading your photos" heights={[96]} />
       ) : (
-        <p class="state l-m0">No photos yet. After a session you can add front, side and back photos.</p>
+        <Empty>No photos yet. After a session you can add front, side and back photos.</Empty>
       )}
       <div class="l-row l-gap-8">
         <button type="button" class="clay press btn btn--fit t-pink l-grow" data-testid="me-add-photo" onClick={() => openPhotos()}>

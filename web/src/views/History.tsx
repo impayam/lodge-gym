@@ -6,9 +6,10 @@ import { localDate } from "../../../worker/lib/time";
 import type { ProgramInfo, WorkoutSession } from "../../../worker/lib/types";
 import { errorText } from "../api";
 import { SessionCard } from "../components/SessionCard";
+import { Empty, LoadError, Loading } from "../components/States";
 import { dayMonth, instantShort, monthLabel, plural } from "../format";
 import { activeSession, programName, recentSwitch, sortedSessions, styleLabel } from "../model";
-import { flash, loadAllHistory, switchProgram, useStore } from "../store";
+import { flash, loadAllHistory, navigate, switchProgram, useStore } from "../store";
 import { ReportsTimeline } from "./ReportsTimeline";
 
 const lastStart = (p: ProgramInfo) => p.activations[p.activations.length - 1]?.started_at ?? "";
@@ -16,6 +17,8 @@ const lastStart = (p: ProgramInfo) => p.activations[p.activations.length - 1]?.s
 export function History() {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
+  // The last 60 days are on the device; older sessions come from the server.
+  const older = useStore((s) => s.loads.history);
   useEffect(() => {
     void loadAllHistory();
   }, []);
@@ -51,9 +54,14 @@ export function History() {
         </div>
       </header>
       <ReportsTimeline />
-      {!all.length ? (
-        <p class="state">No sessions yet. Finished sessions show up here.</p>
+      {all.length ? null : older?.status === "error" ? (
+        <LoadError what="Couldn't load your sessions." error={older.error} onRetry={() => void loadAllHistory()} />
+      ) : older?.status !== "done" ? (
+        <Loading label="Loading your sessions" heights={[132, 132]} />
       ) : (
+        <Empty action={{ label: "Go to Train", onClick: () => navigate("home"), testId: "history-empty-train" }}>No sessions yet. Finished sessions show up here.</Empty>
+      )}
+      {all.length ? (
         groups.map((g) => (
           <section class="l-col l-gap-12" data-testid="history-group" data-program={g.key} aria-label={`${g.title}, ${plural(g.list.length, "session")}`}>
             {/* The program is named when there are several, or when these sessions belong to an earlier one. */}
@@ -72,7 +80,9 @@ export function History() {
             ))}
           </section>
         ))
-      )}
+      ) : null}
+      {all.length && older?.status === "loading" ? <Loading label="Loading older sessions" heights={[132]} /> : null}
+      {all.length && older?.status === "error" ? <LoadError what="Couldn't load sessions older than 60 days." error={older.error} onRetry={() => void loadAllHistory()} /> : null}
       {programs.length ? <Timeline programs={ordered} /> : null}
     </main>
   );

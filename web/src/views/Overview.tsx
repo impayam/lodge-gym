@@ -8,6 +8,7 @@ import type { OverviewView, StoredMotivation } from "../../../worker/lib/ai/over
 import { cachedOverview, cachedSessionReports, fetchOverview, fetchSessionReports, requestOverview, unavailableReason, type OverviewResponse, type SessionReportItem } from "../ai";
 import { errorText, NetworkError } from "../api";
 import { IconChevron } from "../components/PulseIcons";
+import { Empty, isOffline, LoadError } from "../components/States";
 import { dateShort, dayMonth, fmtNum, hm, instantShort } from "../format";
 import { dayTitle } from "../lib/lifts";
 import { dayInfo, sortedSessions } from "../model";
@@ -28,7 +29,9 @@ export function TrainingOverviewCard() {
   const tz = useStore((s) => s.boot!.settings.timezone);
   const lastDone = useStore((s) => sortedSessions(s.sessions).find((x) => x.status === "done" && x.ended_at) ?? null);
   const [res, setRes] = useState<OverviewResponse | null>(null);
-  const [offline, setOffline] = useState(false);
+  // The last fetch failed (offline, or the server answered with an error): the error, shown with Retry.
+  const [failure, setFailure] = useState<unknown>(null);
+  const offline = failure !== null;
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [round, setRound] = useState(0);
@@ -47,18 +50,18 @@ export function TrainingOverviewCard() {
         const r = await fetchOverview();
         if (stop) return;
         setRes(r);
-        setOffline(false);
+        setFailure(null);
         if (r.pending) return again();
         // The last finished session is newer than anything written since: its update may not be queued yet.
         const ended = lastDone?.ended_at ?? "";
         const newest = [r.overview?.created_at ?? "", r.failed?.created_at ?? ""].sort().at(-1)!;
         if (ended && ended > newest && Date.now() - Date.parse(ended) < FRESH_MS && syncPending === 0 && grace.current++ < GRACE_POLLS) again();
-      } catch {
+      } catch (e) {
         if (stop) return;
         const cached = await cachedOverview();
         if (stop) return;
         if (cached) setRes((cur) => cur ?? cached);
-        setOffline(true);
+        setFailure(e);
       }
     };
     void run();
@@ -99,10 +102,10 @@ export function TrainingOverviewCard() {
           </span>
         ) : null}
       </div>
-      {offline && res ? <p class="caption l-m0">Offline: showing the last saved copy.</p> : null}
+      {offline && res ? <p class="caption l-m0">{isOffline(failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
       {!res ? (
         offline ? (
-          <p class="state l-m0">The training overview needs a connection.</p>
+          <LoadError what="Couldn't load the training overview." error={failure} onRetry={() => setRound((n) => n + 1)} />
         ) : (
           <div class="l-col l-gap-8" aria-label="Loading the training overview">
             <span class="skeleton skeleton--line" />
@@ -261,7 +264,8 @@ export function SessionReportsList() {
   const syncPending = useStore((s) => s.sync.pending);
   const online = useStore((s) => s.sync.online);
   const [list, setList] = useState<SessionReportItem[] | null>(null);
-  const [offline, setOffline] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
   const [all, setAll] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
 
@@ -272,18 +276,18 @@ export function SessionReportsList() {
         const r = await fetchSessionReports();
         if (stop) return;
         setList(r);
-        setOffline(false);
-      } catch {
+        setFailure(null);
+      } catch (e) {
         const cached = await cachedSessionReports();
         if (stop) return;
         if (cached) setList((cur) => cur ?? cached);
-        setOffline(true);
+        setFailure(e);
       }
     })();
     return () => {
       stop = true;
     };
-  }, [syncPending, online]);
+  }, [syncPending, online, round]);
 
   const open = async (id: string) => {
     setOpening(id);
@@ -299,10 +303,10 @@ export function SessionReportsList() {
       <h2 class="l-sr" id="session-reports-title">
         Session reports
       </h2>
-      {offline && list ? <p class="caption">Offline: showing the last saved copy.</p> : null}
+      {failure !== null && list ? <p class="caption">{isOffline(failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
       {!list ? (
-        offline ? (
-          <p class="state">Session reports need a connection.</p>
+        failure !== null ? (
+          <LoadError what="Couldn't load the session reports." error={failure} onRetry={() => setRound((n) => n + 1)} />
         ) : (
           <div class="l-col l-gap-8" aria-label="Loading the session reports">
             <span class="skeleton skeleton--line" />
@@ -310,7 +314,7 @@ export function SessionReportsList() {
           </div>
         )
       ) : !list.length ? (
-        <p class="state">No session reports yet. A report is written after each finished session.</p>
+        <Empty>No session reports yet. A report is written after each finished session.</Empty>
       ) : (
         <>
           {shown.map((r) => {

@@ -234,6 +234,14 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 - `.plan-groupbar` sticks above the tab bar (in the session, above the bottom edge).
 - `.week-strip` training days are pressed in with pink text (6.1:1); rest days stay flat with `--ink-3`.
 
+### Loading, empty and error states (plan step 11)
+
+Every list and chart uses `web/src/components/States.tsx` (no new classes):
+- `<Loading>`: card-shaped `.skeleton` blocks in the size of what is coming, `role="status"` with a label.
+- `<Empty>`: one `.state` line on what is missing, with a `clay btn-sm t-muted` button for the action when the screen has one.
+- `<LoadError>`: `.state` with what failed (`t-orange`), the reason ("No internet connection." or the server's message) and Retry.
+- A list that still has a saved copy keeps it on screen with the caption "Offline: showing the last saved copy." (or "Couldn't refresh: …").
+
 ## Don't
 
 - No new colors, no gradients other than the page background, clay and card fills.

@@ -11,6 +11,7 @@ import { deviceLabel, registerPasskey } from "../passkey";
 import { IconChevron, IconWatch } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
+import { LoadError, Loading } from "../components/States";
 import { loadProgramVersions, logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
 
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
@@ -181,11 +182,14 @@ function ProgramSettings() {
   const info = activeProgramInfo(boot);
   const since = info?.activations[info.activations.length - 1]?.started_at;
   const [drafts, setDrafts] = useState<ProgramInfo[] | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
   useEffect(() => {
+    setFailure(null);
     loadProgramVersions()
       .then((list) => setDrafts(list.filter((p) => p.status === "draft")))
-      .catch(() => setDrafts(null));
-  }, []);
+      .catch((e) => setFailure(e));
+  }, [round]);
   return (
     <section class="card l-col l-gap-10" data-testid="program-settings" aria-label="Program">
       <div class="l-col">
@@ -195,6 +199,12 @@ function ProgramSettings() {
       <button type="button" class="clay press btn t-pink" data-testid="new-program" onClick={() => openProgramEditor()}>
         New program
       </button>
+      {/* Saved drafts, when there are any. */}
+      {drafts === null && failure !== null ? (
+        <LoadError what="Couldn't load your saved drafts." error={failure} onRetry={() => setRound((n) => n + 1)} />
+      ) : drafts === null ? (
+        <Loading label="Loading your saved drafts" heights={[56]} />
+      ) : null}
       {drafts?.length ? (
         <div class="l-col">
           <h3 class="form-field__label l-m0">Drafts</h3>
@@ -223,15 +233,14 @@ function ProgramSettings() {
 export function AiSettings() {
   const online = useStore((s) => s.sync.online);
   const [u, setU] = useState<AiUsage | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
   useEffect(() => {
+    setFailure(null);
     fetchUsage()
-      .then((r) => {
-        setU(r);
-        setFailed(false);
-      })
-      .catch(() => setFailed(true));
-  }, [online]);
+      .then((r) => setU(r))
+      .catch((e) => setFailure(e));
+  }, [online, round]);
   const keyProblem = u ? (u.key === "missing" ? "Report unavailable — API key not set" : u.key_status === "invalid" ? "Report unavailable — API key expired or invalid" : null) : null;
   return (
     <section class="card l-col l-gap-10" data-testid="ai-settings" aria-label="AI reports">
@@ -240,28 +249,24 @@ export function AiSettings() {
           <b class="t-orange">{keyProblem}</b>
         </p>
       ) : null}
-      <div class="l-col">
-        <Fact
-          label="This month"
-          testid="ai-cost"
-          value={
-            u
-              ? `${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`
-              : failed
-                ? "Needs connection"
-                : "–"
-          }
-        />
-        {u ? (
-          <>
-            <Fact
-              label="Today"
-              value={`${fmtNum(u.today.reports)}/${fmtNum(u.limits.report)} reports · ${fmtNum(u.today.overviews)}/${fmtNum(u.limits.overview)} overviews · ${fmtNum(u.today.advice)}/${fmtNum(u.limits.advice)} advice`}
-            />
-            <Fact label="Model" value={u.model} />
-          </>
-        ) : null}
-      </div>
+      {u ? (
+        <div class="l-col">
+          <Fact
+            label="This month"
+            testid="ai-cost"
+            value={`${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`}
+          />
+          <Fact
+            label="Today"
+            value={`${fmtNum(u.today.reports)}/${fmtNum(u.limits.report)} reports · ${fmtNum(u.today.overviews)}/${fmtNum(u.limits.overview)} overviews · ${fmtNum(u.today.advice)}/${fmtNum(u.limits.advice)} advice`}
+          />
+          <Fact label="Model" value={u.model} />
+        </div>
+      ) : failure !== null ? (
+        <LoadError what="Couldn't load this month's AI use." error={failure} onRetry={() => setRound((n) => n + 1)} />
+      ) : (
+        <Loading label="Loading this month's AI use" heights={[44, 44, 44]} />
+      )}
       <p class="caption l-m0">
         A short Persian report is written after each session, then the training overview in Reports is updated. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
@@ -271,12 +276,15 @@ export function AiSettings() {
 
 export function Backups() {
   const [list, setList] = useState<{ name: string; bytes: number; uploaded: string }[] | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
   const [msg, setMsg] = useState("");
   useEffect(() => {
+    setFailure(null);
     api<{ backups: { name: string; bytes: number; uploaded: string }[] }>("GET", "/backups")
       .then((r) => setList(r.backups))
-      .catch(() => setList(null));
-  }, []);
+      .catch((e) => setFailure(e));
+  }, [round]);
   const get = async (path: string) => {
     setMsg("");
     try {
@@ -290,7 +298,13 @@ export function Backups() {
   return (
     <section class="card l-col l-gap-10" data-testid="backups" aria-label="Backup and export">
       <p class="ex-card__meta l-m0">Every Monday a full copy (sessions, sets, watch data, body weight and the photo list) is saved automatically, and the last 12 copies are kept.</p>
-      <Fact label="Latest automatic backup" testid="last-backup" value={latest ? `${dateLong(latest.uploaded.slice(0, 10))} · ${fmtNum(Math.round(latest.bytes / 1024))} KB` : list ? "None yet" : "–"} />
+      {list ? (
+        <Fact label="Latest automatic backup" testid="last-backup" value={latest ? `${dateLong(latest.uploaded.slice(0, 10))} · ${fmtNum(Math.round(latest.bytes / 1024))} KB` : "None yet"} />
+      ) : failure !== null ? (
+        <LoadError what="Couldn't load your backups." error={failure} onRetry={() => setRound((n) => n + 1)} />
+      ) : (
+        <Loading label="Loading your backups" heights={[44]} />
+      )}
       <div class="l-row l-gap-8">
         <button type="button" class="clay press btn btn--fit t-muted l-grow" disabled={!latest} onClick={() => void get("/backups/latest")}>
           Download latest backup

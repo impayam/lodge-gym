@@ -17,6 +17,7 @@ import type { Equipment, Exercise, WorkoutSession } from "../../../worker/lib/ty
 import { dayMonth, fmtNum, ytLink } from "../format";
 import type { AnatomyView } from "../lib/anatomy3d";
 import { loadLibrary, useStore } from "../store";
+import { Empty, LoadError, Loading } from "./States";
 import { CATEGORY_LABEL, EquipmentIcon, equipmentLabel, muscleLabel } from "../views/Library";
 import { IconPlay } from "./PulseIcons";
 import { token } from "../lib/tokens";
@@ -250,6 +251,7 @@ function lastDone(sessions: Record<string, WorkoutSession>) {
 function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: Exercise) => void }) {
   const boot = useStore((s) => s.boot)!;
   const library = useStore((s) => s.library);
+  const load = useStore((s) => s.loads.library);
   const sessions = useStore((s) => s.sessions);
   const muscle = place.muscle!;
   const last = lastDone(sessions);
@@ -311,10 +313,20 @@ function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: 
           ))}
         </Select>
       </div>
-      {library === null ? <span class="skeleton" style={{ height: "76px" }} aria-label="Loading the library" /> : null}
       <div class="l-col l-gap-8" data-testid="pick-primary">
         {primary.map(row)}
-        {!primary.length ? <p class="state l-m0">No exercise has {muscleLabel(muscle).toLowerCase()} as its main muscle with these filters.</p> : null}
+        {/* Until the library is here, the rows come from the exercises the app already knows (program and history). */}
+        {library === null && load?.status === "error" ? (
+          <LoadError what="Couldn't load the exercise library." error={load.error} onRetry={() => void loadLibrary()} />
+        ) : library === null ? (
+          <Loading label="Loading the library" heights={[76]} />
+        ) : !primary.length ? (
+          <Empty
+            action={place.equipment || place.category !== "all" ? { label: "Show all equipment and categories", onClick: () => go({ equipment: "", category: "all" }), testId: "pick-clear" } : undefined}
+          >
+            No exercise has {muscleLabel(muscle).toLowerCase()} as its main muscle with these filters.
+          </Empty>
+        ) : null}
       </div>
       {secondary.length ? (
         <div class="l-col l-gap-8" data-testid="pick-secondary">
