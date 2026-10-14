@@ -1,4 +1,4 @@
-import { STAGE_STATUS_COLOR } from "../../web/src/lib/anatomy-status";
+import { STAGE_STATUS_COLOR } from "./tokens";
 import { expect, test } from "./fixtures";
 import { resetWorkouts, signIn, sql } from "./helpers";
 

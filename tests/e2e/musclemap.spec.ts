@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { STAGE_STATUS_COLOR } from "../../web/src/lib/anatomy-status";
+import { STAGE_STATUS_COLOR, tokenValue } from "./tokens";
 import { groupOf } from "../../worker/lib/muscles";
 import type { BalanceStatus } from "../../worker/lib/reports";
 import { expect, test, type Page } from "./fixtures";
@@ -103,7 +103,7 @@ test("3D map: each mapped muscle in its group's status colour, unmapped dark; a 
   const parts = await view(page, (v) => v.partColors());
   // The model's 440 muscle nodes, less one without a mesh (a patellar retinaculum).
   expect(parts.length).toBe(439);
-  for (const p of parts) expect(p.color, `${p.name} (${p.muscle ?? "unmapped"})`).toBe(p.muscle ? STAGE_STATUS_COLOR[table[groupOf(p.muscle)!]] : "#3b2725");
+  for (const p of parts) expect(p.color, `${p.name} (${p.muscle ?? "unmapped"})`).toBe(p.muscle ? STAGE_STATUS_COLOR[table[groupOf(p.muscle)!]] : tokenValue("--model-context"));
   // Traps (0 sets, no target) are muted; the trapezius's middle and lower parts are upper back (back under target).
   expect(table.traps).toBe("none");
   const trapezius = (n: string) => [...new Set(parts.filter((p) => p.name === n).map((p) => p.color))];
