@@ -1,0 +1,90 @@
+/* GYM time — "Pulse" design tokens (source of truth).
+   Copy to web/src/styles/tokens.css. Never hard-code a hex value in a component:
+   every color, radius, shadow and font comes from a variable below.
+   Values were checked for contrast on 2026-10-14 (ratios in DESIGN-SPEC §3). */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- Page background ---------- */
+  --bg-top: #2B2C31;
+  --bg-mid: #1C1D21;
+  --bg-bottom: #121316;
+  --bg: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 35%, var(--bg-bottom) 100%);
+  --bg-solid: #16171A;            /* used for chart point rings, theme_color */
+
+  /* ---------- Surfaces ---------- */
+  --card-top: #1B1C20;            /* boxes (cards) */
+  --card-bottom: #131417;
+  --clay-top: #2C2C32;            /* raised buttons, bottom menu */
+  --clay-bottom: #1F1F23;
+  --well: #121214;                /* pressed-in: inputs, selected tab, chips, icon wells */
+  --track: #0F1012;               /* bar-chart tracks, empty calendar cells */
+  --divider: #1F2024;
+  --gridline: #26262B;
+  --baseline: #34343A;
+  --bubble-user: #2A2A30;         /* chat: the user's own message */
+
+  /* ---------- Ink (text) ---------- */
+  --ink: #F2F2F4;                 /* 16.0:1 on --bg-solid */
+  --ink-2: #C9C9CF;               /* secondary text */
+  --ink-3: #8F8F99;               /* captions, labels (>= 4.5:1). Mockups used #6F6F78 / #8A8A93 for small text: use THIS instead */
+  --ink-decor: #6F6F78;           /* NON-TEXT only: chevrons, axis ticks. Never for text (3.6:1) */
+
+  /* ---------- Brand accents (text/icon color on clay or wells) ---------- */
+  --pink: #FF4FA0;                /* primary action text, active tab icon. 4.9:1 on clay, 6.1:1 on well */
+  --orange: #FF5A1F;              /* targets, coach button, secondary action. 4.8:1 on clay */
+  --violet: #9A7BF2;              /* data: lines, "on target" bars */
+  --violet-ink: #B9A3FF;          /* data numbers as text, 8.3:1 */
+
+  /* ---------- Data colors (validated with the colorblind checker, dark, on #1C1726/#16171A) ----------
+     Fixed order for multi-series charts: orange, violet, pink. Never place pink next to orange. */
+  --series-1: #E0703A;            /* orange */
+  --series-2: #9A7BF2;            /* violet */
+  --series-3: #E0559A;            /* pink   */
+  --status-on: #9A7BF2;           /* on target (90–110%) */
+  --status-under: #E0703A;        /* under target (<90%) */
+  --status-over: #E0559A;         /* over target (>110%), always with ▲ icon + label */
+
+  /* ---------- Effort colors (active session only) ----------
+     effort e = sets done / sets planned in this session, 0..1.
+     Interpolate e: 0 → stop-1, 0.5 → stop-2, 1 → stop-3 (linear RGB mix). */
+  --effort-1: #A78BFA;            /* Warming up  (e < 0.34) */
+  --effort-2: #F472B6;            /* Working     (0.34–0.67) */
+  --effort-3: #FB923C;            /* All in      (>= 0.67) */
+  --session-bg: #120F1A;          /* session screen base (CONFIRM §6) */
+  --session-card: rgba(28,23,38,.86);
+
+  /* ---------- Shadows ---------- */
+  --sh-clay: inset 0 1.5px 0 rgba(255,255,255,.11), inset 0 -3px 6px rgba(0,0,0,.35), 0 7px 15px rgba(0,0,0,.42), 0 1.5px 3px rgba(0,0,0,.32);
+  --sh-clay-pressed: inset 0 3px 7px rgba(0,0,0,.49), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.28);
+  --sh-card: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -2px 6px rgba(0,0,0,.22), 0 6px 14px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.25);
+  --sh-well: inset 0 2px 6px rgba(0,0,0,.56), inset 0 -1px 0 rgba(255,255,255,.06);
+  --sh-track: inset 0 1px 3px rgba(0,0,0,.6);
+
+  /* ---------- Radii ---------- */
+  --r-card: 22px;
+  --r-hero: 24px;
+  --r-btn-lg: 20px;   /* 56–58px tall buttons */
+  --r-btn: 15px;      /* 42–46px buttons */
+  --r-btn-sm: 13px;   /* 36–38px buttons */
+  --r-nav: 26px;
+  --r-tab: 19px;
+  --r-pill: 999px;
+
+  /* ---------- Type ---------- */
+  --font-ui: "Instrument Sans", system-ui, sans-serif;
+  --font-num: "Barlow Condensed", "Instrument Sans", sans-serif;   /* big numbers + exercise titles */
+  --font-fa: -apple-system, system-ui, sans-serif;                 /* all Persian text, dir="rtl" lang="fa" */
+
+  /* ---------- Spacing ---------- */
+  --gutter: 16px;     /* page side padding */
+  --gap: 12px;        /* between boxes */
+  --pad-card: 16px;
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --t-press: 140ms;
+  --t-slide: 320ms;   /* tab indicator */
+  --t-sheet: 300ms;   /* bottom sheet, rest timer */
+}

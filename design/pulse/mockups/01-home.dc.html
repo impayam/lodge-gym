@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pulse Pro — interactive</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Instrument+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.press{transition:transform 140ms cubic-bezier(.2,.8,.2,1),filter 140ms;cursor:pointer}
+.press:active{transform:scale(.96);filter:brightness(1.12)}
+.press:focus-visible{outline:2px solid #FF5A1F;outline-offset:3px}
+.glow{box-shadow:0 0 0 0 rgba(225,29,116,.5);animation:ring 2.4s ease-out 1}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(225,29,116,.5)}100%{box-shadow:0 0 0 14px rgba(225,29,116,0)}}
+.slide{transition:transform 320ms cubic-bezier(.2,.8,.2,1)}
+.sheet{transition:transform 300ms cubic-bezier(.2,.8,.2,1),opacity 200ms}
+.fade{transition:opacity 200ms}
+.clay{border:0;background:linear-gradient(180deg,#2C2C32 0%,#1F1F23 100%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.11),inset 0 -3px 6px rgba(0,0,0,.35),0 7px 15px rgba(0,0,0,.42),0 1.5px 3px rgba(0,0,0,.32)}
+.clay:active{background:linear-gradient(180deg,#19191C 0%,#222226 100%);box-shadow:inset 0 3px 7px rgba(0,0,0,.49),inset 0 -1px 0 rgba(255,255,255,.05),0 1px 2px rgba(0,0,0,.28);filter:none}
+.clay-in{background:#121214;box-shadow:inset 0 2px 6px rgba(0,0,0,.52),inset 0 -1px 0 rgba(255,255,255,.06)}
+@media (prefers-reduced-motion: reduce){.press,.slide,.sheet,.fade{transition:none}.glow{animation:none}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: linear-gradient(180deg, #2B2C31 0%, #1C1D21 45%, #121316 100%); color: #F2F2F4; font-family: 'Instrument Sans', system-ui, sans-serif; position: relative; overflow: hidden;">
+
+  <sc-if value="{{isHome}}" hint-placeholder-val="{{true}}">
+  <div style="position: absolute; inset: 0; padding: 58px 16px 120px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px;">
+    <header style="padding: 0 4px; display: flex; align-items: flex-end; justify-content: space-between;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 13px; color: #8D949E;">Wednesday, October 14</span>
+        <h1 style="margin: 0; font-size: 28px; font-weight: 600;">Today</h1>
+      </div>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8D949E;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #FF5A1F;"></span>Synced</span>
+    </header>
+
+    <section style="background: linear-gradient(180deg, #1B1C20 0%, #131417 100%); border: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 6px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.25); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <span style="font-size: 13px; color: #8D949E;">Day 2 of Full body</span>
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 54px; font-weight: 700; line-height: 0.9;">Legs</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; padding-top: 4px;">
+          <span class="num" style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 600;">60<span style="font-size: 15px; color: #8D949E;"> min</span></span>
+          <span style="font-size: 12px; color: #8D949E;">5 exercises</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 1fr 64px 60px; gap: 8px; align-items: center; padding: 9px 0; border-top: 1px solid #27272C; font-size: 14px;">
+            <span>{{r.name}}</span>
+            <span class="num" style="text-align: right; color: #8D949E;">{{r.last}}</span>
+            <span class="num" style="text-align: right; font-weight: 600; color: #FF5A1F;">{{r.next}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <button class="press clay" style="height: 58px; border-radius: 20px; color: #FF4FA0; font-family: 'Instrument Sans', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 0.01em;">Start Legs</button>
+    </section>
+
+    <section style="background: linear-gradient(180deg, #1B1C20 0%, #131417 100%); border: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 6px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.25); border-radius: 22px; padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 14px; font-weight: 600;">Estimated 1RM</span>
+        <div role="group" aria-label="Lift" style="display: flex; gap: 4px; background: #121417; border-radius: 999px; padding: 3px;">
+          <sc-for list="{{liftTabs}}" as="lt" hint-placeholder-count="3">
+            <button class="press" onClick="{{lt.pick}}" style="{{lt.style}}">{{lt.name}}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="num" style="font-family: 'Barlow Condensed', sans-serif; font-size: 34px; font-weight: 600; line-height: 1;">{{sel.value}}<span style="font-size: 16px; color: #8D949E;"> lb</span></span>
+        <span class="num" style="font-size: 13px; color: #B9A3FF;">{{change}}</span>
+        <span style="font-size: 12px; color: #6F7680; margin-left: auto;">{{sel.date}}</span>
+      </div>
+      <svg width="100%" height="120" viewBox="0 0 326 120" role="img" aria-label="{{chartLabel}}" style="display: block; overflow: visible;">
+        <line x1="0" x2="326" y1="20" y2="20" stroke="#27272C" stroke-width="1"/>
+        <line x1="0" x2="326" y1="60" y2="60" stroke="#27272C" stroke-width="1"/>
+        <line x1="0" x2="326" y1="100" y2="100" stroke="#34343A" stroke-width="1"/>
+        <path d="{{area}}" fill="#9A7BF2" fill-opacity="0.12"/>
+        <line x1="{{sel.x}}" x2="{{sel.x}}" y1="8" y2="100" stroke="#5B636E" stroke-width="1" stroke-dasharray="3 3"/>
+        <polyline points="{{line}}" fill="none" stroke="#9A7BF2" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="{{sel.x}}" cy="{{sel.y}}" r="5" fill="#9A7BF2" stroke="#18181B" stroke-width="2"/>
+        <sc-for list="{{pts}}" as="p" hint-placeholder-count="8">
+          <circle cx="{{p.x}}" cy="{{p.y}}" r="16" fill="transparent" onClick="{{p.pick}}" style="cursor: pointer;"/>
+        </sc-for>
+        <text x="0" y="116" fill="#6F7680" font-size="10" font-family="Instrument Sans, sans-serif">{{firstLabel}}</text>
+        <text x="326" y="116" fill="#6F7680" font-size="10" text-anchor="end" font-family="Instrument Sans, sans-serif">This week</text>
+      </svg>
+    </section>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{isReports}}" hint-placeholder-val="{{false}}">
+  <div style="position: absolute; inset: 0; padding: 58px 16px 120px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px;">
+    <h1 style="margin: 0 4px; font-size: 28px; font-weight: 600;">Reports</h1>
+    <section style="background: linear-gradient(180deg, #1B1C20 0%, #131417 100%); border: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 6px rgba(0,0,0,0.22), 0 6px 14px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.25); border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <span style="font-size: 14px; font-weight: 600;">Sets this week vs target</span>
+        <span style="font-size: 12px; color: #6F7680;">Chest first</span>
+      </div>
+      <sc-for list="{{volume}}" as="v" hint-placeholder-count="5">
+        <div style="display: grid; grid-template-columns: 74px 1fr 64px; gap: 10px; align-items: center;">
+          <span style="font-size: 13px; color: #C9CED6;">{{v.name}}</span>
+          <span style="position: relative; height: 10px; border-radius: 999px; background: #27272C;">
+            <span style="{{v.bar}}"></span>
+            <span style="{{v.tick}}"></span>
+          </span>
+          <span class="num" style="font-size: 13px; text-align: right;"><span style="font-weight: 600;">{{v.done}}</span><span style="color: #6F7680;"> / {{v.target}}</span></span>
+        </div>
+      </sc-for>
+      <span style="font-size: 12px; color: #6F7680;">White tick marks the weekly target.</span>
+    </section>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{isOther}}" hint-placeholder-val="{{false}}">
+  <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #6F7680; font-size: 14px;">{{tabName}} — not drawn in this prototype</div>
+  </sc-if>
+
+  <div class="fade" style="{{scrim}}" onClick="{{closeChat}}"></div>
+  <div class="sheet" role="dialog" aria-label="Coach" style="{{sheetStyle}}">
+    <span style="align-self: center; width: 40px; height: 5px; border-radius: 999px; background: #3A3F46;"></span>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 17px; font-weight: 600;">Coach</span>
+      <button class="press" aria-label="Close" onClick="{{closeChat}}" style="width: 36px; height: 36px; border-radius: 12px; border: 0; background: #27272C; color: #EDEFF2;">✕</button>
+    </div>
+    <div dir="rtl" lang="fa" style="align-self: flex-start; max-width: 85%; background: #27272C; border-radius: 18px 18px 18px 6px; padding: 10px 14px; font-family: -apple-system, system-ui, sans-serif; font-size: 15px; line-height: 1.6;">امروز روز پاست. هدف اسکوات ۸۰×۵ است؛ دفعه‌ی قبل ۷۰×۵ زدی.</div>
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+      <button class="press" style="height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #34343A; background: transparent; color: #C9CED6; font-family: inherit; font-size: 13px;">Plan next week</button>
+      <button class="press" style="height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #34343A; background: transparent; color: #C9CED6; font-family: inherit; font-size: 13px;">How is my chest doing?</button>
+    </div>
+    <label style="display: flex; gap: 8px; align-items: center; background: #121417; border: 1px solid #34343A; border-radius: 16px; padding: 6px 6px 6px 14px;">
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden;">Message</span>
+      <input placeholder="Ask about your training" style="flex: 1; border: 0; background: transparent; color: #EDEFF2; font-family: inherit; font-size: 15px; outline: none;">
+      <button class="press clay" aria-label="Send" style="width: 42px; height: 42px; border-radius: 14px; color: #FF5A1F; display: flex; align-items: center; justify-content: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </label>
+  </div>
+
+  <sc-if value="{{chatClosed}}" hint-placeholder-val="{{true}}">
+  <button class="press clay" aria-label="Ask the coach" onClick="{{openChat}}" style="position: absolute; right: 16px; bottom: 112px; width: 56px; height: 56px; border-radius: 20px; color: #FF5A1F; display: flex; align-items: center; justify-content: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8M8 13h5"/></svg></button>
+  </sc-if>
+
+  <nav class="clay" style="position: absolute; left: 16px; right: 16px; bottom: 26px; height: 68px; border-radius: 26px;">
+    <span class="slide" style="{{indicator}}"></span>
+    <div style="position: relative; height: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+        <button class="press" aria-label="{{t.name}}" aria-current="{{t.current}}" onClick="{{t.pick}}" style="{{t.style}}">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{t.icon}}"/></svg>
+        </button>
+      </sc-for>
+    </div>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { tab: 0, lift: 0, pick: 7, chat: false }; }
+  renderVals() {
+    const s = this.state;
+    const series = [
+      { name: 'Bench', data: [150, 152, 155, 157, 158, 161, 163, 166] },
+      { name: 'Squat', data: [176, 182, 190, 197, 204, 212, 220, 227] },
+      { name: 'Deadlift', data: [248, 251, 255, 258, 262, 266, 270, 274] }
+    ];
+    const weeks = ['Aug 24', 'Aug 31', 'Sep 7', 'Sep 14', 'Sep 21', 'Sep 28', 'Oct 5', 'Oct 12'];
+    const d = series[s.lift].data;
+    const lo = Math.min(...d) - 4, hi = Math.max(...d) + 4;
+    const X = (i) => 6 + i * (314 / (d.length - 1));
+    const Y = (v) => 100 - ((v - lo) / (hi - lo)) * 80;
+    const pts = d.map((v, i) => ({ x: X(i), y: Y(v), pick: () => this.setState({ pick: i }) }));
+    const line = pts.map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+    const area = 'M' + pts[0].x + ',100 L' + line.split(' ').join(' L') + ' L' + pts[pts.length - 1].x + ',100 Z';
+    const i = Math.min(s.pick, d.length - 1);
+    const pct = ((d[i] - d[0]) / d[0] * 100).toFixed(1);
+    const liftTabs = series.map((x, k) => ({
+      name: x.name,
+      pick: () => this.setState({ lift: k, pick: 7 }),
+      style: 'height: 30px; padding: 0 10px; border: 0; border-radius: 999px; font-family: Instrument Sans, sans-serif; font-size: 12px; font-weight: 600; ' + (k === s.lift ? 'background: #121214; box-shadow: inset 0 2px 5px rgba(0,0,0,.52), inset 0 -1px 0 rgba(255,255,255,.06); color: #B9A3FF;' : 'background: transparent; color: #8A8A93;')
+    }));
+    const icons = {
+      Train: 'M3 12h2M19 12h2M6 8v8M18 8v8M9 10v4M15 10v4M9 12h6',
+      History: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+      Library: 'M5 4h4v16H5zM10 4h4v16h-4zM15 5l4 1-3 14-4-1',
+      Reports: 'M5 20V12M10 20V6M15 20v-9M20 20V9M3 20h18',
+      Me: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1-4 4-6 8-6s7 2 8 6'
+    };
+    const names = Object.keys(icons);
+    const tabs = names.map((k, n) => ({
+      name: k, icon: icons[k], current: n === s.tab ? 'page' : 'false',
+      pick: () => this.setState({ tab: n }),
+      style: 'background: transparent; border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-family: Instrument Sans, sans-serif; color: ' + (n === s.tab ? '#FF4FA0' : '#8A8A93') + ';'
+    }));
+    const tw = 358 / 5;
+    const indicator = 'position: absolute; top: 8px; left: 0; width: ' + (tw - 12) + 'px; height: 52px; border-radius: 19px; background: #121214; box-shadow: inset 0 2px 6px rgba(0,0,0,.56), inset 0 -1px 0 rgba(255,255,255,.06); transform: translateX(' + (s.tab * tw + 6) + 'px);';
+    const vol = [['Chest', 9, 13], ['Back', 10, 17.5], ['Shoulders', 7.5, 15.5], ['Quads', 4.5, 11.5], ['Hams & glutes', 7.5, 14]];
+    const volume = vol.map(([name, done, target]) => ({
+      name, done, target,
+      bar: 'position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: ' + (done / target >= 0.9 ? '#9A7BF2' : '#E0703A') + '; width: ' + Math.min(100, done / 20 * 100) + '%;',
+      tick: 'position: absolute; top: -3px; width: 2px; height: 16px; border-radius: 1px; background: #EDEFF2; left: ' + (target / 20 * 100) + '%;'
+    }));
+    return {
+      isHome: s.tab === 0, isReports: s.tab === 3, isOther: s.tab !== 0 && s.tab !== 3, tabName: names[s.tab],
+      rows: [
+        { name: 'Back Squat', last: '70 × 5', next: '80 × 5' },
+        { name: 'Leg Press', last: '230 × 10', next: '240 × 10' },
+        { name: 'Calf Raise', last: '60 × 13', next: '70' }
+      ],
+      liftTabs, pts, line, area,
+      sel: { x: X(i), y: Y(d[i]), value: d[i], date: weeks[i] },
+      change: (pct >= 0 ? '+' : '') + pct + '% since ' + weeks[0],
+      firstLabel: weeks[0],
+      chartLabel: series[s.lift].name + ' estimated 1RM rose from ' + d[0] + ' to ' + d[d.length - 1] + ' pounds over 8 weeks',
+      tabs, indicator, volume,
+      chatClosed: !s.chat,
+      openChat: () => this.setState({ chat: true }),
+      closeChat: () => this.setState({ chat: false }),
+      scrim: 'position: absolute; inset: 0; background: rgba(0,0,0,0.55); ' + (s.chat ? 'opacity: 1;' : 'opacity: 0; pointer-events: none;'),
+      sheetStyle: 'position: absolute; left: 0; right: 0; bottom: 0; background: #18181B; border-radius: 28px 28px 0 0; border-top: 1px solid #34343A; padding: 10px 16px 30px; display: flex; flex-direction: column; gap: 14px; transform: translateY(' + (s.chat ? '0' : '105%') + ');'
+    };
+  }
+}
+</script>
+</body>
+</html>

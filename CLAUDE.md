@@ -7,6 +7,7 @@ Read `SPEC.md` and `SPEC-v2.md` fully before writing any code. They are the sing
 - No change to the program seed (SPEC §6), the data model (§5) or the API surface (§11) without Payam's explicit approval. Propose the change with trade-offs and wait.
 - If you are about to make a decision on your own that the spec does not cover, stop, say so plainly ("I wanted to do X because Y"), and wait for guidance.
 - Production code only. No placeholders, no TODO stubs, no mock data in shipped code, no "simplified version".
+- UI: build only from `design/pulse/tokens.css` and `design/pulse/components.css` per `design/pulse/DESIGN-SPEC-v8-Pulse.md`. No hex values, shadows or fonts anywhere else. Anything missing from the library: stop and ask Payam.
 - Build milestones in order (M1 → M5, then SPEC-v2 M6 → M8). A milestone is done only when its acceptance criteria in SPEC §14 pass and tests are green.
 - Test before reporting done. If something fails, fix it completely; do not hand back a failure with an explanation.
 - Keep answers to Payam short and in Persian unless he writes in English. Code, identifiers and commit messages in English.
