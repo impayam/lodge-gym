@@ -1,0 +1,90 @@
+# SPEC v9: M12, Coach chat (backend + full screen)
+
+Status: scope APPROVED by Payam on 2026-10-14: free questions, program writing, photo analysis, saved conversations, a professional coach who knows all training methods. Cost: **show only, no cap**.
+Same CLAUDE.md working rules. Points marked **STOP** need Payam's OK before you continue.
+Build **after PR #12 (Pulse) is merged**, on a new branch from `main`. The Coach screen shell from Pulse (mockup 07, decision E) is the UI; this milestone connects it.
+
+---
+
+## 1. What Payam gets
+- Coach button (FAB) → full-screen Coach chat (Pulse mockup 07, library classes only).
+- He can ask anything about training, nutrition basics, technique, programs, his own progress, in Persian or English. Answers in Persian (RTL) unless he writes in English.
+- Answers about **his own data** come with **data cards** (tables/charts) whose numbers are computed by the app, captioned "Numbers calculated by the app from your logs".
+- He can ask for a **program**; the coach returns a **program draft card** with **Add to Planner** / **Change**. Nothing is saved to his program without his tap.
+- He can attach a **photo** (camera or library, or pick one of his progress photos) and ask about it.
+- Conversations are **saved**: a list of past chats, open any, continue it. **New chat** starts a fresh one.
+- Under each coach answer: small caption with the cost of that answer. Me → AI reports row shows "This month: Coach N messages, ~$X" next to the existing report costs.
+
+## 2. Model and key
+- Same Worker secret `ANTHROPIC_API_KEY` (already set). No new key. Never sent to the client, never printed or read in logs.
+- Model from config `COACH_MODEL`, default `claude-opus-5-5`. Effort from `COACH_EFFORT`, default `medium`. `COACH_MAX_TOKENS` default 4000. Changeable without a code change.
+- **Streaming** (Messages API SSE) through the Worker to the client, so text appears while it is written. Typing indicator until the first token.
+- Prompt caching on the system prompt and tool definitions (lower cost on every message).
+- No fallback model. If the call fails: the user message stays, an error line "Answer failed — Retry" appears under it.
+
+## 3. The coach's knowledge and rules (system prompt)
+**STOP:** show Payam the full system prompt text before building on it.
+
+The prompt must say:
+- You are an experienced strength and hypertrophy coach. You know the established training methods and when each fits: progressive overload, linear/double/undulating/block periodization, RIR/RPE autoregulation, volume landmarks, supersets/tri-sets/giant sets, drop sets, rest-pause, myo-reps, clusters, tempo and pauses, unilateral work, exercise selection by muscle length/region, technique cues for the main lifts, warm-up ramps, recovery and sleep, basic nutrition for muscle and strength.
+- Explain the reason behind advice. When evidence is mixed or weak, say so plainly. Never invent studies, numbers or sources.
+- Facts about **Payam's own training** come only from the tools (§4). If a tool has no data, say there is no data. Never guess his numbers.
+- Payam's standing preferences (from earlier specs): strength and balance; chest is the current priority; **no deloads, light weeks or intro weeks** unless he says he is tired; he may group any 2–3 exercises and his groups are never criticised; progression rules of the app (+5 lb upper, +10 lb lower, +5 lb per dumbbell, RIR rules); every program change needs his tap.
+- No medical diagnosis. With pain or injury: suggest rest and seeing a professional.
+- Honest, direct, no flattery.
+
+## 4. Tools the model can call (read-only, server-side)
+All numbers are computed by existing app functions (same math as Reports). Each tool result is also what the client renders as a data card.
+
+| Tool | Returns |
+|---|---|
+| `get_sessions(from, to)` | sessions with day, date, duration, done sets (exercise, weight, reps/seconds, RIR, is_extra), notes |
+| `get_e1rm_history(exercise_id, weeks)` | e1RM points (Epley, existing function) + % change |
+| `get_volume(from, to)` | fractional sets per group vs T2 targets, status under/on/over |
+| `get_adherence(from, to)` | planned vs done sessions (option A count, existing function) |
+| `get_prs(exercise_id?)` | PRs by the existing PR rule |
+| `get_program()` | active program, days, exercises, sets/reps/rest |
+| `get_library(muscle?, equipment?)` | exercises: id, name, equipment, primary/secondary muscles, category |
+| `get_body_weight(weeks)` | body weight entries + trend |
+| `get_photos(pose?, from?, to?)` | list of his progress photo ids with date and pose |
+
+**STOP:** show Payam the final tool list and their JSON shapes before building.
+
+**Write tool (needs a tap):** `propose_program(draft)`: days → exercises (`exercise_id` must exist in the library, else the item is dropped and the coach is told), sets, reps, rest, optional groups. Zod-validated. Rendered as the program draft card. **Add to Planner** creates a new inactive program (or a planner draft) — never overwrites the active program; activating stays a separate tap in Program. **Change** puts "Change this draft: " in the composer.
+
+## 5. Photo analysis
+- Attach from camera/library or choose a progress photo. Client processing as SPEC v1 §8: EXIF orientation, longest side 1600 px, JPEG 0.85, **EXIF stripped**. Stored in R2 (auth-only serving, same as progress photos), linked to the message.
+- Sent to the model as an image block with his question. Up to 4 images per message.
+- Allowed: visible muscle development and balance (left/right, upper/lower), comparing two dates, posture and position in a still photo, what to train more.
+- Prompt rules: say it is a visual estimate; no exact body-fat % as fact (a range labelled as rough estimate only if he asks); a single still photo cannot fully judge lifting technique — say so and ask for more angles; no medical judgments.
+- Chat photos are **not** added to the Progress photos gallery unless he taps "Save to progress photos".
+
+## 6. Saved conversations (data change)
+**STOP:** show Payam the migration SQL before applying. Proposal:
+- `coach_threads(id, title, created_at, updated_at, archived)` — title = first question, shortened.
+- `coach_messages(id, thread_id, role, content_json, created_at, input_tokens, output_tokens, cache_read_tokens, cost_usd, model, error)` — content_json keeps text, tool calls/results and image refs so cards re-render exactly.
+- `coach_attachments(id, message_id, r2_key, width, height, created_at)`.
+- `archived` = 0/1. Permanent delete (only for archived threads) removes the thread, its messages, attachments rows and R2 objects in one operation; test that nothing else is removed.
+- Nothing else in D1 changes. Existing tables untouched.
+- Context sent to the model: the whole thread up to a budget (`COACH_CONTEXT_TOKENS`, default 60,000). Older messages beyond it stay saved and visible but are not sent; a small line in the chat says so.
+- Past chats readable offline (cached in IndexedDB); sending needs a connection ("Needs connection", composer disabled).
+
+## 7. Cost display (no cap)
+- Price table in config (Opus 5.5: $4 input / $20 output per million tokens, cached-read at the official cached rate — **check the current price page and write the date in the report**).
+- Per answer: caption "~$0.0X" (from the API's returned token counts, not estimated).
+- Me → AI reports: "This month: Coach N messages, ~$X" plus existing lines.
+- No limit, no blocking. Payam's spend limit at console.anthropic.com stays the safety net.
+
+## 8. Decisions and CONFIRM (pick a default if Payam is asleep, list under "Decisions to confirm")
+1. (Decided by Payam 2026-10-14) Chats: **Archive** hides a chat from the list and keeps it (an "Archived" list shows them, with **Unarchive**). From the Archived list Payam can also **Delete permanently**: confirm dialog ("This chat and its photos will be deleted for good"), `--danger` text, then the thread, its messages, its attachments rows and their R2 objects are removed. Only archived chats can be deleted. Never touches training data or progress photos.
+2. Suggested question chips (Persian), default 4: «این هفته چطور بودم؟»، «برنامه‌ی سینه‌ام را بهتر کن»، «چرا پرس سینه‌ام ثابت مانده؟»، «این عکس را تحلیل کن».
+3. "What it knows" sheet in the header: lists the tools in plain words.
+
+## 9. Tests
+- Anthropic API **mocked** in all tests; never call the real API in tests.
+- Unit: tool results equal the Reports numbers for a fixture week; `propose_program` drops unknown exercise ids; cost calculation from token counts; context budget trimming.
+- E2E (WebKit iPhone + Chromium): new chat → streamed answer → data card → reload → chat still there; program draft → Add to Planner → new inactive program exists, active program unchanged; attach photo → EXIF removed (check bytes) → sent; offline → composer disabled, old chat readable; archive → unarchive; delete permanently an archived chat → its rows and R2 objects are gone, sessions/photos untouched; failed call → Retry works.
+- Screenshots (iPhone, dark): empty chat with chips, answer with data card, program draft card, photo message, chat list, cost caption.
+
+## 10. Report
+Per CLAUDE.md, in Persian: what was built, test totals, screenshots, the real cost of 5 test messages on the deployed preview (text-only and with a photo), bundle size change. **Do not merge, do not deploy** without Payam's OK.
