@@ -1,13 +1,17 @@
 // Mock of the Claude Messages API for the Playwright tests (SPEC-v3: the real API is never called in tests). The e2e
 // Workers point ANTHROPIC_BASE_URL here. It answers like the model would, from the request's own input:
-//   session report: a short Persian report that names the extra exercises and copies the volume rows given
-//   plan advice:    "add" the first candidate not in the plan, at position 2
-// Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth and read GET /__calls.
+//   session report:    a short Persian report that names the extra exercises and copies the volume rows given
+//   plan advice:       "add" the first candidate not in the plan, at position 2
+//   training overview: Persian prose using only the input's numbers, plus one warning with a number the input lacks
+//                      (the app must drop it)
+// Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth and read
+// GET /__calls (the count, the last call and the last call of each kind).
 import { createServer } from "node:http";
 
 export function startAiMock(port) {
-  const mode = { report: "ok", advice: "ok" };
+  const mode = { report: "ok", advice: "ok", overview: "ok" };
   const calls = [];
+  const lastOf = {};
   const send = (res, status, body) => {
     res.writeHead(status, { "content-type": "application/json", "request-id": "req_e2e_mock" });
     res.end(JSON.stringify(body));
@@ -46,25 +50,38 @@ export function startAiMock(port) {
     };
   };
 
+  const overview = (input) => ({
+    summary_fa: `در ${input.window.weeks} هفتهٔ اخیر ${input.totals.sessions_done} جلسه از ${input.totals.sessions_planned} جلسهٔ برنامه انجام شد و روند کلی خوب است.`,
+    trends: input.lifts.filter((l) => l.change_pct != null).map((l) => `${l.name}: ${l.change_pct}٪ تغییر در این بازه.`),
+    volume_fa: "سینه اولویت توست؛ حجم آن را با هدف هفتگی هماهنگ نگه دار.",
+    consistency_fa: "جلسه‌ها را طبق برنامه ادامه بده.",
+    focus_next: ["روی حرکت‌های سینه با فرم درست تمرکز کن."],
+    // A number the input does not have: the app drops this item.
+    warnings: ["۹۹۹۹ ست اضافه بزن."],
+  });
+
   const server = createServer((req, res) => {
     const url = new URL(req.url, `http://localhost:${port}`);
     if (req.method === "GET" && url.pathname === "/__mode") {
-      for (const k of ["report", "advice"]) if (url.searchParams.has(k)) mode[k] = url.searchParams.get(k);
+      for (const k of ["report", "advice", "overview"]) if (url.searchParams.has(k)) mode[k] = url.searchParams.get(k);
       return send(res, 200, { ...mode });
     }
-    if (req.method === "GET" && url.pathname === "/__calls") return send(res, 200, { calls: calls.length, last: calls.at(-1) ?? null });
+    if (req.method === "GET" && url.pathname === "/__calls") return send(res, 200, { calls: calls.length, last: calls.at(-1) ?? null, by_kind: lastOf });
     if (req.method !== "POST" || url.pathname !== "/v1/messages") return send(res, 404, { type: "error", error: { type: "not_found_error", message: "Not found" } });
     let raw = "";
     req.on("data", (c) => (raw += c));
     req.on("end", () => {
       const body = JSON.parse(raw);
-      const kind = String(body.system).includes("training report") ? "report" : "advice";
-      calls.push({ kind, model: body.model, effort: body.output_config?.effort, key_set: Boolean(req.headers["x-api-key"]) });
+      const system = String(body.system);
+      const kind = system.includes("overview of Payam") ? "overview" : system.includes("training report") ? "report" : "advice";
+      const call = { kind, model: body.model, effort: body.output_config?.effort, max_tokens: body.max_tokens, key_set: Boolean(req.headers["x-api-key"]) };
+      calls.push(call);
+      lastOf[kind] = call;
       const m = mode[kind];
       if (m === "auth") return send(res, 401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } });
       if (m === "fail") return send(res, 400, { type: "error", error: { type: "invalid_request_error", message: "mock failure" } });
       const input = JSON.parse(body.messages[0].content);
-      send(res, 200, message(kind === "report" ? report(input) : advice(input)));
+      send(res, 200, message(kind === "report" ? report(input) : kind === "overview" ? overview(input) : advice(input)));
     });
   });
   return new Promise((resolve) => server.listen(Number(port), "127.0.0.1", () => resolve(server)));

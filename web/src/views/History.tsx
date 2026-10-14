@@ -5,6 +5,7 @@ import { instantShort, monthLabel, plural } from "../format";
 import { activeSession, programName, recentSwitch, sortedSessions, styleLabel } from "../model";
 import { flash, loadAllHistory, switchProgram, useStore } from "../store";
 import { HistoryItem } from "./HistoryItem";
+import { ReportsTimeline } from "./ReportsTimeline";
 
 const lastStart = (p: ProgramInfo) => p.activations[p.activations.length - 1]?.started_at ?? "";
 
@@ -34,6 +35,7 @@ export function History() {
   return (
     <>
       {programs.length ? <Timeline programs={ordered} /> : null}
+      <ReportsTimeline />
       {!all.length ? (
         <>
           <h2>History</h2>

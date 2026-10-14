@@ -46,7 +46,7 @@ export async function signIn(context: BrowserContext, baseURL: string) {
 }
 
 export function resetWorkouts() {
-  sql("DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
+  sql("DELETE FROM training_overviews; DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
 }
 
 /** The seed program active again; versions made by the generator (M8) or by Apply to program (M9c) go. */
@@ -73,14 +73,24 @@ export async function waitForSynced(page: Page) {
 
 const AI_MOCK = `http://127.0.0.1:${process.env.E2E_AI_PORT ?? "8791"}`;
 
+type AiAnswer = "ok" | "fail" | "auth";
+
 /** Switches the mock model's answers (scripts/e2e-ai-mock.mjs): ok, fail (API error) or auth (expired key). */
-export async function aiMode(mode: { report?: "ok" | "fail" | "auth"; advice?: "ok" | "fail" | "auth" }) {
+export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer }) {
   const q = new URLSearchParams(mode as Record<string, string>);
   const res = await fetch(`${AI_MOCK}/__mode?${q}`, { headers: { Connection: "close" } });
   if (!res.ok) throw new Error("AI mock did not switch");
 }
 
-/** Calls the mock model received, and the last one (kind, model, effort). */
-export async function aiCalls(): Promise<{ calls: number; last: { kind: string; model: string; effort: string; key_set: boolean } | null }> {
-  return (await fetch(`${AI_MOCK}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: { kind: string; model: string; effort: string; key_set: boolean } | null }>;
+interface AiCall {
+  kind: "report" | "advice" | "overview";
+  model: string;
+  effort: string;
+  max_tokens: number;
+  key_set: boolean;
+}
+
+/** Calls the mock model received, the last one, and the last one of each kind. */
+export async function aiCalls(): Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }> {
+  return (await fetch(`${AI_MOCK}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
 }

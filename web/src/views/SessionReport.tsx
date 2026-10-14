@@ -165,7 +165,7 @@ function nextChange(n: NextTimeRow): string {
   return "add reps or load";
 }
 
-function ReportBody({ view }: { view: ReportView }) {
+export function ReportBody({ view }: { view: ReportView }) {
   const r = view.report!;
   const list = (title: string, items: string[], mark: string, cls = "") =>
     items.length ? (

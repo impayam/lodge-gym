@@ -8,13 +8,13 @@ test.describe.configure({ mode: "serial" });
 test.beforeEach(async ({ context, baseURL }) => {
   resetWorkouts();
   resetPrograms();
-  await aiMode({ report: "ok", advice: "ok" });
+  await aiMode({ report: "ok", advice: "ok", overview: "ok" });
   await signIn(context, baseURL!);
 });
 test.afterAll(async () => {
   resetWorkouts();
   resetPrograms();
-  await aiMode({ report: "ok", advice: "ok" });
+  await aiMode({ report: "ok", advice: "ok", overview: "ok" });
 });
 
 /** Starts Day 1 and logs the first bench set. */
@@ -61,7 +61,7 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   await expect(bench).toContainText("+5 lb");
   await expect(bench.locator("p[dir=rtl]")).toHaveText("همین مسیر را با فرم درست ادامه بده.");
   await expect(page.getByTestId("report-next")).not.toContainText("۲۰۰");
-  const call = (await aiCalls()).last!;
+  const call = (await aiCalls()).by_kind.report!;
   expect(call).toMatchObject({ kind: "report", model: "claude-opus-5-5", effort: "low", key_set: true });
 
   // The model fails: "Report unavailable" with Retry; older reports are kept.
@@ -80,7 +80,7 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   // Fixed: Retry from History → session → Report writes a new report; Settings is clear again.
   await aiMode({ report: "ok" });
   await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
-  await page.locator("button.hist").first().click();
+  await page.getByTestId("history-group").locator("button.hist").first().click();
   await page.getByTestId("open-report").click();
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await page.getByTestId("report-retry").click();
@@ -130,7 +130,7 @@ test("Get advice with a mocked model shows a suggestion; Apply adds the exercise
   await expect(page.getByTestId("advice-assessment")).toHaveAttribute("dir", "rtl");
   // Get advice saved the plan first.
   await expect(page.getByTestId("plan-state")).toHaveText("Planned");
-  expect((await aiCalls()).last).toMatchObject({ kind: "advice", effort: "medium" });
+  expect((await aiCalls()).by_kind.advice).toMatchObject({ kind: "advice", effort: "medium" });
   const sug = page.getByTestId("advice-sug-0");
   await expect(sug).toHaveAttribute("data-type", "add");
   await expect(sug).toContainText("at #2");

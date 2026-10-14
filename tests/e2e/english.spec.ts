@@ -1,14 +1,15 @@
 import { expect, test, type Page } from "./fixtures";
 import { resetWorkouts, signIn, sql } from "./helpers";
 
-// SPEC-v2 M6 acceptance: no Persian UI text remains, except stored user notes and the weekly review card.
+// SPEC-v2 M6 acceptance: no Persian UI text remains, except stored user notes, the weekly review card and the AI's
+// Persian prose (session report, training overview), which renders in lang="fa" containers.
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
-/** Visible text of the page outside the weekly review card, plus attribute text a screen reader reads. */
+/** Visible text of the page outside the weekly review card and the Persian AI prose, plus attribute text a screen reader reads. */
 async function uiText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const root = document.body.cloneNode(true) as HTMLElement;
-    root.querySelectorAll('[data-testid="weekly-review"]').forEach((n) => n.remove());
+    root.querySelectorAll('[data-testid="weekly-review"], [lang="fa"]').forEach((n) => n.remove());
     const attrs = [...root.querySelectorAll("[aria-label],[placeholder],[title],[alt]")].flatMap((n) =>
       ["aria-label", "placeholder", "title", "alt"].map((a) => n.getAttribute(a) ?? "")
     );
@@ -45,6 +46,13 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
     await page.waitForLoadState("networkidle");
     await check(tab);
   }
+  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await expect(page.getByTestId("rt-col")).toHaveCount(1);
+  await page.getByTestId("rt-mode-list").click();
+  await check("Reports timeline (list)");
+  await page.getByTestId("rt-list").getByTestId("rt-item").first().click();
+  await expect(page.getByTestId("weekly-review")).toBeVisible();
+  await check("Saved weekly review");
   await page.getByRole("button", { name: "Reports" }).click();
   for (const tab of ["Monthly", "Progress"]) {
     await page.getByRole("tab", { name: tab }).click();

@@ -15,6 +15,9 @@ export interface Env {
   REPORT_EFFORT?: string;
   ADVICE_EFFORT?: string;
   REPORT_MAX_TOKENS?: string;
+  /** Training overview (SPEC-v7 M9d): effort and the reply's max_tokens. */
+  OVERVIEW_EFFORT?: string;
+  OVERVIEW_MAX_TOKENS?: string;
 }
 
 export type SessionScope = "full" | "recovery";

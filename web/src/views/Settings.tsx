@@ -231,7 +231,7 @@ function AiSettings() {
         <span>This month</span>
         <span class="num" data-testid="ai-cost">
           {u
-            ? `${plural(u.month.reports, "report")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`
+            ? `${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`
             : failed
               ? "Needs connection"
               : "–"}
@@ -242,7 +242,7 @@ function AiSettings() {
           <div class="kv">
             <span>Today</span>
             <span class="num">
-              {fmtNum(u.today.reports)}/{fmtNum(u.limits.report)} reports · {fmtNum(u.today.advice)}/{fmtNum(u.limits.advice)} advice
+              {fmtNum(u.today.reports)}/{fmtNum(u.limits.report)} reports · {fmtNum(u.today.overviews)}/{fmtNum(u.limits.overview)} overviews · {fmtNum(u.today.advice)}/{fmtNum(u.limits.advice)} advice
             </span>
           </div>
           <div class="kv">
@@ -252,7 +252,7 @@ function AiSettings() {
         </>
       ) : null}
       <p class="why" style={{ margin: 0 }}>
-        A short Persian report is written after each session, and the planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
+        A short Persian report is written after each session, then the training overview in Reports is updated. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
     </div>
   );

@@ -1,18 +1,17 @@
-// Weekly review: the latest review Claude wrote into D1 (table weekly_reviews). Read-only in the app.
+// Weekly reviews (table weekly_reviews, written by Claude into D1). Read-only in the app. SPEC-v7 M9d replaced the card
+// on Home and Reports with the training overview; every review stays readable from History → Reports timeline.
 // The review text stays in Persian (SPEC-v2 M6), so its content is rendered right-to-left inside the English UI.
 
 import { useState } from "preact/hooks";
+import type { WeeklyReview } from "../../../worker/lib/types";
 import { addDays } from "../../../worker/lib/time";
 import { dayMonth } from "../format";
-import { useStore } from "../store";
 
-export function WeeklyReviewCard() {
-  const review = useStore((s) => s.boot?.review ?? null);
+export function WeeklyReviewCard({ review }: { review: WeeklyReview }) {
   const [open, setOpen] = useState(false);
-  if (!review) return null;
   const long = review.summary_fa.length > 220 || review.highlights.length + review.suggestions.length > 4;
   return (
-    <section class="card review stack" data-testid="weekly-review">
+    <section class="card review stack" data-testid="weekly-review" data-review={review.id}>
       <div class="kv">
         <span class="eyebrow">Weekly review</span>
         <span class="muted" style={{ fontSize: "12px" }}>
