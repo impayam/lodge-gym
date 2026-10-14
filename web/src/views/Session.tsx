@@ -197,24 +197,18 @@ export function Session({ id }: { id: string }) {
 
   if (picking)
     return (
-      <div class="legacy">
-        <div class="wrap">
-          <main>
-            <ExercisePicker
-              sessionId={s.id}
-              onCancel={() => setPicking(false)}
-              onPick={(ex) => {
-                setPicking(false);
-                // The card shows the new exercise once it is in the session.
-                void addExtraExercise(s.id, ex).then(() => {
-                  shownExercise.set(id, ex.id);
-                  setShown(ex.id);
-                });
-              }}
-            />
-          </main>
-        </div>
-      </div>
+      <ExercisePicker
+        sessionId={s.id}
+        onCancel={() => setPicking(false)}
+        onPick={(ex) => {
+          setPicking(false);
+          // The card shows the new exercise once it is in the session.
+          void addExtraExercise(s.id, ex).then(() => {
+            shownExercise.set(id, ex.id);
+            setShown(ex.id);
+          });
+        }}
+      />
     );
 
   if (arranging && active)

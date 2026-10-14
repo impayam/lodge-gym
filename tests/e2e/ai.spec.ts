@@ -40,6 +40,8 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   await picker.getByTestId("picker-tab-search").click();
   await picker.getByRole("searchbox").fill("biceps curl");
   await picker.getByTestId("library-row").filter({ has: page.locator("b", { hasText: /^Dumbbell Biceps Curl$/ }) }).first().click();
+  // The card shows the added exercise once it is in the session.
+  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "curl");
   await enterSet(page, "curl", 0, "w", "30");
   await enterSet(page, "curl", 0, "r", "10");
   await page.getByTestId("check-curl-0").click();
@@ -80,7 +82,7 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   // Fixed: Retry from History → session → Report writes a new report; Settings is clear again.
   await aiMode({ report: "ok" });
   await goTo(page, "History");
-  await page.getByTestId("history-group").locator("button.hist").first().click();
+  await page.getByTestId("history-group").getByTestId("session-card").first().click();
   await page.getByTestId("open-report").click();
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await page.getByTestId("report-retry").click();

@@ -21,9 +21,15 @@ test("library: search, filters, detail with media, muscles, instructions, form v
   await page.goto("/");
   await goTo(page, "Library");
   const list = page.getByTestId("library");
-  await expect(list.getByTestId("library-count")).toHaveText(/^\d+ exercises$/);
+  // The header carries the total; the line under the chips names the chip (mockup 05).
+  await expect(page.getByTestId("library-tab").locator(".page-head__sub")).toHaveText(/^\d+ exercises$/);
+  await expect(list.getByTestId("library-count")).toHaveText("All exercises");
+  await list.getByTestId("group-chest").click();
+  await expect(list.getByTestId("library-count")).toHaveText(/^Chest, \d+ exercises$/);
+  await list.getByTestId("group-all").click();
   await list.getByRole("searchbox", { name: "Search exercises" }).fill("trap bar");
   await expect(list.getByTestId("library-row")).toHaveCount(1);
+  await expect(list.getByTestId("library-count")).toHaveText("1 exercise");
   await list.getByTestId("library-row").click();
   const detail = page.getByTestId("exercise-detail");
   await expect(detail.getByRole("heading", { name: "Trap Bar Deadlift" })).toBeVisible();
@@ -31,21 +37,25 @@ test("library: search, filters, detail with media, muscles, instructions, form v
   await expect(detail).toContainText("Hinge");
   await expect(detail.getByTestId("media-placeholder")).toBeVisible();
   await expect(detail.getByRole("link", { name: "Watch form video ↗" })).toHaveAttribute("href", "https://www.youtube.com/results?search_query=Trap%20Bar%20Deadlift%20form");
-  await expect(detail.locator("ol.rules li").first()).toBeVisible();
+  await expect(detail.locator("ol li").first()).toBeVisible();
   await expect(detail.getByTestId("exercise-history")).toContainText("No sets logged");
   await expect(detail.getByTestId("category")).toHaveText("Strength");
   await expect(detail.getByTestId("not-counted")).toHaveCount(0);
-  await detail.getByRole("button", { name: "← Back to the library" }).click();
+  await detail.getByRole("button", { name: "Back to the library" }).click();
 
   // Stretching stays in the library and can be logged, but counts 0 sets (SPEC-v2 §7.4).
   await list.getByRole("searchbox", { name: "Search exercises" }).fill("hamstring stretch");
-  await list.getByTestId("library-row").filter({ has: page.locator("b", { hasText: /^Hamstring Stretch$/ }) }).click();
+  await list
+    .getByTestId("library-row")
+    .filter({ has: page.locator("b", { hasText: /^Hamstring Stretch$/ }) })
+    .click();
   await expect(detail.getByTestId("category")).toHaveText("Stretching");
   await expect(detail.getByTestId("not-counted")).toContainText("Not counted in volume");
-  await detail.getByRole("button", { name: "← Back to the library" }).click();
+  await detail.getByRole("button", { name: "Back to the library" }).click();
 
-  // Filters: muscle + equipment + pattern.
+  // Filters (behind "Filters"): muscle + equipment + pattern.
   await list.getByRole("searchbox").fill("");
+  await list.getByTestId("library-filters").click();
   await list.getByRole("combobox", { name: "Equipment" }).selectOption("barbell");
   await list.getByRole("combobox", { name: "Pattern" }).selectOption("h_push");
   await list.getByRole("combobox", { name: "Muscle" }).selectOption("chest");
@@ -57,7 +67,7 @@ test("library: search, filters, detail with media, muscles, instructions, form v
 
   // Seeded exercise enriched from the library: images from R2 through the Worker, history from every program.
   await bench.click();
-  const imgs = detail.locator(".exmedia img");
+  const imgs = detail.locator(".media-frame img");
   await expect(imgs).toHaveCount(2);
   await expect(imgs.first()).toHaveAttribute("src", "/api/library/media/library/free-exercise-db/images/Barbell_Bench_Press_-_Medium_Grip/0.jpg");
   await expect.poll(() => imgs.first().evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
@@ -80,7 +90,10 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
   // The picker opens on the body map (SPEC-v3 M9b); search is its second tab.
   await picker.getByTestId("picker-tab-search").click();
   await picker.getByRole("searchbox").fill("hack squat");
-  await picker.getByTestId("library-row").filter({ hasText: /^Hack Squat/ }).click();
+  await picker
+    .getByTestId("library-row")
+    .filter({ hasText: /^Hack Squat/ })
+    .click();
   const card = page.locator('[data-ex="fedb-Hack_Squat"]');
   await expect(card).toContainText("Added today");
   await expect(card).toContainText("no target");
@@ -148,7 +161,7 @@ test("custom exercise: create with secondary muscles, find it in the picker, arc
   expect(sql("SELECT category FROM exercises WHERE name_en = 'Machine Chest-Supported Row'")).toEqual([{ category: "plyometrics" }]);
   await detail.getByTestId("archive").click();
   await expect(detail.getByTestId("archive")).toHaveText("Restore");
-  await detail.getByRole("button", { name: "← Back to the library" }).click();
+  await detail.getByRole("button", { name: "Back to the library" }).click();
   await page.getByTestId("library").getByRole("searchbox").fill("chest-supported row");
   await expect(page.getByTestId("library").getByTestId("library-row").filter({ hasText: "Machine Chest-Supported Row" })).toHaveCount(0);
   expect((sql("SELECT archived_at IS NOT NULL AS a FROM exercises WHERE name_en = 'Machine Chest-Supported Row'") as { a: number }[])[0].a).toBe(1);

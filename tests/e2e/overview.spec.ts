@@ -159,16 +159,16 @@ test("History → Reports timeline: a session date lists its report and the over
   const cols = page.getByTestId("rt-col");
   await expect(cols).toHaveCount(3);
   expect(await cols.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")))).toEqual([localDay(7), threeAgo, today]);
-  // Two labeled rows only.
-  await expect(page.locator(".rt-lanes .rt-lane")).toHaveText(["Session report", "Weekly review"]);
+  // Two labeled rows only (mockup 04: Sessions, Weekly).
+  await expect(page.locator(".timeline__lanes")).toHaveText(/^\s*Sessions\s*Weekly\s*$/);
   const todayCol = cols.nth(2);
-  await expect(todayCol.locator(".mk-session")).toBeVisible();
+  await expect(todayCol.locator(".marker--session")).toBeVisible();
   await expect(todayCol).toHaveAttribute("aria-label", /: session report, training overview$/);
-  // The overview-only date: ◆ on the date, nothing in the session row.
+  // The overview-only date: ◆ in the Sessions lane instead of a session dot.
   const manual = cols.nth(1);
-  await expect(manual.locator(".d .mk-overview")).toBeVisible();
-  await expect(manual.locator(".mk-session")).toHaveCount(0);
-  await expect(cols.nth(0).locator(".mk-review")).toBeVisible();
+  await expect(manual.locator(".marker--overview")).toBeVisible();
+  await expect(manual.locator(".marker--session")).toHaveCount(0);
+  await expect(cols.nth(0).locator(".marker--review")).toBeVisible();
 
   // A date with two reports: the short list to choose from.
   await todayCol.click();

@@ -1,15 +1,18 @@
+// History (SPEC-v8 §6.04, SPEC-v2 §8.6): the reports timeline, then the sessions as cards by month (grouped by
+// program when there is more than one), then the program timeline with Switch back.
+
 import { useEffect, useState } from "preact/hooks";
+import { localDate } from "../../../worker/lib/time";
 import type { ProgramInfo, WorkoutSession } from "../../../worker/lib/types";
 import { errorText } from "../api";
-import { instantShort, monthLabel, plural } from "../format";
+import { SessionCard } from "../components/SessionCard";
+import { dayMonth, instantShort, monthLabel, plural } from "../format";
 import { activeSession, programName, recentSwitch, sortedSessions, styleLabel } from "../model";
 import { flash, loadAllHistory, switchProgram, useStore } from "../store";
-import { HistoryItem } from "./HistoryItem";
 import { ReportsTimeline } from "./ReportsTimeline";
 
 const lastStart = (p: ProgramInfo) => p.activations[p.activations.length - 1]?.started_at ?? "";
 
-/** History (SPEC-v2 §8.6): the program timeline, and sessions grouped by the program they belong to. */
 export function History() {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
@@ -32,35 +35,46 @@ export function History() {
   if (!programs.length && bySession.has(boot.program.id)) groups.push({ key: boot.program.id, title: programName({ name: boot.program.name, style: "seed_full_body" }), list: bySession.get(boot.program.id)! });
   for (const [k, list] of bySession) if (!groups.some((g) => g.key === k)) groups.push({ key: k, title: "Other sessions", list });
 
+  const active = programs.find((p) => p.status === "active") ?? null;
+  const since = active ? lastStart(active) : "";
+
   return (
-    <>
-      {programs.length ? <Timeline programs={ordered} /> : null}
+    <main class="page" data-testid="history">
+      <header class="page-head">
+        <div class="l-col l-gap-2">
+          {active && since ? (
+            <span class="page-head__sub num">
+              {programName(active)}, since {dayMonth(localDate(boot.settings.timezone, since))}
+            </span>
+          ) : null}
+          <h1 class="h-page">History</h1>
+        </div>
+      </header>
       <ReportsTimeline />
       {!all.length ? (
-        <>
-          <h2>History</h2>
-          <div class="empty">No sessions yet.</div>
-        </>
+        <p class="state">No sessions yet. Finished sessions show up here.</p>
       ) : (
         groups.map((g) => (
-          <section data-testid="history-group" data-program={g.key}>
-            <h2>
-              {g.title} <small>· {plural(g.list.length, "session")}</small>
-            </h2>
+          <section class="l-col l-gap-12" data-testid="history-group" data-program={g.key} aria-label={`${g.title}, ${plural(g.list.length, "session")}`}>
+            {/* The program is named when there are several, or when these sessions belong to an earlier one. */}
+            {groups.length > 1 || g.key !== active?.id ? (
+              <h2 class="t-title l-m0">
+                {g.title} <span class="caption">· {plural(g.list.length, "session")}</span>
+              </h2>
+            ) : null}
             {[...months(g.list)].map(([month, list]) => (
               <>
-                <h3 class="subhead">{month}</h3>
-                <div class="stack">
-                  {list.map((s) => (
-                    <HistoryItem s={s} boot={boot} />
-                  ))}
-                </div>
+                <h3 class="section-label">{month}</h3>
+                {list.map((s) => (
+                  <SessionCard s={s} boot={boot} all={all} />
+                ))}
               </>
             ))}
           </section>
         ))
       )}
-    </>
+      {programs.length ? <Timeline programs={ordered} /> : null}
+    </main>
   );
 }
 
@@ -73,6 +87,7 @@ function months(list: WorkoutSession[]) {
   return out;
 }
 
+/** Every program used, with its dates; an archived one can be used again after a confirm (SPEC-v2 §8.6). */
 function Timeline({ programs }: { programs: ProgramInfo[] }) {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
@@ -99,54 +114,56 @@ function Timeline({ programs }: { programs: ProgramInfo[] }) {
   };
 
   return (
-    <>
-      <h2>Programs</h2>
-      <div class="card stack" data-testid="program-timeline">
-        {programs.map((p) => (
-          <div class="tl-item" data-program={p.id}>
-            <div class="tl-row">
-              <span class="meta">
-                <b>
-                  {programName(p)} {p.status === "active" ? <span class="pill done">active</span> : null}
-                </b>
-                <small>
-                  {styleLabel(p.style)} ·{" "}
-                  {p.activations.length ? p.activations.map((a) => `${day(a.started_at)} – ${a.ended_at ? day(a.ended_at) : "now"}`).join(", ") : "never used"}
-                </small>
+    <section class="card card--list" data-testid="program-timeline" aria-labelledby="programs-title">
+      <h2 class="card__title l-m0" id="programs-title">
+        Programs
+      </h2>
+      {programs.map((p) => (
+        <div class="list-row l-col l-top" data-program={p.id} data-testid="program-item">
+          <div class="l-row l-gap-12 l-full">
+            <span class="list-row__text">
+              <span class="t-title">
+                {programName(p)} {p.status === "active" ? <span class="badge">active</span> : null}
               </span>
-              {p.status === "archived" && armed !== p.id ? (
-                <button type="button" class="btn btn-ghost btn-small" data-testid="reactivate" onClick={() => setArmed(p.id)}>
-                  {p.activations.length ? "Switch back" : "Use this program"}
-                </button>
-              ) : null}
-            </div>
-            {armed === p.id ? (
-              <div class="stack tl-confirm" data-testid="reactivate-confirm">
-                <div class="why">“{programName(p)}” becomes your program{p.activations.length ? " again" : ""} from the next session. Your history stays as it is.</div>
-                {switchedAt ? (
-                  <div class="ss-note" data-testid="switch-notice">
-                    You last switched programs on {day(switchedAt)}. Switching more than once in 3 weeks makes progress hard to judge.
-                  </div>
-                ) : null}
-                {open ? <div class="ss-note">Finish or delete the open session first.</div> : null}
-                <div class="row">
-                  <button type="button" class="btn btn-primary" data-testid="reactivate-yes" disabled={busy || !!open} onClick={() => void activate(p)}>
-                    {busy ? "Working…" : p.activations.length ? "Yes, switch back" : "Yes, use it"}
-                  </button>
-                  <button type="button" class="btn btn-ghost" onClick={() => setArmed(null)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <span class="caption num">
+                {styleLabel(p.style)} ·{" "}
+                {p.activations.length ? p.activations.map((a) => `${day(a.started_at)} – ${a.ended_at ? day(a.ended_at) : "now"}`).join(", ") : "never used"}
+              </span>
+            </span>
+            {p.status === "archived" && armed !== p.id ? (
+              <button type="button" class="clay press btn-sm btn--fit t-pink" data-testid="reactivate" onClick={() => setArmed(p.id)}>
+                {p.activations.length ? "Switch back" : "Use this program"}
+              </button>
             ) : null}
           </div>
-        ))}
-        {msg ? (
-          <div class="why" role="alert">
-            {msg}
-          </div>
-        ) : null}
-      </div>
-    </>
+          {armed === p.id ? (
+            <div class="callout l-full" data-testid="reactivate-confirm">
+              <span class="ex-card__meta">
+                “{programName(p)}” becomes your program{p.activations.length ? " again" : ""} from the next session. Your history stays as it is.
+              </span>
+              {switchedAt ? (
+                <span class="ex-card__meta t-orange" data-testid="switch-notice">
+                  You last switched programs on {day(switchedAt)}. Switching more than once in 3 weeks makes progress hard to judge.
+                </span>
+              ) : null}
+              {open ? <span class="ex-card__meta t-orange">Finish or delete the open session first.</span> : null}
+              <div class="l-row l-gap-8">
+                <button type="button" class="clay press btn btn--fit t-pink" data-testid="reactivate-yes" disabled={busy || !!open} onClick={() => void activate(p)}>
+                  {busy ? "Working…" : p.activations.length ? "Yes, switch back" : "Yes, use it"}
+                </button>
+                <button type="button" class="clay press btn btn--fit t-muted" onClick={() => setArmed(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ))}
+      {msg ? (
+        <p class="caption t-orange" role="alert">
+          {msg}
+        </p>
+      ) : null}
+    </section>
   );
 }

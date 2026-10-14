@@ -107,7 +107,7 @@ test("chips: Arms → Triceps lists triceps-primary exercises first; picking one
   await list.getByTestId("pick-back").click();
   await expect(step).toHaveAttribute("data-area", "arms");
   await step.getByTestId("muscle-triceps").click();
-  await list.locator(`[data-testid="pick-row"][data-id="oh_tri"] .pickmain`).click();
+  await list.locator(`[data-testid="pick-row"][data-id="oh_tri"] .ex-row__main`).click();
   await expect(page.getByTestId("exercise-picker")).toHaveCount(0);
   const card = page.locator(`[data-testid="ex-card"][data-ex="oh_tri"]`);
   await expect(card).toContainText("Added today");
@@ -133,12 +133,12 @@ test("3D: a tap on the body zooms to its area; in the close-up a tap lights the 
 
   // A muscle that is not mapped (the forehead), with nothing mapped within 24 px: the tap does nothing.
   const brow = (await hook(page, (h) => h.view!.pointOn("Frontalis muscle", false)))!;
-  await expect(hint).not.toHaveClass(/gone/);
+  await expect(hint).toHaveAttribute("data-gone", "false");
   await page.touchscreen.tap(brow.x, brow.y);
   await expect(step).toHaveAttribute("data-area", "");
   await expect(chip).toHaveCount(0);
-  // The first touch on the model fades the hint out.
-  await expect(hint).toHaveClass(/gone/);
+  // The first touch on the model hides the hint.
+  await expect(hint).toHaveAttribute("data-gone", "true");
 
   // Whole body seen from the back: a tap on the triceps opens the Arms close-up on the same side, nothing chosen yet.
   await step.getByTestId("view-back").click();

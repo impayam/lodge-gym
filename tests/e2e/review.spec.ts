@@ -34,8 +34,8 @@ test("weekly reviews sit in the History timeline on the last day of their week a
   // Oldest on the left; each on the last day of its week.
   expect(await cols.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")))).toEqual(["2026-09-20", "2026-09-27", "2026-10-06"]);
   await expect(cols.nth(1)).toHaveAttribute("aria-label", "Sun, Sep 27: weekly review");
-  await expect(cols.nth(2).locator(".mk-review")).toBeVisible();
-  await expect(cols.nth(2).locator(".mk-session")).toHaveCount(0);
+  await expect(cols.nth(2).locator(".marker--review")).toBeVisible();
+  await expect(cols.nth(2).locator(".marker--session")).toHaveCount(0);
 
   // One report on the date: it opens at once, read-only.
   await cols.nth(1).click();

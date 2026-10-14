@@ -103,11 +103,11 @@ test("old sessions still show under the archived program (SPEC-v2 §8.8 E2E 2)",
   const timeline = page.getByTestId("program-timeline");
   await expect(timeline.locator('[data-program="fullbody4"]')).toContainText("Full body (original program)");
   await expect(timeline.locator('[data-program="fullbody4"]')).toContainText("Switch back");
-  await expect(timeline.locator(".tl-item").first()).toContainText("active");
+  await expect(timeline.getByTestId("program-item").first()).toContainText("active");
   const old = page.locator('[data-testid="history-group"][data-program="fullbody4"]');
   await expect(old).toContainText("Full body · 4 days");
-  await expect(old.locator(".hist")).toHaveCount(1);
-  await expect(old.locator(".hist")).toContainText("Day 1 · Chest");
+  await expect(old.getByTestId("session-card")).toHaveCount(1);
+  await expect(old.getByTestId("session-card")).toContainText("Chest");
 });
 
 test("bench press progression continues from the old weights (SPEC-v2 §8.8 E2E 3)", async ({ page }) => {

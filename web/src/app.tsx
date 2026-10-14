@@ -126,9 +126,7 @@ export function App() {
         <Planner key={view.planId} id={view.planId} />
       </Legacy>
     ) : view.name === "history" ? (
-      <Legacy>
-        <History />
-      </Legacy>
+      <History />
     ) : view.name === "saved" && view.saved ? (
       <Legacy>
         <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
@@ -136,9 +134,7 @@ export function App() {
     ) : view.name === "reports" ? (
       <Reports />
     ) : view.name === "library" ? (
-      <Legacy>
-        <Library />
-      </Legacy>
+      <Library />
     ) : view.name === "me" ? (
       <Me />
     ) : view.name === "coach" ? (

@@ -156,6 +156,51 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 - `.rest` is hidden from touch and screen readers when closed (`visibility` after the slide); `data-over` is the visual cue when rest is over.
 - `.input` text is 16 px so iOS does not zoom on focus.
 
+### Reports (plan step 5)
+
+```html
+<div class="l-grid-3"><div class="card card--tile"><span class="big-num big-num--26">4</span><span class="caption">Sessions</span></div>…</div>
+<div class="bar-row"><span class="bar-row__label">Chest</span><span class="target-bar"><span class="target-bar__fill"></span><span class="target-bar__tick"></span></span><span class="bar-row__value"><b>12</b><span class="bar-row__of"> / 14</span></span></div>
+<div class="chart-readout" aria-live="polite">Week of Oct 6: 3 sessions</div>
+<div class="columns" role="group" data-picked="true"><span class="columns__target"></span><button aria-pressed="true"><span class="columns__bar"></span></button>…</div>
+<div class="calendar"><span class="calendar__head">M</span>…<span class="calendar__cell" data-trained="true"></span>…<span class="calendar__count">3</span></div>
+<div class="callout" data-bad="false"><h3 class="card__title">…</h3><p class="prose-fa fa" dir="rtl" lang="fa">…</p></div>
+<div class="stage"><div class="stage__canvas"><canvas></canvas></div><div class="stage__top">…</div><span class="stage__hint">Drag to turn.</span><div class="stage__card">…</div></div>
+<div class="body-figures"><figure class="body-figure"><svg>…<path class="body-region" data-status="under"/>…</svg><figcaption>Front</figcaption></figure></div>
+<ol class="balance-list"><li><span>Muscle</span><span>Sets</span><span>Status</span></li><li data-status="on">…<span class="balance-list__status">On target</span></li></ol>
+```
+- Columns are HTML, not uPlot (SPEC-v8 §8); one series in `--series-2`, the target as a dashed line explained in words under the chart.
+- Muscle status is never colour alone: under and over are striped textures, and the list names the status.
+
+### History (plan step 6)
+
+```html
+<h3 class="section-label">October 2026</h3>
+<div class="timeline"><div class="timeline__lanes"><span></span><span>Sessions</span><span>Weekly</span><span></span></div>
+  <div class="timeline__scroll"><div class="timeline__cols">
+    <button class="timeline__col" aria-pressed="false"><span class="timeline__month">Oct</span><span class="marker marker--session"></span><span class="marker marker--review"></span>
+      <span class="timeline__date"><b>13</b>Tue</span></button>…</div></div></div>
+<div class="timeline__chooser"><button class="clay press timeline-item"><span class="marker marker--overview"></span>…</button></div>
+```
+- Markers differ by shape as well as colour (dot, square outline, diamond), and every item has a text label.
+
+### Library (plan step 7)
+
+```html
+<label class="search-field well"><svg>…</svg><input class="search-field__input" type="search" placeholder="Search exercises"></label>
+<div class="chip-wrap"><button class="clay press chip" aria-pressed="true">Chest</button>…</div>          <!-- chip--lg: the picker's body parts -->
+<button class="card press ex-row"><span class="well icon-well icon-well--52 t-pink">…</span><span class="list-row__text">…</span>
+  <span class="ex-row__side"><span class="big-num big-num--22">166</span><span class="caption">est. 1RM</span></span></button>
+<span class="well icon-well icon-well--off">…</span>                                                  <!-- not logged yet -->
+<div class="stage stage--picker">…</div>
+<div class="media-pair"><div class="media-frame well"><img alt=""></div>…</div>
+<ol class="prose-list"><li>…</li></ol>
+<fieldset class="form-field"><legend class="form-field__label">Secondary muscles</legend><div class="chip-wrap"><label class="check-chip"><input type="checkbox">Lats</label>…</div></fieldset>
+<label class="clay press btn btn--fit t-muted file-pick"><input type="file" accept="image/*">Choose photo</label>
+```
+- `.ex-row__main` is the tappable part of a row that also holds another button (the form video in the body picker).
+- `.file-pick` hides the native file control inside a clay button; the chosen file name is shown beside it.
+
 ## Don't
 
 - No new colors, no gradients other than the page background, clay and card fills.

@@ -17,6 +17,7 @@ import * as ldb from "../localdb";
 import type { BootData } from "../localdb";
 import { dayInfo } from "../model";
 import { navigate, openSaved, setState, useStore } from "../store";
+import { IconChevron } from "../components/PulseIcons";
 import { OverviewBody } from "./Overview";
 import { WeeklyReviewCard } from "./Review";
 import { ReportBody } from "./SessionReport";
@@ -31,18 +32,19 @@ function detail(it: TimelineItem, boot: BootData): string {
   return `Week of ${dayMonth(it.week_start!)} – ${dayMonth(addDays(it.week_start!, 6))}`;
 }
 
-const Marker = ({ kind }: { kind: TimelineKind }) => <i class={`mk mk-${kind}`} aria-hidden="true" />;
+const Marker = ({ kind }: { kind: TimelineKind }) => <i class={`marker marker--${kind}`} aria-hidden="true" />;
 
-function ItemButton({ it, boot }: { it: TimelineItem; boot: BootData }) {
+/** One saved report: a raised row in a date's chooser (mockup 04), a list row in the List view. */
+function ItemButton({ it, boot, row }: { it: TimelineItem; boot: BootData; row?: boolean }) {
   return (
-    <button type="button" class="rt-item" data-testid="rt-item" data-kind={it.kind} data-date={it.date} onClick={() => openSaved(it)}>
+    <button type="button" class={row ? "list-row press" : "clay press timeline-item"} data-testid="rt-item" data-kind={it.kind} data-date={it.date} onClick={() => openSaved(it)}>
       <Marker kind={it.kind} />
-      <span class="t">
-        <b>{KIND_LABEL[it.kind]}</b>
-        <small>{detail(it, boot)}</small>
+      <span class="list-row__text">
+        <span class="t-title">{KIND_LABEL[it.kind]}</span>
+        <span class="caption">{detail(it, boot)}</span>
       </span>
-      <span class="go" aria-hidden="true">
-        ›
+      <span class="list-row__chevron">
+        <IconChevron size={16} />
       </span>
     </button>
   );
@@ -107,42 +109,42 @@ export function ReportsTimeline() {
   for (const d of dates) months.set(monthLabel(d.date), [...(months.get(monthLabel(d.date)) ?? []), d]);
 
   return (
-    <section data-testid="reports-timeline" data-mode={mode}>
-      <div class="kv rt-head">
-        <h2>Reports timeline</h2>
+    <section class="card l-col l-gap-12" data-testid="reports-timeline" data-mode={mode} aria-labelledby="rt-title">
+      <div class="card__head l-gap-8">
+        <h2 class="card__title l-m0" id="rt-title">
+          Reports timeline
+        </h2>
         {items?.length ? (
-          <div class="seg" role="group" aria-label="View">
-            <button type="button" aria-pressed={mode === "timeline"} data-testid="rt-mode-timeline" onClick={() => choose("timeline")}>
+          <span class="segmented" role="group" aria-label="View">
+            <button type="button" class="press" aria-pressed={mode === "timeline"} data-testid="rt-mode-timeline" onClick={() => choose("timeline")}>
               Timeline
             </button>
-            <button type="button" aria-pressed={mode === "list"} data-testid="rt-mode-list" onClick={() => choose("list")}>
+            <button type="button" class="press" aria-pressed={mode === "list"} data-testid="rt-mode-list" onClick={() => choose("list")}>
               List
             </button>
-          </div>
+          </span>
         ) : null}
       </div>
-      {offline && items ? <p class="why" style={{ marginTop: 0 }}>Offline: showing the last saved copy.</p> : null}
+      {offline && items ? <p class="caption l-m0">Offline: showing the last saved copy.</p> : null}
       {!items ? (
-        <div class="empty">{offline ? "The reports timeline needs a connection." : "Loading…"}</div>
+        offline ? (
+          <p class="state l-m0">The reports timeline needs a connection.</p>
+        ) : (
+          <span class="skeleton" style={{ height: "120px" }} aria-label="Loading the reports timeline" />
+        )
       ) : !items.length ? (
-        <div class="empty">No saved reports yet. Session reports, training overviews and weekly reviews show up here.</div>
+        <p class="state l-m0">No saved reports yet. Session reports, training overviews and weekly reviews show up here.</p>
       ) : mode === "timeline" ? (
-        <div class="card rt-card">
-          <div class="rt-grid" role="group" aria-label="Reports by date, newest on the right">
-            <div class="rt-lanes" aria-hidden="true">
+        <>
+          <div class="timeline">
+            <div class="timeline__lanes" aria-hidden="true">
               <span />
-              <span class="rt-lane">
-                <Marker kind="session" />
-                Session report
-              </span>
-              <span class="rt-lane">
-                <Marker kind="review" />
-                Weekly review
-              </span>
+              <span>Sessions</span>
+              <span>Weekly</span>
               <span />
             </div>
-            <div class="rt-scroll" ref={scroller}>
-              <div class="rt-cols">
+            <div class="timeline__scroll" ref={scroller}>
+              <div class="timeline__cols" role="group" aria-label="Reports by date, newest on the right">
                 {columns.map((d, i) => {
                   const has = (k: TimelineKind) => d.items.some((x) => x.kind === k);
                   const month = i === 0 || d.date.slice(0, 7) !== columns[i - 1].date.slice(0, 7);
@@ -150,20 +152,20 @@ export function ReportsTimeline() {
                   return (
                     <button
                       type="button"
-                      class={`rt-col${sel === d.date ? " sel" : ""}${month && i ? " month-start" : ""}`}
+                      class="timeline__col press"
                       data-testid="rt-col"
                       data-date={d.date}
                       aria-pressed={d.items.length > 1 ? sel === d.date : undefined}
                       aria-label={`${dateShort(d.date)}: ${d.items.map((x) => KIND_LABEL[x.kind].toLowerCase()).join(", ")}`}
                       onClick={() => pick(d)}
                     >
-                      <span class="m">{month ? rest.split(" ")[0] : ""}</span>
-                      <span class="c">{has("session") ? <Marker kind="session" /> : null}</span>
-                      <span class="c">{has("review") ? <Marker kind="review" /> : null}</span>
-                      <span class="d">
-                        <span class="o">{has("overview") && !has("session") ? <Marker kind="overview" /> : null}</span>
-                        <b>{rest.split(" ")[1]}</b>
-                        <small>{wd}</small>
+                      <span class="timeline__month">{month ? rest.split(" ")[0] : ""}</span>
+                      {/* An overview on a day without a session sits in the Sessions lane as ◆. */}
+                      <span>{has("session") ? <Marker kind="session" /> : has("overview") ? <Marker kind="overview" /> : null}</span>
+                      <span>{has("review") ? <Marker kind="review" /> : null}</span>
+                      <span class="timeline__date">
+                        <b class="num">{rest.split(" ")[1]}</b>
+                        <span>{wd}</span>
                       </span>
                     </button>
                   );
@@ -171,40 +173,36 @@ export function ReportsTimeline() {
               </div>
             </div>
           </div>
-          <div class="rt-hint">
+          <span class="caption l-row l-gap-8">
             <Marker kind="overview" />
             <span>Overview on a day without a session. Tap a date to open its report.</span>
-          </div>
+          </span>
           {chosen ? (
-            <div class="rt-pick" role="group" aria-label={`Reports on ${dateLong(chosen.date)}`} data-testid="rt-chooser">
-              <b>
+            <div class="timeline__chooser" role="group" aria-label={`Reports on ${dateLong(chosen.date)}`} data-testid="rt-chooser">
+              <span class="caption num">
                 {dateLong(chosen.date)} · {plural(chosen.items.length, "report")}
-              </b>
+              </span>
               {chosen.items.map((it) => (
                 <ItemButton it={it} boot={boot} />
               ))}
             </div>
           ) : null}
-        </div>
+        </>
       ) : (
-        <div data-testid="rt-list">
+        <div class="l-col l-gap-12" data-testid="rt-list">
           {[...months].map(([month, days]) => (
             <>
-              <h3 class="subhead">{month}</h3>
-              <ul class="card rt-days">
-                {days.map((d) => (
-                  <li class="rt-day">
-                    <div class="rt-date">{dateShort(d.date)}</div>
-                    <ul class="rt-items">
-                      {d.items.map((it) => (
-                        <li>
-                          <ItemButton it={it} boot={boot} />
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
+              <h3 class="section-label">{month}</h3>
+              {days.map((d) => (
+                <div class="l-col l-gap-2">
+                  <span class="caption num">{dateShort(d.date)}</span>
+                  <div class="card--list">
+                    {d.items.map((it) => (
+                      <ItemButton it={it} boot={boot} row />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </>
           ))}
         </div>

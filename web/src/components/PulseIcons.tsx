@@ -49,3 +49,18 @@ export const IconMore = ({ size = 22 }: { size?: number }) => (
     <circle cx="19" cy="12" r="2" />
   </svg>
 );
+
+export const IconSearch = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="6" />
+    <path d="M20 20l-4.5-4.5" />
+  </svg>
+);
+
+/** Pick by body part (mockup 05). */
+export const IconBody = svg("M12 7v7M7 9l5 2 5-2M9.5 21l2.5-7 2.5 7", <circle cx="12" cy="4.5" r="2" />);
+
+/** Equipment in the exercise rows (mockup 05): barbell (and bodyweight), dumbbell, cable (and machine). */
+export const IconBarbell = svg("M3 12h2M19 12h2M6 8v8M18 8v8M9 10v4M15 10v4M9 12h6");
+export const IconDumbbell = svg("M4 10v4M20 10v4M7 8v8M17 8v8M7 12h10");
+export const IconCable = svg("M12 3v6M8 9h8M10 9l-3 12M14 9l3 12");

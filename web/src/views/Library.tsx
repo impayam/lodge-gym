@@ -1,8 +1,8 @@
-// Exercise library (SPEC-v2 §7.3): search with muscle / equipment / pattern filters, a detail view with media,
-// instructions, muscles and your history with the exercise, custom exercises (create, edit, archive, photo), and the
-// same list as a picker for adding an exercise to the session.
+// Exercise library (SPEC-v2 §7.3, SPEC-v8 §6.05): search, muscle-group chips and more filters, rows with each
+// exercise's number, the 3D body picker ("Body"), a detail screen with media, instructions, muscles and your history,
+// custom exercises (create, edit, archive, photo), and the same list as a picker for adding an exercise to a session.
 
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { CATEGORIES, countsVolume, type Category } from "../../../worker/lib/category";
 import { CANONICAL_MUSCLES } from "../../../worker/lib/muscles";
 import { bestSet } from "../../../worker/lib/reports";
@@ -10,8 +10,12 @@ import type { Exercise, Pattern, SetEntry, WorkoutSession } from "../../../worke
 import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
 import { BodyPicker } from "../components/BodyPicker";
-import { LineChart } from "../components/Charts";
+import { Pushed } from "../components/Pushed";
+import { IconBack, IconBarbell, IconBody, IconCable, IconDumbbell, IconPlay, IconSearch } from "../components/PulseIcons";
+import { TimeChart } from "../components/TimeChart";
 import { dateLong, dayMonth, fmtNum, ytLink } from "../format";
+import { BIG_THREE } from "../lib/lifts";
+import { inGroup, LIBRARY_GROUPS, rowFacts, type LibraryGroup, type RowFact } from "../lib/libraryView";
 import { loadAllHistory, loadLibrary, mediaSrc, saveCustomExercise, uploadCustomPhoto, useStore, type CustomExerciseInput } from "../store";
 
 export const MUSCLE_LABEL: Record<string, string> = {
@@ -73,28 +77,70 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 };
 const SOURCE_LABEL: Record<Exercise["source"], string> = { seed: "Program", fedb: "free-exercise-db", manual: "Added by hand", custom: "Your exercise" };
 
-/** "Watch form video" link: a YouTube search for the English name + " form", built at render time. */
-export function FormVideoLink({ name }: { name: string }) {
-  return (
-    <a class="formlink" href={ytLink(name)} target="_blank" rel="noopener noreferrer">
-      Watch form video ↗
-    </a>
-  );
-}
-
+/** The exercise's photo (custom and library exercises), for screens still on the old styles. */
 export function ExerciseThumb({ ex }: { ex: Exercise }) {
   const m = ex.media[0];
   return m ? <img class="exthumb" src={mediaSrc(m)} alt="" loading="lazy" /> : <span class="exthumb placeholder" aria-hidden="true" />;
 }
 
+const EQUIPMENT_ICON: Record<Exercise["equipment"], (p: { size?: number }) => preact.JSX.Element> = {
+  barbell: IconBarbell,
+  bodyweight: IconBarbell,
+  dumbbell: IconDumbbell,
+  cable: IconCable,
+  machine: IconCable,
+};
+/** The equipment icon of an exercise row. */
+export function EquipmentIcon({ equipment, size = 26 }: { equipment: Exercise["equipment"]; size?: number }) {
+  const Icon = EQUIPMENT_ICON[equipment] ?? IconBarbell;
+  return <Icon size={size} />;
+}
+
+/** Logged rows take the accents in turn (mockup 05); a row not logged yet stays grey. */
+const ROW_TINT = ["t-pink", "t-violet", "t-orange"];
+
+/** "Chest, front delts, triceps": the main muscle, then the others. */
+const musclesLine = (ex: Exercise) => [muscleLabel(ex.muscle_primary), ...ex.muscles_secondary.map((m) => muscleLabel(m).toLowerCase())].join(", ");
+
+/** An exercise as a row card (mockup 05): equipment icon, name, muscles, and its number on the right. */
+function ExerciseRow({ ex, fact, i, onOpen, testId = "library-row" }: { ex: Exercise; fact: RowFact | undefined; i: number; onOpen: () => void; testId?: string }) {
+  return (
+    <button type="button" class="card press ex-row" data-testid={testId} data-id={ex.id} onClick={onOpen}>
+      <span class={`well icon-well icon-well--52 ${fact ? ROW_TINT[i % ROW_TINT.length] : "icon-well--off"}`}>
+        <EquipmentIcon equipment={ex.equipment} />
+      </span>
+      <span class="list-row__text">
+        <b class="t-title">{ex.name_en}</b>
+        <span class="caption">
+          {musclesLine(ex)}
+          {ex.archived_at ? " · archived" : ""}
+          <span class="l-sr">, {equipmentLabel(ex.equipment)}</span>
+        </span>
+      </span>
+      <span class="ex-row__side">
+        <span class="big-num big-num--22 num">{fact ? fmtNum(fact.value) : "—"}</span>
+        <span class="caption">{fact ? fact.label : "not logged"}</span>
+      </span>
+    </button>
+  );
+}
+
+function useRowFacts() {
+  const sessions = useStore((s) => s.sessions);
+  const unit = useStore((s) => s.boot!.settings.unit);
+  return useMemo(() => rowFacts(Object.values(sessions), unit, new Set(BIG_THREE.map((l) => l.id))), [sessions, unit]);
+}
+
 interface Filters {
   q: string;
+  group: LibraryGroup;
   muscle: string;
   equipment: string;
   pattern: string;
 }
 
 function matches(ex: Exercise, f: Filters): boolean {
+  if (!inGroup(ex.muscle_primary, f.group)) return false;
   if (f.muscle && ex.muscle_primary !== f.muscle && !ex.muscles_secondary.includes(f.muscle)) return false;
   if (f.equipment && ex.equipment !== f.equipment) return false;
   if (f.pattern && ex.pattern !== f.pattern) return false;
@@ -105,10 +151,28 @@ function matches(ex: Exercise, f: Filters): boolean {
 
 const PAGE = 60;
 
-/** Searchable, filterable exercise list. Used by the Library tab and by the session's "+ Add exercise". */
-export function ExerciseList({ onOpen, archived = false, testId }: { onOpen: (ex: Exercise) => void; archived?: boolean; testId?: string }) {
+/**
+ * The searchable exercise list (mockup 05): search, muscle-group chips, the count, more filters (muscle, equipment,
+ * pattern, and archived exercises in the Library tab), then the rows. Used by the Library tab and the picker's Search.
+ */
+export function ExerciseList({
+  onOpen,
+  archived,
+  onArchived,
+  totalShown,
+  testId,
+}: {
+  onOpen: (ex: Exercise) => void;
+  archived?: boolean;
+  onArchived?: (on: boolean) => void;
+  /** The page header already shows the library's total. */
+  totalShown?: boolean;
+  testId?: string;
+}) {
   const library = useStore((s) => s.library);
-  const [f, setF] = useState<Filters>({ q: "", muscle: "", equipment: "", pattern: "" });
+  const facts = useRowFacts();
+  const [f, setF] = useState<Filters>({ q: "", group: "all", muscle: "", equipment: "", pattern: "" });
+  const [more, setMore] = useState(false);
   const [limit, setLimit] = useState(PAGE);
   useEffect(() => {
     void loadLibrary();
@@ -118,57 +182,80 @@ export function ExerciseList({ onOpen, archived = false, testId }: { onOpen: (ex
     setF({ ...f, ...patch });
     setLimit(PAGE);
   };
+  const extra = [f.muscle, f.equipment, f.pattern].filter(Boolean).length + (archived ? 1 : 0);
+  // Mockup 05 names the chip here ("Chest, …"), without repeating a total the page header already shows.
+  const count = `${fmtNum(list.length)} ${list.length === 1 ? "exercise" : "exercises"}`;
+  const group = LIBRARY_GROUPS.find((g) => g.key === f.group)!;
+  const countLine = f.group !== "all" ? `${group.label}, ${count}` : totalShown && !f.q.trim() && !extra ? "All exercises" : count;
   return (
-    <div class="stack" data-testid={testId}>
-      <input class="search" type="search" placeholder="Search exercises" aria-label="Search exercises" value={f.q} onInput={(e) => set({ q: (e.currentTarget as HTMLInputElement).value })} />
-      <div class="filters">
-        <select aria-label="Muscle" value={f.muscle} onChange={(e) => set({ muscle: (e.currentTarget as HTMLSelectElement).value })}>
-          <option value="">All muscles</option>
-          {CANONICAL_MUSCLES.map((m) => (
-            <option value={m}>{muscleLabel(m)}</option>
-          ))}
-        </select>
-        <select aria-label="Equipment" value={f.equipment} onChange={(e) => set({ equipment: (e.currentTarget as HTMLSelectElement).value })}>
-          <option value="">All equipment</option>
-          {EQUIPMENT.map(([k, label]) => (
-            <option value={k}>{label}</option>
-          ))}
-        </select>
-        <select aria-label="Pattern" value={f.pattern} onChange={(e) => set({ pattern: (e.currentTarget as HTMLSelectElement).value })}>
-          <option value="">All patterns</option>
-          {(Object.keys(PATTERN_LABEL) as Pattern[]).map((p) => (
-            <option value={p}>{PATTERN_LABEL[p]}</option>
-          ))}
-        </select>
+    <div class="l-col l-gap-12" data-testid={testId}>
+      <label class="search-field well">
+        <IconSearch />
+        <span class="l-sr">Search exercises</span>
+        <input class="search-field__input" type="search" placeholder="Search exercises" value={f.q} onInput={(e) => set({ q: (e.currentTarget as HTMLInputElement).value })} />
+      </label>
+      <div class="chip-wrap" role="group" aria-label="Muscle group">
+        {LIBRARY_GROUPS.map((g) => (
+          <button type="button" class="clay press chip" aria-pressed={f.group === g.key} data-testid={`group-${g.key}`} onClick={() => set({ group: g.key })}>
+            {g.label}
+          </button>
+        ))}
       </div>
+      <div class="l-row l-between l-gap-8">
+        <span class="caption num" data-testid="library-count" aria-live="polite">
+          {library === null ? "" : countLine}
+        </span>
+        <button type="button" class="clay press btn-sm t-muted" aria-expanded={more} aria-controls={`${testId ?? "list"}-filters`} data-testid="library-filters" onClick={() => setMore(!more)}>
+          {extra ? `Filters (${fmtNum(extra)})` : "Filters"}
+        </button>
+      </div>
+      {more ? (
+        <div id={`${testId ?? "list"}-filters`} class="l-col l-gap-8">
+          <div class="l-grid-3 l-gap-8">
+            <select class="input" aria-label="Muscle" value={f.muscle} onChange={(e) => set({ muscle: (e.currentTarget as HTMLSelectElement).value })}>
+              <option value="">All muscles</option>
+              {CANONICAL_MUSCLES.map((m) => (
+                <option value={m}>{muscleLabel(m)}</option>
+              ))}
+            </select>
+            <select class="input" aria-label="Equipment" value={f.equipment} onChange={(e) => set({ equipment: (e.currentTarget as HTMLSelectElement).value })}>
+              <option value="">All equipment</option>
+              {EQUIPMENT.map(([k, label]) => (
+                <option value={k}>{label}</option>
+              ))}
+            </select>
+            <select class="input" aria-label="Pattern" value={f.pattern} onChange={(e) => set({ pattern: (e.currentTarget as HTMLSelectElement).value })}>
+              <option value="">All patterns</option>
+              {(Object.keys(PATTERN_LABEL) as Pattern[]).map((p) => (
+                <option value={p}>{PATTERN_LABEL[p]}</option>
+              ))}
+            </select>
+          </div>
+          {onArchived ? (
+            <div class="l-row">
+              <button type="button" class="clay press chip" aria-pressed={!!archived} data-testid="show-archived" onClick={() => onArchived(!archived)}>
+                Show archived exercises
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {library === null ? (
-        <div class="empty">Loading the library…</div>
+        <div class="l-col l-gap-8" aria-label="Loading the library">
+          <span class="skeleton" style={{ height: "76px" }} />
+          <span class="skeleton" style={{ height: "76px" }} />
+        </div>
       ) : (
         <>
-          <small class="muted" data-testid="library-count">
-            {fmtNum(list.length)} {list.length === 1 ? "exercise" : "exercises"}
-          </small>
-          <div class="exlist">
-            {list.slice(0, limit).map((ex) => (
-              <button type="button" class="exrow" data-testid="library-row" data-id={ex.id} onClick={() => onOpen(ex)}>
-                <ExerciseThumb ex={ex} />
-                <span class="meta">
-                  <b>{ex.name_en}</b>
-                  <small>
-                    {muscleLabel(ex.muscle_primary)} · {equipmentLabel(ex.equipment)}
-                    {ex.pattern ? ` · ${PATTERN_LABEL[ex.pattern]}` : ""}
-                    {ex.archived_at ? " · archived" : ""}
-                  </small>
-                </span>
-              </button>
-            ))}
-          </div>
+          {list.slice(0, limit).map((ex, i) => (
+            <ExerciseRow ex={ex} fact={facts.get(ex.id)} i={i} onOpen={() => onOpen(ex)} />
+          ))}
           {list.length > limit ? (
-            <button type="button" class="btn btn-ghost btn-block" onClick={() => setLimit(limit + PAGE)}>
+            <button type="button" class="clay press btn t-muted" onClick={() => setLimit(limit + PAGE)}>
               Show more
             </button>
           ) : null}
-          {!list.length ? <div class="empty">No exercise matches.</div> : null}
+          {!list.length ? <p class="state l-m0">No exercise matches.</p> : null}
         </>
       )}
     </div>
@@ -189,31 +276,48 @@ function ExerciseHistory({ ex }: { ex: Exercise }) {
     .sort((a, b) => (a.local_date + a.started_at).localeCompare(b.local_date + b.started_at));
   if (!withEx.length)
     return (
-      <div class="empty" data-testid="exercise-history">
+      <p class="state l-m0" data-testid="exercise-history">
         No sets logged with this exercise yet.
-      </div>
+      </p>
     );
   const last: WorkoutSession = withEx[withEx.length - 1];
   const lastSets = last.sets.filter((x) => x.exercise_id === ex.id && x.done).sort((a, b) => a.set_index - b.set_index);
   const points = withEx.map((s) => ({ date: s.local_date, best: bestSet(s, ex.id, unit) })).filter((p) => p.best);
   const best = points.reduce<(typeof points)[number] | null>((b, p) => (!b || p.best!.e1rm > b.best!.e1rm ? p : b), null);
   return (
-    <div class="stack" data-testid="exercise-history">
-      <div class="kv">
-        <span>Last time ({dateLong(last.local_date)})</span>
-        <span class="num">{lastSets.map((x) => setLine(x, last.unit)).join(", ")}</span>
+    <div class="l-col l-gap-12" data-testid="exercise-history">
+      <div class="card--list">
+        <div class="list-row">
+          <span class="list-row__text">
+            <span class="t-title">Last time</span>
+            <span class="caption num">{dateLong(last.local_date)}</span>
+          </span>
+          <span class="list-row__value num">{lastSets.map((x) => setLine(x, last.unit)).join(", ")}</span>
+        </div>
+        <div class="list-row">
+          <span class="list-row__text">
+            <span class="t-title">Best estimated 1RM</span>
+          </span>
+          <span class="list-row__value num" data-testid="best-e1rm">
+            {best ? `${fmtNum(best.best!.e1rm, 1)} ${unit} (${fmtNum(best.best!.weight, 1)}×${fmtNum(best.best!.reps)}, ${dayMonth(best.date)})` : "–"}
+          </span>
+        </div>
+        <div class="list-row">
+          <span class="list-row__text">
+            <span class="t-title">Sessions</span>
+          </span>
+          <span class="list-row__value num">{fmtNum(withEx.length)}</span>
+        </div>
       </div>
-      <div class="kv">
-        <span>Best estimated 1RM</span>
-        <span class="num" data-testid="best-e1rm">
-          {best ? `${fmtNum(best.best!.e1rm, 1)} ${unit} (${fmtNum(best.best!.weight, 1)}×${fmtNum(best.best!.reps)}, ${dayMonth(best.date)})` : "–"}
-        </span>
-      </div>
-      <div class="kv">
-        <span>Sessions</span>
-        <span class="num">{fmtNum(withEx.length)}</span>
-      </div>
-      {points.length ? <LineChart points={points.map((p) => ({ x: p.date, y: p.best!.e1rm, label: dayMonth(p.date) }))} valueLabel={`${unit} e1RM`} height={120} /> : null}
+      {points.length ? (
+        <TimeChart
+          series={[{ label: "Best set, estimated 1RM", color: "--series-2", points: points.map((p) => ({ date: p.date, value: p.best!.e1rm })) }]}
+          height={120}
+          yAxis
+          label={`${ex.name_en}: estimated 1RM of the best set per session, ${unit}`}
+          unit={unit}
+        />
+      ) : null}
     </div>
   );
 }
@@ -251,76 +355,120 @@ function CustomForm({ initial, onDone, onCancel }: { initial: Exercise | null; o
     }
   };
   return (
-    <section class="card stack" data-testid="custom-form">
-      <b>{initial ? "Edit exercise" : "New custom exercise"}</b>
-      <div class="field">
-        <label for="cx-name">Name</label>
-        <input id="cx-name" value={name} maxLength={80} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
-      </div>
-      <div class="field">
-        <label for="cx-primary">Primary muscle</label>
-        <select id="cx-primary" value={primary} onChange={(e) => setPrimary((e.currentTarget as HTMLSelectElement).value)}>
-          {CANONICAL_MUSCLES.map((m) => (
-            <option value={m}>{muscleLabel(m)}</option>
-          ))}
-        </select>
-      </div>
-      <fieldset class="field chipset">
-        <legend class="lbl">Secondary muscles</legend>
-        {CANONICAL_MUSCLES.filter((m) => m !== primary).map((m) => (
-          <label class="chipcheck">
-            <input
-              type="checkbox"
-              checked={secondary.includes(m)}
-              onChange={(e) => setSecondary((e.currentTarget as HTMLInputElement).checked ? [...secondary, m] : secondary.filter((x) => x !== m))}
-            />
-            {muscleLabel(m)}
+    <main class="page" data-testid="custom-form">
+      <header class="screen-head">
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Cancel" disabled={busy} onClick={onCancel}>
+          <IconBack size={20} />
+        </button>
+        <h1 class="screen-head__title l-m0 l-grow">{initial ? "Edit exercise" : "New custom exercise"}</h1>
+      </header>
+      <section class="card l-col l-gap-12">
+        <div class="form-field">
+          <label class="form-field__label" for="cx-name">
+            Name
           </label>
-        ))}
-      </fieldset>
-      <div class="field">
-        <label for="cx-eq">Equipment</label>
-        <select id="cx-eq" value={equipment} onChange={(e) => setEquipment((e.currentTarget as HTMLSelectElement).value as Exercise["equipment"])}>
-          {EQUIPMENT.map(([k, label]) => (
-            <option value={k}>{label}</option>
-          ))}
-        </select>
-      </div>
-      <div class="field">
-        <label for="cx-pattern">Pattern</label>
-        <select id="cx-pattern" value={pattern} onChange={(e) => setPattern((e.currentTarget as HTMLSelectElement).value as Pattern | "")}>
-          <option value="">None</option>
-          {(Object.keys(PATTERN_LABEL) as Pattern[]).map((p) => (
-            <option value={p}>{PATTERN_LABEL[p]}</option>
-          ))}
-        </select>
-      </div>
-      <div class="field">
-        <label for="cx-category">Category</label>
-        <select id="cx-category" value={category} onChange={(e) => setCategory((e.currentTarget as HTMLSelectElement).value as Category)}>
-          {CATEGORIES.map((k) => (
-            <option value={k}>{CATEGORY_LABEL[k]}</option>
-          ))}
-        </select>
-      </div>
-      <div class="field">
-        <label for="cx-photo">Photo (optional)</label>
-        <input id="cx-photo" type="file" accept="image/*" onChange={(e) => setPhoto((e.currentTarget as HTMLInputElement).files?.[0] ?? null)} />
-      </div>
-      <div class="row">
-        <button type="button" class="btn btn-primary" disabled={busy || !name.trim()} onClick={() => void save()}>
+          <input id="cx-name" class="input" value={name} maxLength={80} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="cx-primary">
+            Primary muscle
+          </label>
+          <select id="cx-primary" class="input" value={primary} onChange={(e) => setPrimary((e.currentTarget as HTMLSelectElement).value)}>
+            {CANONICAL_MUSCLES.map((m) => (
+              <option value={m}>{muscleLabel(m)}</option>
+            ))}
+          </select>
+        </div>
+        <fieldset class="form-field">
+          <legend class="form-field__label">Secondary muscles</legend>
+          <div class="chip-wrap">
+            {CANONICAL_MUSCLES.filter((m) => m !== primary).map((m) => (
+              <label class="check-chip">
+                <input
+                  type="checkbox"
+                  checked={secondary.includes(m)}
+                  onChange={(e) => setSecondary((e.currentTarget as HTMLInputElement).checked ? [...secondary, m] : secondary.filter((x) => x !== m))}
+                />
+                {muscleLabel(m)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div class="l-grid-2 l-gap-8">
+          <div class="form-field">
+            <label class="form-field__label" for="cx-eq">
+              Equipment
+            </label>
+            <select id="cx-eq" class="input" value={equipment} onChange={(e) => setEquipment((e.currentTarget as HTMLSelectElement).value as Exercise["equipment"])}>
+              {EQUIPMENT.map(([k, label]) => (
+                <option value={k}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-field__label" for="cx-pattern">
+              Pattern
+            </label>
+            <select id="cx-pattern" class="input" value={pattern} onChange={(e) => setPattern((e.currentTarget as HTMLSelectElement).value as Pattern | "")}>
+              <option value="">None</option>
+              {(Object.keys(PATTERN_LABEL) as Pattern[]).map((p) => (
+                <option value={p}>{PATTERN_LABEL[p]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="cx-category">
+            Category
+          </label>
+          <select id="cx-category" class="input" value={category} onChange={(e) => setCategory((e.currentTarget as HTMLSelectElement).value as Category)}>
+            {CATEGORIES.map((k) => (
+              <option value={k}>{CATEGORY_LABEL[k]}</option>
+            ))}
+          </select>
+        </div>
+        <div class="form-field">
+          <span class="form-field__label" id="cx-photo-label">
+            Photo (optional)
+          </span>
+          <div class="l-row l-gap-12">
+            <label class="clay press btn btn--fit t-muted file-pick">
+              <input type="file" accept="image/*" aria-labelledby="cx-photo-label" onChange={(e) => setPhoto((e.currentTarget as HTMLInputElement).files?.[0] ?? null)} />
+              {photo || initial?.media.length ? "Change photo" : "Choose photo"}
+            </label>
+            <span class="list-row__note l-grow" aria-live="polite">
+              {photo ? photo.name : initial?.media.length ? "Keeps the current photo." : "No photo."}
+            </span>
+          </div>
+        </div>
+      </section>
+      <div class="l-row l-gap-8">
+        <button type="button" class="clay press btn-lg t-pink l-grow" disabled={busy || !name.trim()} onClick={() => void save()}>
           Save
         </button>
-        <button type="button" class="btn btn-ghost" disabled={busy} onClick={onCancel}>
+        <button type="button" class="clay press btn-lg btn--fit t-muted" disabled={busy} onClick={onCancel}>
           Cancel
         </button>
       </div>
       {err ? (
-        <div class="err" role="alert">
+        <p class="caption t-orange l-m0" role="alert">
           {err}
-        </div>
+        </p>
       ) : null}
-    </section>
+    </main>
+  );
+}
+
+function Fact({ name, value, testid }: { name: string; value: string; testid?: string }) {
+  return (
+    <div class="list-row">
+      <span class="list-row__text">
+        <span class="caption">{name}</span>
+      </span>
+      <span class="list-row__value" data-testid={testid}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -331,7 +479,15 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
     setBusy(true);
     setErr("");
     try {
-      await saveCustomExercise(ex.id, { name_en: ex.name_en, muscle_primary: ex.muscle_primary, muscles_secondary: ex.muscles_secondary, equipment: ex.equipment, pattern: ex.pattern, category: ex.category ?? undefined, archived });
+      await saveCustomExercise(ex.id, {
+        name_en: ex.name_en,
+        muscle_primary: ex.muscle_primary,
+        muscles_secondary: ex.muscles_secondary,
+        equipment: ex.equipment,
+        pattern: ex.pattern,
+        category: ex.category ?? undefined,
+        archived,
+      });
     } catch (e) {
       setErr(errorText(e));
     } finally {
@@ -340,92 +496,81 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
   };
   const images = ex.media.filter((m) => m.kind === "image" || m.kind === "gif");
   return (
-    <div class="stack" data-testid="exercise-detail">
-      <button type="button" class="linkbtn" onClick={onBack}>
-        ← Back to the library
-      </button>
-      <h2 style={{ margin: "4px 0 0" }}>{ex.name_en}</h2>
-      {/* A missing category only comes from a copy cached before the category existed: say nothing rather than guess. */}
-      {!ex.category || countsVolume(ex.category) ? null : (
-        <p class="muted" data-testid="not-counted" style={{ margin: 0 }}>
-          <span class="pill">Not counted in volume</span> Sets are logged, but count 0 toward weekly muscle volume and the muscle map.
-        </p>
-      )}
-      {images.length ? (
-        <div class="exmedia">
-          {images.slice(0, 2).map((m, i) => (
-            <img src={mediaSrc(m)} alt={`${ex.name_en}, ${i === 0 ? "start" : "end"} position`} loading="lazy" />
-          ))}
-        </div>
-      ) : (
-        <div class="exmedia none" data-testid="media-placeholder">
-          <span>No image</span>
-        </div>
-      )}
-      <FormVideoLink name={ex.name_en} />
-      <div class="card stack">
-        <div class="kv">
-          <span>Primary muscle</span>
-          <span>{muscleLabel(ex.muscle_primary)}</span>
-        </div>
-        <div class="kv">
-          <span>Secondary muscles</span>
-          <span>{ex.muscles_secondary.length ? ex.muscles_secondary.map(muscleLabel).join(", ") : "–"}</span>
-        </div>
-        <div class="kv">
-          <span>Equipment</span>
-          <span>{equipmentLabel(ex.equipment)}</span>
-        </div>
-        <div class="kv">
-          <span>Pattern</span>
-          <span>{ex.pattern ? PATTERN_LABEL[ex.pattern] : "–"}</span>
-        </div>
-        <div class="kv">
-          <span>Category</span>
-          <span data-testid="category">{ex.category ? CATEGORY_LABEL[ex.category] : "–"}</span>
-        </div>
-        <div class="kv">
-          <span>Mechanic · level</span>
-          <span>
-            {ex.mechanic ?? "–"} · {ex.level ?? "–"}
-          </span>
-        </div>
-        <div class="kv">
-          <span>Source</span>
-          <span>{SOURCE_LABEL[ex.source]}</span>
-        </div>
-      </div>
-      {ex.cue_en ? <p class="cue">{ex.cue_en}</p> : null}
-      {ex.instructions_en.length ? (
-        <>
-          <h2>Instructions</h2>
-          <ol class="rules">
-            {ex.instructions_en.map((s) => (
-              <li>{s}</li>
+    <Pushed onBack={onBack}>
+      <main class="page" data-testid="exercise-detail">
+        <header class="screen-head">
+          <button type="button" class="clay press btn-icon t-muted" aria-label="Back to the library" onClick={onBack}>
+            <IconBack size={20} />
+          </button>
+          <div class="l-col l-grow">
+            <span class="screen-head__sub">Library</span>
+            <h1 class="screen-head__title l-m0">{ex.name_en}</h1>
+          </div>
+        </header>
+        {/* A missing category only comes from a copy cached before the category existed: say nothing rather than guess. */}
+        {!ex.category || countsVolume(ex.category) ? null : (
+          <p class="callout l-m0 ex-card__meta" data-testid="not-counted">
+            <b class="t-orange">Not counted in volume</b> Sets are logged, but count 0 toward weekly muscle volume and the muscle map.
+          </p>
+        )}
+        {images.length ? (
+          <div class="media-pair">
+            {images.slice(0, 2).map((m, i) => (
+              <span class="media-frame well">
+                <img src={mediaSrc(m)} alt={`${ex.name_en}, ${i === 0 ? "start" : "end"} position`} loading="lazy" />
+              </span>
             ))}
-          </ol>
-        </>
-      ) : null}
-      <h2>Your history</h2>
-      <div class="card">
-        <ExerciseHistory ex={ex} />
-      </div>
-      {ex.source === "custom" ? (
-        <div class="row">
-          <button type="button" class="btn btn-ghost" disabled={busy} onClick={onEdit}>
-            Edit
-          </button>
-          <button type="button" class="btn btn-ghost" disabled={busy} data-testid="archive" onClick={() => void archive(!ex.archived_at)}>
-            {ex.archived_at ? "Restore" : "Archive"}
-          </button>
-        </div>
-      ) : null}
-      {err ? (
-        <div class="err" role="alert">
-          {err}
-        </div>
-      ) : null}
-    </div>
+          </div>
+        ) : (
+          <p class="state card l-m0" data-testid="media-placeholder">
+            No image
+          </p>
+        )}
+        <a class="clay press btn t-orange l-row l-center l-gap-8" href={ytLink(ex.name_en)} target="_blank" rel="noopener noreferrer">
+          <IconPlay size={16} />
+          Watch form video ↗
+        </a>
+        <section class="card card--list" aria-label="About this exercise">
+          <Fact name="Primary muscle" value={muscleLabel(ex.muscle_primary)} />
+          <Fact name="Secondary muscles" value={ex.muscles_secondary.length ? ex.muscles_secondary.map(muscleLabel).join(", ") : "–"} />
+          <Fact name="Equipment" value={equipmentLabel(ex.equipment)} />
+          <Fact name="Pattern" value={ex.pattern ? PATTERN_LABEL[ex.pattern] : "–"} />
+          <Fact name="Category" value={ex.category ? CATEGORY_LABEL[ex.category] : "–"} testid="category" />
+          <Fact name="Mechanic · level" value={`${ex.mechanic ?? "–"} · ${ex.level ?? "–"}`} />
+          <Fact name="Source" value={SOURCE_LABEL[ex.source]} />
+        </section>
+        {ex.cue_en ? <p class="ex-card__cue l-m0">{ex.cue_en}</p> : null}
+        {ex.instructions_en.length ? (
+          <section class="card l-col l-gap-12">
+            <h2 class="card__title l-m0">Instructions</h2>
+            <ol class="prose-list">
+              {ex.instructions_en.map((s) => (
+                <li>{s}</li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
+        <section class="card l-col l-gap-12">
+          <h2 class="card__title l-m0">Your history</h2>
+          <ExerciseHistory ex={ex} />
+        </section>
+        {ex.source === "custom" ? (
+          <div class="l-row l-gap-8">
+            <button type="button" class="clay press btn btn--fit t-muted l-grow" disabled={busy} onClick={onEdit}>
+              Edit
+            </button>
+            <button type="button" class="clay press btn btn--fit t-muted l-grow" disabled={busy} data-testid="archive" onClick={() => void archive(!ex.archived_at)}>
+              {ex.archived_at ? "Restore" : "Archive"}
+            </button>
+          </div>
+        ) : null}
+        {err ? (
+          <p class="caption t-orange l-m0" role="alert">
+            {err}
+          </p>
+        ) : null}
+      </main>
+    </Pushed>
   );
 }
 
@@ -433,8 +578,19 @@ export function Library() {
   const library = useStore((s) => s.library);
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<{ edit: Exercise | null } | null>(null);
+  const [body, setBody] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const open = openId ? (library ?? []).find((e) => e.id === openId) : null;
+  // A detail, the form or the body picker opens at the top; back on the list, the list is where it was.
+  const listY = useRef(0);
+  const away = !!(openId || form || body);
+  useEffect(() => {
+    if (away) window.scrollTo(0, 0);
+    else requestAnimationFrame(() => window.scrollTo(0, listY.current));
+  }, [away, openId, form, body]);
+  const leaveList = () => {
+    if (!away) listY.current = window.scrollY;
+  };
   if (form)
     return (
       <CustomForm
@@ -447,29 +603,79 @@ export function Library() {
       />
     );
   if (open) return <ExerciseDetail ex={open} onBack={() => setOpenId(null)} onEdit={() => setForm({ edit: open })} />;
+  if (body)
+    return (
+      <Pushed onBack={() => setBody(false)}>
+        <main class="page" data-testid="library-body">
+          <header class="screen-head">
+            <button type="button" class="clay press btn-icon t-muted" aria-label="Back to the library" onClick={() => setBody(false)}>
+              <IconBack size={20} />
+            </button>
+            <h1 class="screen-head__title l-m0 l-grow">Pick by body part</h1>
+          </header>
+          <BodyPicker
+            sessionId="library"
+            onPick={(ex) => {
+              setBody(false);
+              setOpenId(ex.id);
+            }}
+          />
+        </main>
+      </Pushed>
+    );
+  const total = (library ?? []).filter((e) => !e.archived_at).length;
   return (
-    <>
-      <div class="kv navrow">
-        <h2 style={{ margin: 0 }}>Library</h2>
-        <button type="button" class="btn btn-ghost btn-small" data-testid="new-custom" onClick={() => setForm({ edit: null })}>
-          + Custom exercise
+    <main class="page" data-testid="library-tab">
+      <header class="page-head">
+        <div class="l-col l-gap-2">
+          <span class="page-head__sub num">{library === null ? "Library" : `${fmtNum(total)} exercises`}</span>
+          <h1 class="h-page">Library</h1>
+        </div>
+        <button
+          type="button"
+          class="clay press btn t-pink l-row l-gap-8"
+          aria-label="Pick by body part"
+          data-testid="open-body"
+          onClick={() => {
+            leaveList();
+            setBody(true);
+          }}
+        >
+          <IconBody size={18} />
+          Body
         </button>
-      </div>
-      <label class="chipcheck" style={{ marginBottom: "8px" }}>
-        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived((e.currentTarget as HTMLInputElement).checked)} />
-        Show archived exercises
-      </label>
-      <ExerciseList onOpen={(ex) => setOpenId(ex.id)} archived={showArchived} testId="library" />
-    </>
+      </header>
+      <ExerciseList
+        onOpen={(ex) => {
+          leaveList();
+          setOpenId(ex.id);
+        }}
+        archived={showArchived}
+        onArchived={setShowArchived}
+        totalShown
+        testId="library"
+      />
+      <button
+        type="button"
+        class="clay press btn t-pink"
+        data-testid="new-custom"
+        onClick={() => {
+          leaveList();
+          setForm({ edit: null });
+        }}
+      >
+        + Custom exercise
+      </button>
+    </main>
   );
 }
 
 /** Which tab "+ Add exercise" opened on last, per session (Body by default, SPEC-v3 M9b). */
 const pickerTab = new Map<string, "body" | "search">();
 
-/** Full-screen picker for "+ Add exercise" inside a session: the body map (default) or search. */
 /**
- * "+ Add exercise" in a session, and Add / Replace in the session planner (SPEC-v3 M9c).
+ * "+ Add exercise" in a session, and Add / Replace in the session planner (SPEC-v3 M9c): the body map (default) or
+ * search, full screen.
  * @param sessionId keys the remembered tab and body-picker place (a session or a plan id).
  */
 export function ExercisePicker({
@@ -490,32 +696,30 @@ export function ExercisePicker({
     pickerTab.set(sessionId, t);
     setTab(t);
   };
-  // The picker replaces the session page, which may be scrolled down to "+ Add exercise": start it at the top.
+  // The picker replaces the page it was opened from, which may be scrolled down: start it at the top.
   useEffect(() => window.scrollTo(0, 0), []);
   return (
-    <section class="stack" data-testid="exercise-picker">
-      <div class="kv navrow">
-        <h2 style={{ margin: 0 }}>{title}</h2>
-        <button type="button" class="linkbtn" onClick={onCancel}>
+    <main class="page" data-testid="exercise-picker">
+      <header class="screen-head">
+        <h1 class="screen-head__title l-m0 l-grow">{title}</h1>
+        <button type="button" class="clay press btn t-muted" onClick={onCancel}>
           Cancel
         </button>
-      </div>
-      <span class="seg wide" role="tablist" aria-label="Find an exercise by">
+      </header>
+      <span class="segmented l-full" role="tablist" aria-label="Find an exercise by">
         {(
           [
             ["body", "Body"],
             ["search", "Search"],
           ] as const
         ).map(([k, label]) => (
-          <button type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} data-testid={`picker-tab-${k}`} onClick={() => choose(k)}>
+          <button type="button" class="press l-grow" role="tab" aria-selected={tab === k} data-testid={`picker-tab-${k}`} onClick={() => choose(k)}>
             {label}
           </button>
         ))}
       </span>
-      <p class="why" style={{ margin: 0 }}>
-        {note}
-      </p>
-      {tab === "body" ? <BodyPicker sessionId={sessionId} onPick={onPick} /> : <ExerciseList onOpen={onPick} />}
-    </section>
+      <p class="caption l-m0">{note}</p>
+      {tab === "body" ? <BodyPicker sessionId={sessionId} onPick={onPick} /> : <ExerciseList onOpen={onPick} testId="picker-list" />}
+    </main>
   );
 }
