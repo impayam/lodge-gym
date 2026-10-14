@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { goTo, resetWorkouts, signIn } from "./helpers";
+import { goTo, resetWorkouts, signIn, sql } from "./helpers";
 
 // SPEC-v8 §7: every list and chart has a loading state (skeleton in card shape), an empty state (one line + action) and
 // an error state (what failed + Retry). Requests are held or failed with page.route, so the service worker is blocked
@@ -89,6 +89,8 @@ test("history: with no sessions the empty line leads to Train; a failed full-his
 });
 
 test("photos and backups: failed loads say what failed; Retry loads them", async ({ page }) => {
+  // Other specs leave photos behind; after Retry this one expects the empty line.
+  sql("DELETE FROM photos");
   let photoLoads = 0;
   await page.route("**/api/photos", (r) => {
     photoLoads++;
