@@ -14,9 +14,10 @@ import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
 import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
 import type { BootData, OutboxEntry } from "./localdb";
+import { backTarget, tabAfter, type TabName, type ViewName } from "./lib/nav";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report" | "saved";
+export type { TabName, ViewName } from "./lib/nav";
 
 export interface SyncState {
   pending: number;
@@ -34,7 +35,18 @@ export interface State {
    * sessionId: the session view or its AI report (fresh: just finished); programId: a draft opened in the program
    * editor; planId: the session planner.
    */
-  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string; fresh?: boolean; saved?: TimelineItem };
+  view: {
+    name: ViewName;
+    sessionId?: string;
+    programId?: string;
+    planId?: string;
+    fresh?: boolean;
+    saved?: TimelineItem;
+    /** Photos: start in compare mode, or with one photo open. */
+    photos?: { compare?: boolean; open?: string };
+  };
+  /** The selected tab (SPEC-v8 §5); pushed screens keep the tab they were opened from. */
+  tab: TabName;
   sync: SyncState;
   rest: { id: string; endsAt: number; label: string } | null;
   flash: string | null;
@@ -53,6 +65,7 @@ let state: State = {
   boot: null,
   sessions: {},
   view: { name: "home" },
+  tab: "home",
   sync: { pending: 0, online: typeof navigator === "undefined" ? true : navigator.onLine, syncing: false, error: null, lastSync: null },
   rest: null,
   flash: null,
@@ -93,7 +106,19 @@ export const settings = (): Settings => state.boot!.settings;
 export const today = () => localDate(state.boot?.settings.timezone ?? "America/Denver");
 
 export function navigate(name: ViewName, sessionId?: string) {
-  setState({ view: { name, sessionId } });
+  setState((s) => ({ view: { name, sessionId }, tab: tabAfter(name, s.tab) }));
+  window.scrollTo(0, 0);
+}
+
+/** Back from a pushed screen (its Back button or the edge swipe, SPEC-v8 §5). */
+export function goBack() {
+  const to = backTarget(state.view.name, state.tab);
+  if (to) navigate(to);
+}
+
+/** Progress photos, optionally in compare mode or with one photo open (Me → Progress photos). */
+export function openPhotos(opts: { compare?: boolean; open?: string } = {}) {
+  setState({ view: { name: "photos", photos: opts } });
   window.scrollTo(0, 0);
 }
 
@@ -745,7 +770,7 @@ export async function logout() {
     /* offline logout still clears the local flag */
   }
   await ldb.kvSet("logged_in", false);
-  setState({ auth: "login", view: { name: "home" }, rest: null });
+  setState({ auth: "login", view: { name: "home" }, tab: "home", rest: null });
 }
 
 /* ---------------- watch data ---------------- */

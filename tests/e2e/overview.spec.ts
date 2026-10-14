@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql } from "./helpers";
+import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo } from "./helpers";
 
 // SPEC-v7 M9d: the training overview in Reports, rewritten after every finished session right after its report, and
 // the Session reports list. The model is mocked (scripts/e2e-ai-mock.mjs): the real Anthropic API is never called.
@@ -24,11 +24,11 @@ function phaseToday() {
   const dow = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date())}T12:00:00Z`).getUTCDay();
   return dow === 1 || dow === 2 ? "start" : dow === 0 || dow === 6 ? "end" : "mid";
 }
-const toReports = (page: Page) => page.getByRole("navigation").getByRole("button", { name: "Reports" }).click();
+const toReports = (page: Page) => goTo(page, "Reports");
 
 /** Logs Day 1's bench (4 × 5 at 140 lb) and finishes; returns once the session's report is on screen. */
 async function finishDay1(page: Page) {
-  await page.getByRole("navigation").getByRole("button", { name: "Train" }).click();
+  await goTo(page, "Train");
   await expect(page.getByTestId("next-card")).toContainText("Day 1 · Chest");
   await page.getByRole("button", { name: "Start", exact: true }).click();
   for (let i = 0; i < 4; i++) {
@@ -104,7 +104,7 @@ test("the overview updates after a finished session, keeps the old one on failur
   await expect(card(page)).toHaveAttribute("data-state", "ready");
 
   // Settings counts the overviews in this month's cost line.
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "AI reports");
   await expect(page.getByTestId("ai-cost")).toHaveText(/^1 report, 4 overviews, ~\$\d+\.\d{2}$/);
 
   // Offline, Reports shows the last saved overview.
@@ -151,7 +151,7 @@ test("History → Reports timeline: a session date lists its report and the over
      INSERT INTO weekly_reviews (id, week_start, created_at, summary_fa, highlights, suggestions) VALUES ('rv', '${localDay(13)}', '${localDay(6)}T13:55:00Z', 'مرور هفته', '[]', '[]')`
   );
 
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   const cols = page.getByTestId("rt-col");
   await expect(cols).toHaveCount(3);
   expect(await cols.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")))).toEqual([localDay(7), threeAgo, today]);
@@ -205,7 +205,7 @@ test("History → Reports timeline: a session date lists its report and the over
     ["review", localDay(7)],
   ]);
   await page.reload();
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   await expect(page.getByTestId("reports-timeline")).toHaveAttribute("data-mode", "list");
   await page.getByTestId("rt-list").getByTestId("rt-item").nth(3).click();
   await expect(page.getByTestId("weekly-review")).toContainText("مرور هفته");

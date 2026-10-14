@@ -105,7 +105,103 @@
 .msg-coach { max-width: 94%; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.75; color: #E4E4E8; }
 .composer { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 22px; background: var(--well); box-shadow: var(--sh-well); }
 
+/* ==========================================================================
+   Additions approved by Payam on 2026-10-14 (CONFIRM C): existing tokens only.
+   ========================================================================== */
+
+/* ---------- Page header (tab screens) and screen header (pushed screens) ---------- */
+.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 4px; }
+.page-head__sub { font-size: 13px; color: var(--ink-3); }
+.screen-head { display: flex; align-items: center; gap: 12px; }
+.screen-head__title { font-size: 18px; font-weight: 600; }
+
+/* ---------- Buttons: two side by side in a card (13 px, as in the mockups) ---------- */
+.btn--fit { font-size: 13px; padding: 0 12px; white-space: nowrap; }
+
+/* ---------- Text ---------- */
+.t-title { font-size: 15px; font-weight: 600; }          /* titles of rows and list items */
+.t-danger { color: var(--danger); }                      /* destructive actions: always a text label + confirm dialog */
+
+/* ---------- Icon well: pressed-in square holding an icon or a day number (use with .well) ---------- */
+.icon-well { flex-shrink: 0; width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.icon-well svg { width: 18px; height: 18px; }
+.icon-well--40 { width: 40px; height: 40px; border-radius: 13px; }
+.icon-well--44 { width: 44px; height: 44px; border-radius: 14px; }
+.icon-well--52 { width: 52px; height: 52px; border-radius: 15px; }
+.icon-well--52 svg { width: 26px; height: 26px; }
+
+/* ---------- List rows inside a card (card--list); rows are separated by a divider ---------- */
+.card--list { padding-top: 6px; padding-bottom: 6px; }
+.list-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 0; border: 0; border-bottom: 1px solid var(--divider);
+  background: none; color: var(--ink); text-align: left; text-decoration: none; font: inherit; }
+.list-row:last-child { border-bottom: 0; }
+.list-row__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.list-row__chevron { flex-shrink: 0; width: 16px; height: 16px; color: var(--ink-decor); }
+
+/* ---------- Pushed screen: follows the finger on an edge swipe back, springs back or slides out ---------- */
+.pushed { min-height: 100dvh; touch-action: pan-y; transition: transform var(--t-sheet) var(--ease-out); }
+.pushed[data-dragging="true"] { transition: none; }
+
+/* ---------- Empty, loading and error states (SPEC-v8 §7) ---------- */
+.state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--ink-2); }
+.skeleton { display: block; border-radius: var(--r-card); background: var(--well); box-shadow: var(--sh-well); }
+.skeleton--line { height: 12px; border-radius: var(--r-pill); }
+
+/* ---------- Coach composer and dock (chat screen) ---------- */
+.composer__input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-size: 15px; outline: none; }
+.composer__input::placeholder { color: var(--ink-3); }
+.composer[aria-disabled="true"] { opacity: .4; }
+.composer[aria-disabled="true"] .clay:disabled { opacity: 1; }      /* dimmed once, by the composer */
+.coach-dock { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px var(--gutter) calc(env(safe-area-inset-bottom) + 14px);
+  background: linear-gradient(180deg, transparent 0%, var(--bg-bottom) 28%); }
+.chip-scroll { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.chip-scroll > * { flex-shrink: 0; white-space: nowrap; }
+.chip-scroll::-webkit-scrollbar { display: none; }
+
+/* ---------- Big numbers: sizes used by the screens (with .big-num) ---------- */
+.big-num--54 { font-size: 54px; font-weight: 700; line-height: .9; }   /* exercise title on the hero card */
+.big-num--40 { font-size: 40px; }
+.big-num--34 { font-size: 34px; }
+.big-num--30 { font-size: 30px; }
+.big-num--26 { font-size: 26px; }
+.big-num--22 { font-size: 22px; }
+.big-num--18 { font-size: 18px; }
+.big-num__unit { font-family: var(--font-ui); font-size: 16px; font-weight: 400; color: var(--ink-3); }
+
+/* ---------- Charts (SPEC-v8 §8): uPlot layout, crosshair, tooltip, legend, table view ---------- */
+.chart { position: relative; }
+.chart:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; border-radius: 8px; }
+.chart .uplot { width: 100%; }
+.chart .u-wrap { position: relative; user-select: none; -webkit-user-select: none; }
+.chart .u-over, .chart .u-under { position: absolute; }
+.chart .u-under { overflow: hidden; }
+.chart canvas { display: block; position: relative; width: 100%; height: 100%; }
+.chart .u-axis { position: absolute; }
+.chart .u-legend, .chart .u-title, .chart .u-select { display: none; }
+.chart .u-cursor-x, .chart .u-cursor-pt { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+.chart .u-cursor-x { height: 100%; border-right: 1px dashed var(--ink-decor); }
+.chart .u-cursor-pt { border-radius: 50%; border: 0 solid; background-clip: padding-box !important; }
+.chart .u-off { display: none; }
+.chart-tip { position: absolute; top: 0; z-index: 1; pointer-events: none; padding: 8px 10px; border-radius: 12px; background: var(--card-top);
+  box-shadow: var(--sh-card); font-size: 12px; color: var(--ink-2); white-space: nowrap; display: flex; flex-direction: column; gap: 2px; }
+.chart-tip b { color: var(--ink); font-weight: 600; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); }
+.chart-legend > span { display: flex; align-items: center; gap: 6px; }
+.chart-legend b { color: var(--ink); font-weight: 600; }
+.chart-legend__key { width: 14px; height: 3px; border-radius: 2px; }
+.chart-axis { font-size: 10px; color: var(--ink-3); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; font-weight: 600; font-size: 11px; color: var(--ink-3); padding: 0 0 6px; }
+.data-table td { padding: 8px 0; border-top: 1px solid var(--divider); }
+.data-table th + th, .data-table td + td { text-align: right; }
+
+/* ---------- Photo thumbnail (pressed-in frame with the photo, its date below) ---------- */
+.photo-thumb { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 10px; text-align: center; }
+.photo-thumb__frame { position: relative; display: block; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; }
+.photo-thumb__frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
 @media (prefers-reduced-motion: reduce) {
-  .press, .tabbar__indicator, .sheet, .rest, .scrim { transition: none; }
+  .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed { transition: none; }
   .set-check[aria-pressed="true"] svg { animation: none; }
 }

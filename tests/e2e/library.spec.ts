@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -19,7 +19,7 @@ test("library: search, filters, detail with media, muscles, instructions, form v
   sql(`INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, updated_at) VALUES
        ('01LB0', '01LIBH', 'bench', 0, 135, 5, NULL, 1, '${day}T23:10:00.000Z'), ('01LB1', '01LIBH', 'bench', 1, 140, 5, NULL, 1, '${day}T23:12:00.000Z')`);
   await page.goto("/");
-  await page.getByRole("navigation").getByRole("button", { name: "Library" }).click();
+  await goTo(page, "Library");
   const list = page.getByTestId("library");
   await expect(list.getByTestId("library-count")).toHaveText(/^\d+ exercises$/);
   await list.getByRole("searchbox", { name: "Search exercises" }).fill("trap bar");
@@ -69,9 +69,9 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
   await page.goto("/");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
   // Load the library once online so the picker works offline from the cached copy.
-  await page.getByRole("navigation").getByRole("button", { name: "Library" }).click();
+  await goTo(page, "Library");
   await expect(page.getByTestId("library-count")).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: "Train" }).click();
+  await goTo(page, "Train");
   await page.getByRole("button", { name: "Start", exact: true }).click();
   await setOffline(context, page, true);
 
@@ -116,7 +116,7 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
 
 test("custom exercise: create with secondary muscles, find it in the picker, archive it", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("navigation").getByRole("button", { name: "Library" }).click();
+  await goTo(page, "Library");
   await page.getByTestId("new-custom").click();
   const form = page.getByTestId("custom-form");
   await form.getByLabel("Name").fill("Machine Chest-Supported Row");

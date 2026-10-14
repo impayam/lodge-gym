@@ -94,3 +94,16 @@ interface AiCall {
 export async function aiCalls(): Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }> {
   return (await fetch(`${AI_MOCK}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
 }
+
+/** Where goTo can go: a tab, or a screen inside Me (SPEC-v8 §5). */
+export type Place = "Train" | "History" | "Library" | "Reports" | "Me" | "Photos" | "Program" | "Settings" | "AI reports" | "Backup";
+const IN_ME: Partial<Record<Place, string>> = { Photos: "me-add-photo", Program: "me-program", Settings: "me-settings", "AI reports": "me-ai", Backup: "me-backup" };
+
+/** Opens a tab from the tab bar, or a screen that moved into Me (Photos, Program, Settings, AI reports, Backup). */
+export async function goTo(page: Page, place: Place) {
+  const tab = (name: string) => page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name, exact: true }).click();
+  const inMe = IN_ME[place];
+  if (!inMe) return tab(place);
+  await tab("Me");
+  await page.getByTestId(inMe).click();
+}

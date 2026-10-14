@@ -569,3 +569,4 @@
 .legacy .chip { height: auto; }
 .legacy .tabbar { display: block; height: auto; left: 0; right: 0; bottom: 0; border-radius: 0; box-shadow: none; }
 .legacy .rest { height: auto; transform: none; opacity: 1; pointer-events: auto; -webkit-backdrop-filter: none; backdrop-filter: none; border: 0; }
+.legacy.legacy--overlay { min-height: 0; padding: 0; background: none; }

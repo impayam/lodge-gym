@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "./fixtures";
-import { resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
 
 // SPEC-v3 M9c: the session planner (no AI). Plan Day 1 offline, save, reopen and start it; reorder and delete during
 // the session (blocked once a set is done); supersets and tri-sets with the rest timer after the round only; discard
@@ -57,9 +57,9 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
   // The phone has opened the exercise library online before, so it is cached for offline search.
-  await page.getByRole("navigation").getByRole("button", { name: "Library" }).click();
+  await goTo(page, "Library");
   await expect(page.getByTestId("library-count")).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("navigation").getByRole("button", { name: "Train" }).click();
+  await goTo(page, "Train");
   await setOffline(context, page, true);
 
   await page.getByTestId("plan-session").click();

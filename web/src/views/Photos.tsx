@@ -147,14 +147,15 @@ function Viewer({ p, onClose }: { p: Photo; onClose: () => void }) {
   );
 }
 
-export function Photos() {
+/** `compare` starts in compare mode; `open` starts with that photo open (both from Me → Progress photos). */
+export function Photos({ compare = false, open: openFirst }: { compare?: boolean; open?: string }) {
   const photos = useStore((s) => s.photos);
   const pendingIds = useStore((s) => s.pendingPhotos);
   const [pose, setPose] = useState<Pose>("front");
   const [filter, setFilter] = useState<Pose | "all">("all");
-  const [comparing, setComparing] = useState(false);
+  const [comparing, setComparing] = useState(compare);
   const [picked, setPicked] = useState<string[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(openFirst ?? null);
   useEffect(() => {
     void loadPhotos();
   }, []);

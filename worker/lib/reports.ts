@@ -205,7 +205,7 @@ function watchForSession(d: ReportData, sessionId: string): { kcal: number | nul
 }
 
 /** Daily body-mass values (all sources averaged per day) in the report unit. */
-function bodyDaily(d: ReportData, unit: Unit): Map<string, number> {
+export function bodyDaily(d: Pick<ReportData, "body">, unit: Unit): Map<string, number> {
   const byDay = new Map<string, number[]>();
   for (const m of d.body) {
     if (m.kind !== "body_mass") continue;

@@ -1,6 +1,6 @@
 import { BODY_AREAS } from "../../worker/lib/bodyAreas";
 import { expect, test, type Page } from "./fixtures";
-import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
 
 // SPEC-v3 M9b with the SPEC-v6 3D model. "+ Add exercise" opens on the 3D body; the area and muscle chips do the same
 // as the model; a pick adds the exercise to the session as an extra. Both projects render WebGL 2 (WebKit and
@@ -296,7 +296,7 @@ test("memory: opening and closing the picker 20 times leaves no renderer, contex
 
 test("Settings → About credits the 3D model (CC BY-SA 4.0)", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   const about = page.getByTestId("about");
   await expect(about).toHaveText("3D anatomy model: Body Anatomy 3D Viewer by hpfrei, based on Z-Anatomy, CC BY-SA 4.0.");
   await expect(about.getByRole("link", { name: "Body Anatomy 3D Viewer" })).toHaveAttribute("href", "https://github.com/hpfrei/body-anatomy-3d-viewer");

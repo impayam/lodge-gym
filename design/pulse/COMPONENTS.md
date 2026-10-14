@@ -93,6 +93,31 @@ Build every screen from these. Markup shows the intended HTML; write it as Preac
 <label class="composer">…</label>
 ```
 
+## Additions (approved by Payam, 2026-10-14, CONFIRM C)
+
+Built from existing tokens only; each is in `components.css` under "Additions".
+
+```html
+<header class="page-head"><div><h1 class="h-page">Me</h1><span class="page-head__sub">Training since Sep 27</span></div></header>
+<header class="screen-head"><button class="clay press btn-icon t-muted" aria-label="Back">…</button><h1 class="screen-head__title">Coach</h1></header>
+
+<section class="card card--list">                                   <!-- rows inside a card, divider between -->
+  <button class="list-row press"><span class="well icon-well t-pink">…svg…</span>
+    <span class="list-row__text"><span class="t-title">Program</span><span class="caption">Full body, active</span></span>
+    <span class="list-row__chevron">…</span></button>
+</section>
+
+<span class="big-num big-num--40">180.2<span class="big-num__unit"> lb</span></span>   <!-- sizes 54/40/34/30/26/22/18 -->
+<button class="clay press btn btn--fit t-pink">Add photo</button>     <!-- two buttons side by side in a card -->
+<div class="pushed">…pushed screen…</div>                            <!-- edge-swipe back container -->
+<p class="state">No photos yet…</p> <span class="skeleton skeleton--line"></span>   <!-- empty / loading -->
+<div class="chart" role="img" aria-label="…">uPlot</div> <div class="chart-legend">…</div> <table class="data-table">…</table>
+<button class="photo-thumb press"><span class="photo-thumb__frame well"><img alt=""></span><span>Oct 13</span></button>
+<div class="coach-dock"><div class="chip-scroll">…chips…</div><div class="composer"><input class="composer__input"></div></div>
+```
+- `--danger` (#FF6B6B) and `.t-danger`: destructive actions only, always with a text label and the confirm dialog.
+- `--model-*` and `--share-*`: the 3D model and the shared report image, values unchanged from the pre-Pulse app.
+
 ## Don't
 
 - No new colors, no gradients other than the page background, clay and card fills.

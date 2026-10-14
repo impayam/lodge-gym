@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { resetPrograms, resetWorkouts, signIn, sql, waitForSynced } from "./helpers";
+import { resetPrograms, resetWorkouts, signIn, sql, waitForSynced, goTo, type Place } from "./helpers";
 
 // SPEC-v2 §8.8 E2E: generate a program, swap an exercise, approve it; old sessions still show under the archived
 // program; bench press progression continues from the old weights. Then switch back to the seed program.
@@ -12,7 +12,7 @@ const daysAgo = (n: number) => {
   return d.toLocaleDateString("en-CA", { timeZone: "America/Denver" });
 };
 
-const tab = (page: Page, name: string) => page.getByRole("navigation").getByRole("button", { name }).click();
+const tab = (page: Page, name: Place) => goTo(page, name);
 
 test.beforeAll(() => {
   resetPrograms();

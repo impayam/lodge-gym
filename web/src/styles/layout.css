@@ -1,0 +1,25 @@
+/* Layout helpers for GYM time screens (SPEC-v8 §2.2: library classes plus layout). Only display, flex, grid, gap,
+   alignment, sizing, spacing and overflow here; colours, fonts, shadows and radii live in the library. */
+.l-col { display: flex; flex-direction: column; }
+.l-row { display: flex; align-items: center; }
+.l-between { justify-content: space-between; }
+.l-baseline { align-items: baseline; }
+.l-top { align-items: flex-start; }
+.l-bottom { align-items: flex-end; }
+.l-center { justify-content: center; align-items: center; }
+.l-wrap { flex-wrap: wrap; }
+.l-grow { flex: 1; min-width: 0; }
+.l-gap-2 { gap: 2px; }
+.l-gap-4 { gap: 4px; }
+.l-gap-6 { gap: 6px; }
+.l-gap-8 { gap: 8px; }
+.l-gap-10 { gap: 10px; }
+.l-gap-12 { gap: 12px; }
+.l-gap-14 { gap: 14px; }
+.l-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.l-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.l-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.l-right { text-align: right; }
+.l-full { width: 100%; }
+.l-m0 { margin: 0; }
+.l-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

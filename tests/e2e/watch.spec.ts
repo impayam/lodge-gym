@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, signIn, sql } from "./helpers";
+import { resetWorkouts, signIn, sql, goTo } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -27,7 +27,7 @@ test("legacy workout fields: match status, manual attach, session card, revoke",
     );
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await expect(page.getByRole("heading", { name: "Apple Watch" })).toBeVisible();
   await expect(page.getByText("Find Health Samples").first()).toBeVisible();
@@ -93,7 +93,7 @@ test("legacy workout fields: match status, manual attach, session card, revoke",
   await expect(card).toContainText("max 170");
 
   // Revoking the token blocks the shortcut.
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await page.getByRole("button", { name: "Revoke", exact: true }).click();
   await page.getByRole("button", { name: "Sure? Revoke" }).click();
@@ -116,7 +116,7 @@ test("Heart Rate + Active Energy samples: per-session stats on the Apple Watch p
   );
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await expect(page.getByText("Active Energy").first()).toBeVisible();
   await expect(page.getByText("energy_time").first()).toBeVisible();

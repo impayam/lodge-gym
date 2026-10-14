@@ -1,10 +1,10 @@
 import { expect, test } from "./fixtures";
-import { signIn } from "./helpers";
+import { signIn, goTo } from "./helpers";
 
 test("settings: download a full export now and the latest automatic backup", async ({ page, context, baseURL }) => {
   await signIn(context, baseURL!);
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Backup");
   const card = page.getByTestId("backups");
   await expect(card).toContainText("the last 12 copies");
   const dl = page.waitForEvent("download");

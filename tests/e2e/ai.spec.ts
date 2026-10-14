@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
 
 // SPEC-v3 M9a (AI session report) and M9c (Get advice) with a mocked model (scripts/e2e-ai-mock.mjs): the real
 // Anthropic API is never called. The mock writes its answer from the request's own input.
@@ -74,18 +74,18 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   await aiMode({ report: "auth" });
   await page.getByTestId("report-retry").click();
   await expect(page.getByTestId("report-unavailable")).toContainText("API key expired or invalid.", { timeout: 30_000 });
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "AI reports");
   await expect(page.getByTestId("ai-key-problem")).toHaveText("Report unavailable — API key expired or invalid");
 
   // Fixed: Retry from History → session → Report writes a new report; Settings is clear again.
   await aiMode({ report: "ok" });
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   await page.getByTestId("history-group").locator("button.hist").first().click();
   await page.getByTestId("open-report").click();
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await page.getByTestId("report-retry").click();
   await expect(page.getByTestId("report-summary")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "AI reports");
   await expect(page.getByTestId("ai-cost")).toContainText("2 reports");
   await expect(page.getByTestId("ai-key-problem")).toHaveCount(0);
   expect(sql("SELECT status, substr(error, 1, instr(error, ':') - 1) AS code FROM session_reports ORDER BY created_at")).toEqual([

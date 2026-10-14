@@ -20,6 +20,15 @@ describe("Pulse design rules", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("layout.css holds layout properties only", () => {
+    const css = files["web/src/styles/layout.css"].replace(/\/\*[\s\S]*?\*\//g, "");
+    const LAYOUT = /^(display|flex(-direction|-wrap)?|align-items|justify-content|gap|grid-template-columns|text-align|width|height|min-width|margin|padding|position|overflow|clip|white-space|border)$/;
+    const props = [...css.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+    expect(props.length).toBeGreaterThan(10);
+    expect(props.filter((p) => !LAYOUT.test(p))).toEqual([]);
+    expect(css).not.toMatch(/var\(--|#[0-9a-f]/i);
+  });
+
   it("base.css holds resets only: no shadows, radii or font names", () => {
     const base = files["web/src/styles/base.css"].replace(/\/\*[\s\S]*?\*\//g, "");
     expect(base).not.toMatch(/box-shadow|border-radius/);

@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, signIn, sql } from "./helpers";
+import { resetWorkouts, signIn, sql, goTo } from "./helpers";
 
 // SPEC-v7 M9d: the training overview replaced the weekly review card on Home and Reports (approved 2026-10-13). The
 // weekly_reviews rows are kept; each review sits in History → Reports timeline on the last day of the week it covers
@@ -10,7 +10,7 @@ test("weekly reviews sit in the History timeline on the last day of their week a
   await signIn(context, baseURL!);
   await page.goto("/");
   await expect(page.getByTestId("next-card")).toBeVisible();
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   await expect(page.getByTestId("reports-timeline")).toContainText("No saved reports yet.");
 
   const summary = "هفته‌ی خوبی بود: چهار جلسه کامل و پرس سینه بالاتر رفت. ".repeat(6).trim();
@@ -24,11 +24,11 @@ test("weekly reviews sit in the History timeline on the last day of their week a
   await page.reload();
   await expect(page.getByTestId("next-card")).toBeVisible();
   await expect(page.getByTestId("weekly-review")).toHaveCount(0);
-  await page.getByRole("button", { name: "Reports" }).click();
+  await goTo(page, "Reports");
   await expect(page.getByTestId("training-overview")).toBeVisible();
   await expect(page.getByTestId("weekly-review")).toHaveCount(0);
 
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   const cols = page.getByTestId("rt-col");
   await expect(cols).toHaveCount(3);
   // Oldest on the left; each on the last day of its week.
@@ -52,7 +52,7 @@ test("weekly reviews sit in the History timeline on the last day of their week a
   await expect(card).toContainText("خواب را به ۷ ساعت برسان");
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
   // The tab bar keeps History selected; the back link returns to it.
-  await expect(page.getByRole("navigation").getByRole("button", { name: "History" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "History" })).toHaveAttribute("aria-current", "page");
   await page.getByRole("main").getByRole("button", { name: "← History" }).click();
 
   // The List view: newest first, marker plus label.

@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, sql } from "./helpers";
+import { resetWorkouts, sql, goTo, type Place } from "./helpers";
 
 // Passkey ceremonies need a virtual authenticator (CDP), so this runs on Chromium only.
 test.describe.configure({ mode: "serial" });
@@ -33,7 +33,7 @@ test("first-run setup, recovery codes, /setup closes, logout and Face ID login",
   const setup = await page.request.get(`${baseURL}/setup`);
   expect(setup.status()).toBe(404);
 
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByTestId("login")).toBeVisible();
   await page.getByTestId("login").click();

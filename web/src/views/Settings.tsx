@@ -104,12 +104,6 @@ export function Settings() {
       <h2>Rest-timer notification</h2>
       <PushSettings />
 
-      <h2>AI reports</h2>
-      <AiSettings />
-
-      <h2>Backup</h2>
-      <Backups />
-
       <h2>Sync</h2>
       <div class="card stack">
         <div class="kv">
@@ -207,7 +201,7 @@ function ProgramSettings() {
  * SPEC-v3 M9a: this month's AI reports and plan advice with their estimated cost, and the API key's state as the last
  * call saw it (the key itself never reaches the phone).
  */
-function AiSettings() {
+export function AiSettings() {
   const online = useStore((s) => s.sync.online);
   const [u, setU] = useState<AiUsage | null>(null);
   const [failed, setFailed] = useState(false);
@@ -258,7 +252,7 @@ function AiSettings() {
   );
 }
 
-function Backups() {
+export function Backups() {
   const [list, setList] = useState<{ name: string; bytes: number; uploaded: string }[] | null>(null);
   const [msg, setMsg] = useState("");
   useEffect(() => {

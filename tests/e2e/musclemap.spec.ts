@@ -3,7 +3,7 @@ import { STAGE_STATUS_COLOR, tokenValue } from "./tokens";
 import { groupOf } from "../../worker/lib/muscles";
 import type { BalanceStatus } from "../../worker/lib/reports";
 import { expect, test, type Page } from "./fixtures";
-import { resetWorkouts, signIn } from "./helpers";
+import { resetWorkouts, signIn, goTo } from "./helpers";
 
 // SPEC-v6 §8: the Reports muscle map is the 3D model, coloured by weekly status. The drawn figures (the SVG map of
 // PR #3) remain as the fallback without WebGL until Payam approves the 3D version; the list stays under both.
@@ -26,7 +26,7 @@ const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Americ
 
 async function openProgress(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Reports" }).click();
+  await goTo(page, "Reports");
   await page.getByRole("tab", { name: "Progress" }).click();
   await expect(page.getByTestId("muscle-map")).toBeVisible();
 }

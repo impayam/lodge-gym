@@ -1,6 +1,6 @@
 import { STAGE_STATUS_COLOR } from "./tokens";
 import { expect, test } from "./fixtures";
-import { resetWorkouts, signIn, sql } from "./helpers";
+import { resetWorkouts, signIn, sql, goTo } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -32,7 +32,7 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await put("01R2", days(0), "D1", [["bench", 4, 135, 5], ["incline_db", 3, 40, 10], ["rdl", 3, 155, 8], ["cable_row", 3, 100, 10], ["lateral", 3, 15, 12], ["facepull", 3, 40, 15], ["fedb-Hamstring_Stretch", 2, 0, 1]]);
   await page.request.put(`${baseURL}/api/body-mass/${denver(days(0))}`, { headers: { Origin: baseURL! }, data: { value: 180, unit: "lb" } });
 
-  await page.getByRole("button", { name: "Reports" }).click();
+  await goTo(page, "Reports");
   await expect(page.getByTestId("week-stats")).toContainText("1 of 4");
   await expect(page.getByTestId("week-stats")).toContainText("60");
   const lifts = page.getByTestId("week-lifts");

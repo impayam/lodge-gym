@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, signIn } from "./helpers";
+import { resetWorkouts, signIn, goTo } from "./helpers";
 
 test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, cancel on close; SW shows the notification", async ({ page, context, baseURL, browserName }) => {
   test.skip(browserName !== "chromium", "uses CDP to deliver a push to the service worker");
@@ -27,7 +27,7 @@ test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, 
 
   await page.goto("/");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 20_000 });
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   const card = page.getByTestId("push-settings");
   await expect(card.getByTestId("push-status")).toHaveText("Off");
   const subscribed = page.waitForRequest((r) => r.url().endsWith("/api/push/subscribe") && r.method() === "POST");
@@ -39,7 +39,7 @@ test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, 
   expect(key.subscriptions).toBe(1);
 
   // Checking a set schedules the push at the rest end.
-  await page.getByRole("button", { name: "Train" }).click();
+  await goTo(page, "Train");
   await page.getByRole("button", { name: "Start", exact: true }).click();
   const scheduled = page.waitForRequest((r) => r.url().endsWith("/api/push/rest") && r.method() === "POST");
   const before = Date.now();
