@@ -29,8 +29,8 @@ const toReports = (page: Page) => goTo(page, "Reports");
 /** Logs Day 1's bench (4 × 5 at 140 lb) and finishes; returns once the session's report is on screen. */
 async function finishDay1(page: Page) {
   await goTo(page, "Train");
-  await expect(page.getByTestId("next-card")).toContainText("Day 1 · Chest");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
+  await page.getByTestId("start").click();
   for (let i = 0; i < 4; i++) {
     await page.getByTestId(`w-bench-${i}`).locator("input").fill("140");
     await page.getByTestId(`check-bench-${i}`).click();

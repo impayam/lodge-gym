@@ -16,13 +16,13 @@ export const exerciseMap = (boot: BootData) => new Map(boot.exercises.map((e) =>
 /** The active program's metadata; a bootstrap cached before M8 has none. */
 export const activeProgramInfo = (boot: BootData): ProgramInfo | null => (boot.programs ?? []).find((p) => p.status === "active") ?? null;
 
-/** Planned sessions per week of the active program. */
 /** The local date the first program was activated: when training in the app began (Me and Coach headers). */
 export function trainingSince(boot: BootData): string | null {
   const starts = (boot.programs ?? []).flatMap((p) => p.activations.map((a) => localDate(boot.settings.timezone, a.started_at)));
   return starts.length ? starts.sort()[0] : null;
 }
 
+/** Planned sessions per week of the active program. */
 export const daysPerWeek = (boot: BootData) => activeProgramInfo(boot)?.days_per_week ?? boot.program.days.length;
 
 export function styleLabel(style: string | null): string {

@@ -54,7 +54,7 @@ async function pickBySearch(page: Page, query: string, name: RegExp) {
 
 test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in the session; a done exercise can't be deleted", async ({ page, context }) => {
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
   // The phone has opened the exercise library online before, so it is cached for offline search.
   await goTo(page, "Library");
@@ -98,7 +98,8 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await expect(page.getByTestId("plan-estimate")).toHaveText("5 exercises · about 53 min");
   await page.getByTestId("plan-save").click();
   await expect(page.getByTestId("planned-label")).toHaveText("Planned: Day 1 · Chest (edited)");
-  await expect(page.getByTestId("next-card")).toContainText("5 exercises · about 53 min");
+  await expect(page.getByTestId("next-card")).toContainText("5 exercises");
+  await expect(page.getByTestId("next-card")).toContainText("53 min");
   await expect(page.getByTestId("sync-chip")).toContainText("Offline");
 
   await setOffline(context, page, false);
@@ -170,7 +171,7 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
 
 test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only after A3; ungroup restores normal rest", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   // The day's own superset (A1/A2) already rests after the round only.
   await page.getByTestId("check-lateral-0").click();
   await expect(page.getByTestId("rest-timer")).toHaveCount(0);
@@ -248,7 +249,7 @@ test("discard plan returns the day to the program; Apply to program makes a new 
   await page.getByTestId("open-plan").click();
   await page.getByTestId("plan-discard").click();
   await page.getByTestId("discard-confirm").getByRole("button", { name: "Yes, discard" }).click();
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await waitForSynced(page);
   await expect.poll(() => sql("SELECT status FROM planned_sessions"), { timeout: 20_000 }).toEqual([{ status: "discarded" }]);
 

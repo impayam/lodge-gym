@@ -20,8 +20,8 @@ test.afterAll(async () => {
 /** Starts Day 1 and logs the first bench set. */
 async function startDay1(page: Page) {
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Day 1 · Chest");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
+  await page.getByTestId("start").click();
   await page.getByTestId("check-bench-0").click();
 }
 

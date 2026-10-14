@@ -40,7 +40,7 @@ test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, 
 
   // Checking a set schedules the push at the rest end.
   await goTo(page, "Train");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   const scheduled = page.waitForRequest((r) => r.url().endsWith("/api/push/rest") && r.method() === "POST");
   const before = Date.now();
   await page.getByTestId("check-bench-0").click();

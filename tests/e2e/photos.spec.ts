@@ -65,7 +65,7 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 15_000 }).catch(() => undefined);
   const files = { front: await makeJpeg(page, "#c00"), side: await makeJpeg(page, "#0a0"), back: await makeJpeg(page, "#00c") };
 
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await setOffline(context, page, true);
   await page.getByTestId("finish").click();
   const prompt = page.getByTestId("photo-prompt");

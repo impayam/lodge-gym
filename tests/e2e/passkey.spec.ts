@@ -28,7 +28,7 @@ test("first-run setup, recovery codes, /setup closes, logout and Face ID login",
   const codes = page.getByTestId("recovery-codes").locator("span");
   await expect(codes).toHaveCount(10);
   await page.getByRole("button", { name: "I saved the codes, continue" }).click();
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
 
   const setup = await page.request.get(`${baseURL}/setup`);
   expect(setup.status()).toBe(404);

@@ -113,7 +113,7 @@ test("old sessions still show under the archived program (SPEC-v2 §8.8 E2E 2)",
 test("bench press progression continues from the old weights (SPEC-v2 §8.8 E2E 3)", async ({ page }) => {
   await page.goto("/");
   // Bench is the main lift of the new program's chest day.
-  const day = page.locator(".dayopt", { hasText: "Barbell Bench Press" });
+  const day = page.getByTestId("day-option").filter({ hasText: "Barbell Bench Press" });
   await day.click();
   const bench = page.locator('article.ex[data-ex="bench"]');
   await expect(bench).toBeVisible();

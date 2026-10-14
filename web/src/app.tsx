@@ -73,7 +73,6 @@ function TabBar({ tab }: { tab: TabName }) {
 /** A screen still on the pre-Pulse styles, with its old header (until it moves to the Pulse library). */
 function Legacy({ children, back }: { children: ComponentChildren; back?: string }) {
   const t = today();
-  const flashMsg = useStore((s) => s.flash);
   return (
     <div class="legacy">
       <div class="wrap">
@@ -84,11 +83,6 @@ function Legacy({ children, back }: { children: ComponentChildren; back?: string
           </div>
           <StatusChip />
         </header>
-        {flashMsg ? (
-          <div class="banner good" role="status">
-            {flashMsg}
-          </div>
-        ) : null}
         <main>
           {back ? (
             <button type="button" class="linkbtn" data-testid="back" onClick={goBack}>
@@ -106,6 +100,7 @@ export function App() {
   const auth = useStore((s) => s.auth);
   const view = useStore((s) => s.view);
   const tab = useStore((s) => s.tab);
+  const flashMsg = useStore((s) => s.flash);
   const hasBoot = useStore((s) => s.boot !== null);
   useRelock();
 
@@ -179,9 +174,7 @@ export function App() {
         <NewProgram key={view.programId ?? "new"} />
       </Legacy>
     ) : (
-      <Legacy>
-        <Home />
-      </Legacy>
+      <Home />
     );
 
   const pushed = backTarget(view.name, tab) !== null;
@@ -203,6 +196,11 @@ export function App() {
         </button>
       ) : null}
       {showsTabBar(view.name) ? <TabBar tab={tab} /> : null}
+      {flashMsg ? (
+        <div class="toast" role="status" data-testid="toast">
+          {flashMsg}
+        </div>
+      ) : null}
     </>
   );
 }

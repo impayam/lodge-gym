@@ -72,7 +72,7 @@ test("adding an extra exercise offline syncs exactly once; it can be removed whi
   await goTo(page, "Library");
   await expect(page.getByTestId("library-count")).toBeVisible();
   await goTo(page, "Train");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await setOffline(context, page, true);
 
   await page.getByTestId("add-exercise").click();

@@ -7,12 +7,15 @@ import { goTo, signIn, sql } from "./helpers";
 const tabs = (page: Page) => page.getByRole("navigation", { name: "Sections" });
 const indicator = (page: Page) => tabs(page).evaluate((nav) => getComputedStyle(nav).getPropertyValue("--i").trim());
 
-/** A mouse drag that starts `x0` px from the left edge (pointer events, like a finger), one step per frame. */
+/**
+ * A mouse drag that starts `x0` px from the left edge (pointer events, like a finger), one step per frame, along the
+ * header (y 150) so it never starts on a form control.
+ */
 async function edgeDrag(page: Page, x0: number, x1: number, steps: number) {
-  await page.mouse.move(x0, 420);
+  await page.mouse.move(x0, 150);
   await page.mouse.down();
   for (let i = 1; i <= steps; i++) {
-    await page.mouse.move(x0 + ((x1 - x0) * i) / steps, 420 + i / steps);
+    await page.mouse.move(x0 + ((x1 - x0) * i) / steps, 150 + i / steps);
     await page.waitForTimeout(16);
   }
   await page.mouse.up();
@@ -53,6 +56,8 @@ test("five icon tabs: labels for VoiceOver, the indicator follows the tab, the C
 });
 
 test("Me holds Program, Planner, AI reports, Backup, Settings and the photos; each opens and comes back", async ({ page }) => {
+  // Body weight from this test only (other tests log body weight at the end of their sessions).
+  sql("DELETE FROM body_metrics");
   sql(`INSERT INTO body_metrics (id, local_date, kind, value, unit, source, received_at) VALUES
     ('e2e-shell-1', date('now', '-20 days'), 'body_mass', 181.5, 'lb', 'e2e-shell', '${new Date().toISOString()}'),
     ('e2e-shell-2', date('now', '-6 days'), 'body_mass', 180.2, 'lb', 'e2e-shell', '${new Date().toISOString()}')`);
@@ -145,7 +150,7 @@ test("Coach: full screen from the Coach button, the shell until M12, back with t
 test("the active session is full screen: no tab bar, no Coach button", async ({ page }) => {
   sql("DELETE FROM set_entries; DELETE FROM workout_sessions");
   await page.goto("/");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await expect(page.getByTestId("finish")).toBeVisible();
   await expect(tabs(page)).toHaveCount(0);
   await expect(page.getByTestId("coach-button")).toHaveCount(0);

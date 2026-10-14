@@ -11,14 +11,14 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 test("logs a full session in airplane mode; after reconnecting it is in D1 exactly once", async ({ page, context }) => {
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await expect(page.getByText("Your first session: start with Day 1.")).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   // Let the service worker take control so the shell also loads offline.
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
 
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await expect(page.locator('[data-ex="bench"]').getByText("Barbell Bench Press")).toBeVisible();
   await expect(page.getByText("پرس سینه هالتر")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Watch form video ↗" }).first()).toHaveAttribute("href", "https://www.youtube.com/results?search_query=Barbell%20Bench%20Press%20form");
@@ -51,7 +51,7 @@ test("logs a full session in airplane mode; after reconnecting it is in D1 exact
 
   // Still offline: reload works from the service worker and data survives in IndexedDB.
   await page.reload();
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 2 · Legs");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 2 · Legs");
   expect(sql("SELECT COUNT(*) AS n FROM workout_sessions")).toEqual([{ n: 0 }]);
 
   await setOffline(context, page, false);
@@ -92,8 +92,8 @@ test("suggestion and last performance follow SPEC §7", async ({ page }) => {
   sql(`INSERT INTO set_entries (id, session_id, exercise_id, set_index, weight, reps, seconds, done, updated_at) VALUES ${rows.join(", ")}`);
 
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 2 · Legs");
-  await page.locator(".dayopt", { hasText: "Day 1 · Chest" }).click();
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 2 · Legs");
+  await page.getByTestId("day-option").filter({ hasText: "Day 1 · Chest" }).click();
 
   const bench = page.locator('[data-ex="bench"]');
   await expect(bench.getByTestId("last-perf")).toContainText("135×5");
@@ -150,7 +150,7 @@ test("RIR 3+ on every set doubles the next increment", async ({ page }) => {
       .join(", ")}`
   );
   await page.goto("/");
-  await page.locator(".dayopt", { hasText: "Day 1 · Chest" }).click();
+  await page.getByTestId("day-option").filter({ hasText: "Day 1 · Chest" }).click();
   await expect(page.locator('[data-ex="bench"]').getByTestId("suggestion")).toHaveText("Suggested: 145 lb (two steps: every set had 3+ reps in reserve)");
   await expect(page.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "145");
 });
@@ -168,9 +168,9 @@ test("home shows the rest advice after two training days in a row", async ({ pag
        VALUES ('${id}', '${day}', '${date}', '${date}T18:00:00.000Z', '${date}T19:00:00.000Z', 'done', 'lb', '', '${date}T18:00:00.000Z', '${date}T19:00:00.000Z', 'app')`
     );
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 3 · Back");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 3 · Back");
   await expect(page.getByText("Rest is better today", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
+  await expect(page.getByTestId("start")).toBeEnabled();
 });
 
 test("security headers are present on the app shell", async ({ page, baseURL }) => {

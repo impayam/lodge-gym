@@ -26,7 +26,7 @@ export function Coach() {
         </button>
         <div class="l-col l-gap-2 l-grow">
           <h1 class="screen-head__title l-m0">Coach</h1>
-          <span class="caption">
+          <span class="screen-head__sub">
             Knows your {plural(done, "session")}
             {since ? ` since ${dayMonth(since)}` : ""}
           </span>

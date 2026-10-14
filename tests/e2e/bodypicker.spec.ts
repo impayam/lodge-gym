@@ -39,7 +39,9 @@ async function facing(page: Page, cos: 1 | -1) {
  */
 async function chipsVisible(page: Page, testIds: string[]) {
   const width = page.viewportSize()!.width;
-  const navTop = (await page.getByRole("navigation").boundingBox())!.y;
+  // The active session is full screen (SPEC-v8 §5): no tab bar there, so the chips may reach the bottom.
+  const nav = page.getByRole("navigation", { name: "Sections" });
+  const navTop = (await nav.count()) ? (await nav.boundingBox())!.y : page.viewportSize()!.height;
   const rows = new Set<number>();
   for (const id of testIds) {
     const b = (await page.getByTestId(id).boundingBox())!;
@@ -57,7 +59,7 @@ const allAreasVisible = async (page: Page) => expect(await chipsVisible(page, BO
 
 async function startSession(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
 }
 
 async function openPicker(page: Page, mode: "3d" | "fallback" = "3d") {
@@ -251,7 +253,7 @@ test("offline: after one online open the 3D picker loads from the service worker
   test.setTimeout(120_000);
   await page.goto("/");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 20_000 });
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await openPicker(page);
   await page.getByRole("button", { name: "Cancel" }).click();
   const cached = await page.evaluate(async () => {

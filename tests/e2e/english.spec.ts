@@ -39,7 +39,7 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
     expect(bad, `${label} has Persian text`).toEqual([]);
   };
   await check("home");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await expect(page.locator('[data-ex="bench"]')).toBeVisible();
   await expect(page.locator('[data-ex="bench"] .cue')).toBeVisible();
   await check("session");

@@ -92,7 +92,8 @@ test("legacy workout fields: match status, manual attach, session card, revoke",
   await expect(card).toContainText("312 active kcal");
   await expect(card).toContainText("max 170");
 
-  // Revoking the token blocks the shortcut.
+  // Revoking the token blocks the shortcut (the session screen is full screen: leave it first).
+  await page.getByRole("button", { name: "Back", exact: true }).click();
   await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await page.getByRole("button", { name: "Revoke", exact: true }).click();

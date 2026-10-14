@@ -111,12 +111,54 @@
 
 /* ---------- Page header (tab screens) and screen header (pushed screens) ---------- */
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 0 4px; }
-.page-head__sub { font-size: 13px; color: var(--ink-3); }
+.page-head__sub { font-size: 13px; color: var(--ink-2); }   /* --ink-2 near the top of long pages (Payam, 2026-10-14) */
 .screen-head { display: flex; align-items: center; gap: 12px; }
 .screen-head__title { font-size: 18px; font-weight: 600; }
+.screen-head__sub { font-size: 12px; color: var(--ink-2); }
 
 /* ---------- Buttons: two side by side in a card (13 px, as in the mockups) ---------- */
 .btn--fit { font-size: 13px; padding: 0 12px; white-space: nowrap; }
+
+/* ---------- Sync status (header): the dot by state, the text always names it ---------- */
+.sync-status { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 0 4px; border: 0; background: none; font-size: 12px; color: var(--ink-2); }
+.sync-status__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--violet); }
+.sync-status[data-state="pending"] .sync-status__dot { background: var(--orange); }
+.sync-status[data-state="offline"] .sync-status__dot { background: var(--ink-3); }
+.sync-status[data-state="error"] .sync-status__dot { background: var(--danger); }
+
+/* ---------- Home: the next session's exercises (Exercise / Last / Today) ---------- */
+.next-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.next-table th { padding: 0 0 6px; font-size: 11px; font-weight: 600; color: var(--ink-3); text-align: left; }
+.next-table td { padding: 9px 0; border-top: 1px solid var(--divider); }
+.next-table th + th, .next-table td + td { padding-left: 8px; text-align: right; white-space: nowrap; }
+.next-table__last { color: var(--ink-3); }
+.next-table__today { color: var(--orange); font-weight: 600; }
+
+/* ---------- The one attention moment (SPEC-v8 §7): the Home main button glows once on load ---------- */
+.glow-once { animation: glow-once 2.4s var(--ease-out) 1; }
+@keyframes glow-once {
+  0% { box-shadow: var(--sh-clay), 0 0 0 0 color-mix(in srgb, var(--pink) 50%, transparent); }
+  100% { box-shadow: var(--sh-clay), 0 0 0 14px color-mix(in srgb, var(--pink) 0%, transparent); }
+}
+
+/* ---------- Badge (PR) and week dots ---------- */
+.badge { flex-shrink: 0; padding: 5px 9px; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; color: var(--pink); background: color-mix(in srgb, var(--pink) 12%, transparent); }
+.week-dots { display: flex; gap: 6px; }
+.week-dots > span { flex: 1; height: 10px; border-radius: var(--r-pill); background: var(--track); box-shadow: var(--sh-track); }
+.week-dots > span[data-on="true"] { background: var(--pink); box-shadow: none; }
+
+/* ---------- Session card: a whole card that opens the session ---------- */
+.session-card { border: 0; color: var(--ink); text-align: left; font: inherit; }
+
+/* ---------- Tile button: a raised option with a title and a line under it (e.g. pick another day) ---------- */
+.tile-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: var(--r-btn-lg); text-align: left; font-weight: 600; color: var(--ink); }
+
+/* ---------- Toast: a short confirmation at the top, announced (role="status") ---------- */
+.toast { position: fixed; z-index: 3; left: var(--gutter); right: var(--gutter); top: calc(env(safe-area-inset-top) + 10px); padding: 12px 14px;
+  border-radius: 16px; background: var(--card-top); box-shadow: var(--sh-card); font-size: 14px; color: var(--ink); }
+
+/* ---------- A change over time in data (e.g. "+5.6% since Aug 24") ---------- */
+.delta { font-size: 13px; color: var(--violet-ink); }
 
 /* ---------- Text ---------- */
 .t-title { font-size: 15px; font-weight: 600; }          /* titles of rows and list items */
@@ -167,7 +209,7 @@
 .big-num--26 { font-size: 26px; }
 .big-num--22 { font-size: 22px; }
 .big-num--18 { font-size: 18px; }
-.big-num__unit { font-family: var(--font-ui); font-size: 16px; font-weight: 400; color: var(--ink-3); }
+.big-num__unit { font-size: 16px; color: var(--ink-3); }                 /* "60 min", "166 lb": same face as the number */
 
 /* ---------- Charts (SPEC-v8 §8): uPlot layout, crosshair, tooltip, legend, table view ---------- */
 .chart { position: relative; }
@@ -204,4 +246,5 @@
 @media (prefers-reduced-motion: reduce) {
   .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed { transition: none; }
   .set-check[aria-pressed="true"] svg { animation: none; }
+  .glow-once { animation: none; }
 }

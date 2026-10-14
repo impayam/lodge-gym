@@ -41,7 +41,6 @@ interface Props {
 
 const DAY = 86_400_000;
 const toX = (date: string) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10)) / DAY;
-const fromX = (x: number) => new Date(Math.round(x) * DAY).toISOString().slice(0, 10);
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** Aligned uPlot data: one x per date that has a value in any series. */
@@ -81,17 +80,14 @@ export function TimeChart({ series, height, label, unit, area, yAxis, xLabels = 
     const font = `10px ${token("--font-ui")}`;
     const ring = token("--bg-solid");
     const colors = series.map((s) => token(s.color));
+    // The x-axis keeps only its baseline; the first and last dates are HTML under the plot, aligned to its ends.
     const xAxis: uPlot.Axis = {
-      show: xLabels !== false,
-      stroke: ink3,
-      font,
-      size: 20,
-      gap: 4,
+      size: 0,
+      gap: 0,
       ticks: { show: false },
       grid: { show: false },
       border: { show: true, stroke: token("--baseline"), width: 1 },
-      splits: (u) => [u.scales.x.min!, u.scales.x.max!],
-      values: (_u, splits) => splits.map((v, i) => (i === splits.length - 1 && xLabels && xLabels.last ? xLabels.last : dayMonth(fromX(v)))),
+      splits: () => [],
     };
     const opts: uPlot.Options = {
       width: el.clientWidth,
@@ -241,6 +237,12 @@ export function TimeChart({ series, height, label, unit, area, yAxis, xLabels = 
           {tip}
         </div>
       )}
+      {xLabels !== false && !table && dates.length ? (
+        <div class="l-row l-between chart-axis" style={yAxis ? { paddingLeft: "34px" } : undefined} aria-hidden="true">
+          <span>{dayMonth(dates[0])}</span>
+          <span>{xLabels.last ?? dayMonth(dates[dates.length - 1])}</span>
+        </div>
+      ) : null}
       {series.length > 1 && !table ? (
         <div class="chart-legend" data-testid="chart-legend">
           {series.map((s, k) => {
