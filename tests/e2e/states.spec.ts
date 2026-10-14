@@ -89,19 +89,25 @@ test("history: with no sessions the empty line leads to Train; a failed full-his
 });
 
 test("photos and backups: failed loads say what failed; Retry loads them", async ({ page }) => {
-  await page.route("**/api/photos", (r) => r.abort("internetdisconnected"));
+  let photoLoads = 0;
+  await page.route("**/api/photos", (r) => {
+    photoLoads++;
+    return r.abort("internetdisconnected");
+  });
   await page.route("**/api/backups", (r) => r.fulfill(SERVER_ERROR));
   await page.goto("/");
 
   await goTo(page, "Photos");
-  const photos = page.getByTestId("load-error").filter({ hasText: "Couldn't load your photos." });
+  // Me's photo card loads them on the way, then the Photos screen loads them again: wait for that second failure.
+  await expect.poll(() => photoLoads).toBe(2);
+  const photos = page.getByTestId("photos").getByTestId("load-error").filter({ hasText: "Couldn't load your photos." });
   await expect(photos).toContainText("No internet connection.");
   await page.unroute("**/api/photos");
   await photos.getByTestId("retry").click();
   await expect(page.getByText("No photos yet. After each session you can take a front, side and back photo.")).toBeVisible();
 
   await goTo(page, "Backup");
-  const backups = page.getByTestId("load-error").filter({ hasText: "Couldn't load your backups." });
+  const backups = page.getByTestId("backup-screen").getByTestId("load-error").filter({ hasText: "Couldn't load your backups." });
   await expect(backups).toContainText("Something went wrong on the server.");
   await page.unroute("**/api/backups");
   await backups.getByTestId("retry").click();

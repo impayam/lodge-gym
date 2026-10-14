@@ -229,20 +229,23 @@ test("close-up: every area's muscle chips are fully visible above the tab bar, i
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
-/** Taps Front or Back and returns cos(yaw) for every frame drawn over the next 700 ms (a turn takes TURN_MS = 380). */
+/**
+ * Taps Front or Back and samples the view in every frame drawn over the next 700 ms (a turn takes TURN_MS = 380):
+ * whether a turn is running and cos(yaw). Software WebGL draws few frames, so `moving` is the reliable sign of a turn.
+ */
 const turnFrames = (page: Page, testId: "view-front" | "view-back") =>
   page.evaluate(async (id) => {
     const h = (window as unknown as { __anatomy: Hook }).__anatomy;
     (document.querySelector(`[data-testid="${id}"]`) as HTMLElement).click();
-    const seen: number[] = [];
+    const seen: { moving: boolean; cos: number }[] = [];
     const end = performance.now() + 700;
     while (performance.now() < end) {
       await new Promise((r) => requestAnimationFrame(r));
-      seen.push(Math.cos(h.view!.yaw()));
+      seen.push({ moving: h.view!.moving(), cos: Math.cos(h.view!.yaw()) });
     }
     return seen;
   }, testId);
-const between = (frames: number[]) => frames.filter((c) => Math.abs(c) < 0.99).length;
+const between = (frames: { moving: boolean; cos: number }[]) => frames.filter((f) => f.moving || Math.abs(f.cos) < 0.99).length;
 
 test("reduced motion: Front / Back turn the body at once, with no animated turn", async ({ page }) => {
   await startSession(page);
@@ -254,7 +257,7 @@ test("reduced motion: Front / Back turn the body at once, with no animated turn"
   await page.emulateMedia({ reducedMotion: "reduce" });
   const frames = await turnFrames(page, "view-front");
   expect(between(frames)).toBe(0);
-  expect(frames.at(-1)!).toBeCloseTo(1, 3);
+  expect(frames.at(-1)!.cos).toBeCloseTo(1, 3);
   expect(await hook(page, (h) => h.view!.moving())).toBe(false);
   await page.getByRole("button", { name: "Cancel" }).click();
 });
