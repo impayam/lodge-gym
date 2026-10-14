@@ -183,7 +183,7 @@ test("History → Reports timeline: a session date lists its report and the over
   await expect(page.getByTestId("saved-body").getByTestId("overview-summary")).toHaveAttribute("dir", "rtl");
   await expect(page.getByTestId("saved-body").getByTestId("overview-lifts")).toBeVisible();
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   await cols.nth(2).click();
   await page.getByTestId("rt-chooser").getByTestId("rt-item").nth(0).click();
@@ -191,13 +191,13 @@ test("History → Reports timeline: a session date lists its report and the over
   await expect(page.getByTestId("saved-body").getByTestId("report-summary")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   // One report on the date: it opens at once.
   await cols.nth(1).click();
   await expect(page.getByTestId("saved-report")).toHaveAttribute("data-kind", "overview");
   await expect(page.getByTestId("saved-report")).toContainText("Regenerated · ");
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   // The List view keeps all three types, newest first; the choice is kept.
   await page.getByTestId("rt-mode-list").click();

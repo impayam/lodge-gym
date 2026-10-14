@@ -1,12 +1,9 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { Pushed } from "./components/Pushed";
 import { IconCoach, TabIcon } from "./components/PulseIcons";
 import { RestTimer } from "./components/RestTimer";
-import { StatusChip } from "./components/StatusChip";
-import { dateLong } from "./format";
 import { backTarget, showsCoachButton, showsTabBar, tabIndex, TABS, type TabName } from "./lib/nav";
-import { getState, goBack, navigate, setState, today, useStore } from "./store";
+import { getState, goBack, navigate, setState, useStore } from "./store";
 import { FirstOffline, Locked, Login, Recovery, Setup } from "./views/Auth";
 import { History } from "./views/History";
 import { Library } from "./views/Library";
@@ -70,32 +67,6 @@ function TabBar({ tab }: { tab: TabName }) {
   );
 }
 
-/** A screen still on the pre-Pulse styles, with its old header (until it moves to the Pulse library). */
-function Legacy({ children, back }: { children: ComponentChildren; back?: string }) {
-  const t = today();
-  return (
-    <div class="legacy">
-      <div class="wrap">
-        <header class="top">
-          <div class="brand">
-            <b>GYM time</b>
-            <small>{dateLong(t)}</small>
-          </div>
-          <StatusChip />
-        </header>
-        <main>
-          {back ? (
-            <button type="button" class="linkbtn" data-testid="back" onClick={goBack}>
-              ← {back}
-            </button>
-          ) : null}
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-
 export function App() {
   const auth = useStore((s) => s.auth);
   const view = useStore((s) => s.view);
@@ -106,31 +77,24 @@ export function App() {
   const hasBoot = useStore((s) => s.boot !== null);
   useRelock();
 
-  const gate = (el: preact.JSX.Element) => <div class="legacy">{el}</div>;
-  if (auth === "loading") return gate(<div class="gate wrap" aria-busy="true" />);
-  if (auth === "setup") return gate(<Setup />);
-  if (auth === "login") return gate(<Login />);
-  if (auth === "recovery") return gate(<Recovery />);
-  if (auth === "locked") return gate(<Locked />);
-  if (auth === "first-offline" || !hasBoot) return gate(<FirstOffline />);
+  if (auth === "loading") return <main class="page gate" aria-busy="true" />;
+  if (auth === "setup") return <Setup />;
+  if (auth === "login") return <Login />;
+  if (auth === "recovery") return <Recovery />;
+  if (auth === "locked") return <Locked />;
+  if (auth === "first-offline" || !hasBoot) return <FirstOffline />;
 
   const screen =
     view.name === "session" && view.sessionId ? (
       <Session key={view.sessionId} id={view.sessionId} />
     ) : view.name === "report" && view.sessionId ? (
-      <Legacy>
-        <SessionReportScreen key={view.sessionId} id={view.sessionId} fresh={!!view.fresh} />
-      </Legacy>
+      <SessionReportScreen key={view.sessionId} id={view.sessionId} fresh={!!view.fresh} />
     ) : view.name === "plan" && view.planId ? (
-      <Legacy>
-        <Planner key={view.planId} id={view.planId} />
-      </Legacy>
+      <Planner key={view.planId} id={view.planId} />
     ) : view.name === "history" ? (
       <History />
     ) : view.name === "saved" && view.saved ? (
-      <Legacy>
-        <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
-      </Legacy>
+      <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
     ) : view.name === "reports" ? (
       <Reports />
     ) : view.name === "library" ? (
@@ -140,33 +104,19 @@ export function App() {
     ) : view.name === "coach" ? (
       <Coach />
     ) : view.name === "photos" ? (
-      <Legacy back="Me">
-        <Photos key={JSON.stringify(view.photos ?? {})} compare={view.photos?.compare} open={view.photos?.open} />
-      </Legacy>
+      <Photos key={JSON.stringify(view.photos ?? {})} compare={view.photos?.compare} open={view.photos?.open} />
     ) : view.name === "program" ? (
-      <Legacy back="Me">
-        <Program />
-      </Legacy>
+      <Program />
     ) : view.name === "settings" ? (
-      <Legacy back="Me">
-        <Settings />
-      </Legacy>
+      <Settings />
     ) : view.name === "ai" ? (
-      <Legacy>
-        <AiReports />
-      </Legacy>
+      <AiReports />
     ) : view.name === "backup" ? (
-      <Legacy>
-        <Backup />
-      </Legacy>
+      <Backup />
     ) : view.name === "watch" ? (
-      <Legacy>
-        <Watch />
-      </Legacy>
+      <Watch />
     ) : view.name === "newprogram" ? (
-      <Legacy>
-        <NewProgram key={view.programId ?? "new"} />
-      </Legacy>
+      <NewProgram key={view.programId ?? "new"} />
     ) : (
       <Home />
     );

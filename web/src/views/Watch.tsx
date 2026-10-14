@@ -7,6 +7,8 @@ import type { HealthWorkout, WorkoutSession } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
 import { dateLong, dateShort, hm } from "../format";
 import { dayInfo, sortedSessions } from "../model";
+import { ScreenHead } from "../components/ScreenHead";
+import { Select } from "../components/Select";
 import { navigate, upsertWatch, useStore } from "../store";
 
 interface TokenRow {
@@ -55,15 +57,11 @@ async function copy(text: string): Promise<boolean> {
 function CopyField({ value, label, testId }: { value: string; label: string; testId?: string }) {
   const [done, setDone] = useState<string>("");
   return (
-    <div class="field">
-      <span class="lbl">{label}</span>
-      <div class="copyrow">
-        <input readOnly value={value} data-testid={testId} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
-        <button
-          type="button"
-          class="btn btn-ghost btn-small"
-          onClick={async () => setDone((await copy(value)) ? "Copied" : "Select and copy")}
-        >
+    <div class="form-field">
+      <span class="form-field__label">{label}</span>
+      <div class="l-row l-gap-8">
+        <input class="input num" readOnly value={value} aria-label={label} data-testid={testId} onFocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
+        <button type="button" class="clay press btn btn--fit t-muted" onClick={async () => setDone((await copy(value)) ? "Copied" : "Select and copy")}>
           {done || "Copy"}
         </button>
       </div>
@@ -142,23 +140,25 @@ export function Watch() {
     return [...near, ...rest];
   };
 
+  const step = (n: number, title: string) => (
+    <h2 class="section-label">
+      {n}. {title}
+    </h2>
+  );
   return (
-    <>
-      <button type="button" class="linkbtn" onClick={() => navigate("settings")}>
-        ← Back to Settings
-      </button>
-      <h2>Apple Watch</h2>
-      <p class="why" style={{ marginTop: 0 }}>
+    <main class="page" data-testid="watch">
+      <ScreenHead title="Apple Watch" sub="Settings" onBack={() => navigate("settings")} />
+      <p class="ex-card__meta l-m0">
         A web app can't read Apple Health directly. A shortcut with three actions sends the heart-rate and active-energy samples to this app after each watch workout, and the server does the math.
       </p>
       {err ? (
-        <div class="banner" role="alert">
-          {err}
-        </div>
+        <p class="callout l-m0 ex-card__meta" data-bad="true" role="alert">
+          <b class="t-orange">{err}</b>
+        </p>
       ) : null}
 
-      <h2>1. Shortcut token</h2>
-      <div class="card stack">
+      {step(1, "Shortcut token")}
+      <section class="card l-col l-gap-12" aria-label="Shortcut token">
         {fresh ? (
           <>
             <CopyField value={fresh} label="New token (shown only this once)" testId="fresh-token" />
@@ -166,32 +166,33 @@ export function Watch() {
           </>
         ) : null}
         {tokens?.length ? (
-          tokens.map((t) => (
-            <div class="kv" data-testid="token-row">
-              <span>
-                {t.label}
-                <br />
-                <small class="muted">
-                  Created {dateShort(localDate(tz, t.created_at))} · last used {t.last_used_at ? `${dateShort(localDate(tz, t.last_used_at))} ${hm(t.last_used_at, tz)}` : "never"}
-                </small>
-              </span>
-              <button type="button" class="btn btn-danger btn-small" onClick={() => void revoke(t.id)}>
-                {armed === t.id ? "Sure? Revoke" : "Revoke"}
-              </button>
-            </div>
-          ))
+          <div class="l-col">
+            {tokens.map((t) => (
+              <div class="list-row" data-testid="token-row">
+                <span class="list-row__text">
+                  <span class="t-title">{t.label}</span>
+                  <span class="caption num">
+                    Created {dateShort(localDate(tz, t.created_at))} · last used {t.last_used_at ? `${dateShort(localDate(tz, t.last_used_at))} ${hm(t.last_used_at, tz)}` : "never"}
+                  </span>
+                </span>
+                <button type="button" class="clay press btn-sm btn--fit t-danger" onClick={() => void revoke(t.id)}>
+                  {armed === t.id ? "Sure? Revoke" : "Revoke"}
+                </button>
+              </div>
+            ))}
+          </div>
         ) : tokens ? (
-          <div class="why">You haven't created a token yet.</div>
+          <p class="state l-m0">You haven't created a token yet.</p>
         ) : null}
-        <button type="button" class="btn btn-primary btn-block" disabled={busy} onClick={() => void create()}>
+        <button type="button" class="clay press btn t-pink" disabled={busy} onClick={() => void create()}>
           Create new token
         </button>
         <CopyField value={url} label="URL for Get Contents of URL" testId="health-url" />
-      </div>
+      </section>
 
-      <h2>2. Build the “Log Watch Workout” shortcut</h2>
-      <div class="card">
-        <ol class="rules steps">
+      {step(2, "Build the “Log Watch Workout” shortcut")}
+      <section class="card l-col l-gap-12" aria-label="Build the shortcut">
+        <ol class="prose-list">
           <li>
             Open the <b>Shortcuts</b> app, tap <b>+</b> in the <b>Shortcuts</b> tab and name the shortcut “Log Watch Workout”.
           </li>
@@ -203,7 +204,7 @@ export function Watch() {
           </li>
           <li>
             Add <b>Get Contents of URL</b> and put the URL above in it. Tap the arrow next to it (<b>Show More</b>):
-            <ul>
+            <ul class="prose-list">
               <li>
                 <b>Method</b>: <b>POST</b>
               </li>
@@ -212,7 +213,13 @@ export function Watch() {
               </li>
               <li>
                 <b>Request Body</b>: <b>JSON</b>. With <b>Add new field</b> and type <b>Text</b>, create these four fields. The keys must be exactly these; for each value tap <b>Select Variable</b>:
-                <table class="fields">
+                <table class="data-table data-table--text">
+                  <thead>
+                    <tr>
+                      <th scope="col">Key</th>
+                      <th scope="col">Value</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     <tr>
                       <td>hr</td>
@@ -253,14 +260,14 @@ export function Watch() {
             Tap <b>Done</b> and run the shortcut once with ▶︎. <b>Allow</b> access to <b>Health</b>. Then tap “Check again” at the bottom of this page; “Last received” should be updated.
           </li>
         </ol>
-        <p class="why">
+        <p class="caption l-m0">
           For each session you logged in this app, the server takes the samples between its start and end and computes the average and maximum heart rate and the total active energy. The workout duration is the session's duration, so start and finish the session in the app.
         </p>
-      </div>
+      </section>
 
-      <h2>3. Run it automatically after each watch workout</h2>
-      <div class="card">
-        <ol class="rules steps">
+      {step(3, "Run it automatically after each watch workout")}
+      <section class="card l-col l-gap-12" aria-label="Run it automatically">
+        <ol class="prose-list">
           <li>
             In the <b>Shortcuts</b> app go to the <b>Automation</b> tab and tap <b>+</b> (or <b>New Automation</b>). On older iOS: <b>Create Personal Automation</b>.
           </li>
@@ -274,14 +281,14 @@ export function Watch() {
             Tap <b>Next</b>, pick the “Log Watch Workout” shortcut, then <b>Done</b>.
           </li>
         </ol>
-        <p class="why">
+        <p class="caption l-m0">
           iOS limit: Health data can only be read while the iPhone is unlocked, so the run may wait until you unlock the phone. If it didn't run, run the shortcut by hand later: it sends the last 6 hours and nothing is stored twice. If you logged the session in the app after the shortcut ran, run the shortcut once more.
         </p>
-      </div>
+      </section>
 
-      <h2>4. Sync the last 7 days (manual)</h2>
-      <div class="card">
-        <ol class="rules steps">
+      {step(4, "Sync the last 7 days (manual)")}
+      <section class="card" aria-label="Sync the last 7 days">
+        <ol class="prose-list">
           <li>
             In the <b>Shortcuts</b> tab, press and hold “Log Watch Workout” and tap <b>Duplicate</b>. Name the copy “Sync Last 7 Days”.
           </li>
@@ -290,84 +297,86 @@ export function Watch() {
           </li>
           <li>Run it by hand whenever you need to. Duplicate data is not stored again.</li>
         </ol>
-      </div>
+      </section>
 
-      <h2>5. Status</h2>
-      <div class="card stack" data-testid="watch-status">
-        <div class="kv">
-          <span>Last received</span>
-          <span data-testid="last-received">
+      {step(5, "Status")}
+      <section class="card l-col l-gap-10" data-testid="watch-status" aria-label="Status">
+        <div class="list-row">
+          <span class="list-row__text ex-card__meta">Last received</span>
+          <span class="list-row__value" data-testid="last-received">
             {status?.last_received_at ? `${dateLong(localDate(tz, status.last_received_at))} · ${hm(status.last_received_at, tz)}` : "Nothing yet"}
           </span>
         </div>
         {status?.last_result ? (
-          <div class="why">
-            Last send: {fmtNum(status.last_result.hr_samples)} heart-rate samples, {fmtNum(status.last_result.energy_samples ?? 0)} energy samples, data for {fmtNum(status.last_result.sessions ?? 0)}{" "}
-            {status.last_result.sessions === 1 ? "session" : "sessions"}.
-            {status.last_result.stored ? ` ${fmtNum(status.last_result.stored)} watch workouts (old format), ${fmtNum(status.last_result.matched)} matched to a session.` : ""}
+          <div class="l-col l-gap-6 ex-card__meta num">
+            <span>
+              Last send: {fmtNum(status.last_result.hr_samples)} heart-rate samples, {fmtNum(status.last_result.energy_samples ?? 0)} energy samples, data for {fmtNum(status.last_result.sessions ?? 0)}{" "}
+              {status.last_result.sessions === 1 ? "session" : "sessions"}.
+              {status.last_result.stored ? ` ${fmtNum(status.last_result.stored)} watch workouts (old format), ${fmtNum(status.last_result.matched)} matched to a session.` : ""}
+            </span>
             {status.last_result.warnings.map((w) => (
-              <div class="ss-note" style={{ marginTop: "6px" }}>
-                {warningText(w)}
-              </div>
+              <span class="t-orange">{warningText(w)}</span>
             ))}
           </div>
         ) : null}
-        <button type="button" class="btn btn-ghost btn-block" onClick={() => void load()}>
+        <button type="button" class="clay press btn t-muted" onClick={() => void load()}>
           Check again
         </button>
-      </div>
+      </section>
 
-      <h2>Last 10 watch records</h2>
-      <div class="stack" data-testid="watch-list">
-        {status && !status.workouts.length ? <div class="empty">No watch data has arrived for your sessions yet.</div> : null}
+      <h2 class="section-label">Last 10 watch records</h2>
+      <div class="l-col l-gap-8" data-testid="watch-list">
+        {status && !status.workouts.length ? <p class="state l-m0">No watch data has arrived for your sessions yet.</p> : null}
         {status?.workouts.map((w) => {
           const s = w.matched_session_id ? sessions[w.matched_session_id] : null;
           const d = localDate(tz, w.started_at);
           return (
-            <div class="card stack" data-testid="watch-row">
-              <div class="kv">
-                <b>{w.kind === "session" ? (s ? dayInfo(boot, s.program_day_id).name_en : "Session") : workoutTypeName(w.activity_type)}</b>
-                <span>
+            <section class="card l-col l-gap-8" data-testid="watch-row">
+              <div class="l-row l-between l-gap-8">
+                <span class="t-title">{w.kind === "session" ? (s ? dayInfo(boot, s.program_day_id).name_en : "Session") : workoutTypeName(w.activity_type)}</span>
+                <span class="caption num">
                   {dateShort(d)} · {hm(w.started_at, tz)}
                   {w.ended_at ? `–${hm(w.ended_at, tz)}` : ""}
                 </span>
               </div>
-              <div class="why">
+              <span class="ex-card__meta">
                 <WatchStats w={w} session={s} />
-              </div>
+              </span>
               {w.matched_session_id ? (
-                <div class="kv">
-                  <span class="pill done">Matched to a session</span>
+                <div class="l-row l-between l-gap-8">
+                  <span class="badge">Matched to a session</span>
                   {s ? (
-                    <button type="button" class="linkbtn" onClick={() => navigate("session", s.id)}>
+                    <button type="button" class="clay press btn-sm btn--fit t-muted" onClick={() => navigate("session", s.id)}>
                       {dayInfo(boot, s.program_day_id).name_en} · {dateShort(s.local_date)}
                     </button>
                   ) : (
-                    <span class="muted">Session not on this device</span>
+                    <span class="caption">Session not on this device</span>
                   )}
                 </div>
               ) : (
                 <>
-                  <span class="pill">Watch workout without a session</span>
-                  <div class="copyrow">
-                    <select aria-label="Session to attach to" value={pick[w.id] ?? ""} onChange={(e) => setPick({ ...pick, [w.id]: (e.currentTarget as HTMLSelectElement).value })}>
-                      <option value="">Pick a session…</option>
-                      {candidates(w).map((c) => (
-                        <option value={c.id}>
-                          {dayInfo(boot, c.program_day_id).name_en} · {dateShort(c.local_date)} · {hm(c.started_at, tz)}
-                        </option>
-                      ))}
-                    </select>
-                    <button type="button" class="btn btn-primary btn-small" disabled={!pick[w.id]} onClick={() => void attach(w)}>
+                  <span class="caption t-orange">Watch workout without a session</span>
+                  <div class="l-row l-gap-8">
+                    <span class="l-grow">
+                      <Select aria-label="Session to attach to" value={pick[w.id] ?? ""} onChange={(e) => setPick({ ...pick, [w.id]: (e.currentTarget as HTMLSelectElement).value })}>
+                        <option value="">Pick a session…</option>
+                        {candidates(w).map((c) => (
+                          <option value={c.id}>
+                            {dayInfo(boot, c.program_day_id).name_en} · {dateShort(c.local_date)} · {hm(c.started_at, tz)}
+                          </option>
+                        ))}
+                      </Select>
+                    </span>
+                    <button type="button" class="clay press btn btn--fit t-pink" disabled={!pick[w.id]} onClick={() => void attach(w)}>
                       Attach
                     </button>
                   </div>
                 </>
               )}
-            </div>
+            </section>
           );
         })}
       </div>
-    </>
+    </main>
   );
 }

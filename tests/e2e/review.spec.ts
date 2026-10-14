@@ -42,18 +42,18 @@ test("weekly reviews sit in the History timeline on the last day of their week a
   await expect(page.getByTestId("saved-report")).toHaveAttribute("data-kind", "review");
   await expect(page.getByTestId("saved-report")).toContainText("Weekly review · read-only");
   const card = page.getByTestId("weekly-review");
-  await expect(card).toContainText("Week of Sep 21 – Sep 27");
+  await expect(page.getByTestId("saved-report").getByRole("heading", { level: 1 })).toHaveText("Week of Sep 21 – Sep 27");
   await expect(card).toContainText("هفته‌ی خوبی بود");
-  await expect(card.locator("p.summary")).toHaveAttribute("dir", "rtl");
-  await expect(card.locator("p.summary")).toHaveAttribute("lang", "fa");
+  await expect(card.locator("p.prose-fa")).toHaveAttribute("dir", "rtl");
+  await expect(card.locator("p.prose-fa")).toHaveAttribute("lang", "fa");
   await expect(card).not.toContainText("رکورد تازه در اسکوات");
   await card.getByRole("button", { name: "Show more" }).click();
-  await expect(card.locator("ul.rv-list").first()).toHaveAttribute("dir", "rtl");
+  await expect(card.locator("ul.prose-fa").first()).toHaveAttribute("dir", "rtl");
   await expect(card).toContainText("خواب را به ۷ ساعت برسان");
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
   // The tab bar keeps History selected; the back link returns to it.
   await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "History" })).toHaveAttribute("aria-current", "page");
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   // The List view: newest first, marker plus label.
   await page.getByTestId("rt-mode-list").click();

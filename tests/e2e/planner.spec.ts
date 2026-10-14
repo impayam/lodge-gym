@@ -24,7 +24,7 @@ const planOrder = (page: Page) =>
     .evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.slice("pitem-".length)));
 const item = (page: Page, id: string) => page.getByTestId(`pitem-${id}`);
 /** Opens an item's actions (tap on its name). */
-const openItem = (page: Page, id: string) => item(page, id).locator(".pname").click();
+const openItem = (page: Page, id: string) => item(page, id).locator(".plan-name").click();
 
 /** Drags a handle past the middle of another element, in small steps like a finger. */
 async function dragTo(page: Page, handle: Locator, target: Locator) {

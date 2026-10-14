@@ -14,8 +14,9 @@ import { fetchAdvice, type AdviceResponse } from "../ai";
 import { ApiError, NetworkError } from "../api";
 import { fmtNum, plural } from "../format";
 import { activeSession, dayInfo, openPlanFor } from "../model";
-import { allExercises, applyPlanToProgram, discardPlan, flash, getState, navigate, openPlan, rememberExercise, savePlan, sendPlan, startPlan, useStore } from "../store";
+import { allExercises, applyPlanToProgram, discardPlan, flash, getState, goBack, navigate, openPlan, rememberExercise, savePlan, sendPlan, startPlan, useStore } from "../store";
 import { ExercisePicker } from "./Library";
+import { IconBack, IconPlus } from "../components/PulseIcons";
 
 /** Unsaved planner edits, kept while the app is open (a tab switch does not lose them; Cancel does). */
 const drafts = new Map<string, SessionPlan>();
@@ -161,28 +162,35 @@ export function Planner({ id }: { id: string }) {
       />
     );
 
+  const state = !saved ? "Not saved" : dirty ? "Unsaved changes" : edited ? "Planned · edited" : "Planned";
   return (
-    <>
-      <section class="sess-head" data-testid="planner">
-        <div class="sess-title">
-          <div>
-            <div class="eyebrow">Plan session</div>
-            <b>{dayName}</b>
-          </div>
-          <span class={`pill${saved ? " done" : ""}`} data-testid="plan-state">
-            {!saved ? "Not saved" : dirty ? "Unsaved changes" : edited ? "Planned · edited" : "Planned"}
-          </span>
+    <main class="page" data-testid="planner">
+      <header class="screen-head">
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back" data-testid="back" onClick={goBack}>
+          <IconBack size={20} />
+        </button>
+        <div class="l-col l-grow">
+          <span class="screen-head__sub">Plan session</span>
+          <h1 class="screen-head__title l-m0">{dayName}</h1>
         </div>
+        {/* Not saved yet, or edited since: worth a glance before leaving. */}
+        <span class={!saved || dirty ? "badge" : "caption"} data-testid="plan-state">
+          {state}
+        </span>
+      </header>
+      <div class="l-col l-gap-4">
         {day ? (
-          <div class="why num" data-testid="plan-estimate">
+          <span class="ex-card__meta num" data-testid="plan-estimate">
             {plural(liveItems(plan).length, "exercise")} · about {fmtNum(planMinutes(plan, day))} min
-          </div>
+          </span>
         ) : null}
-        <div class="why">Changes apply to this session only. Nothing is timed until you start.</div>
-      </section>
+        <span class="caption">Changes apply to this session only. Nothing is timed until you start.</span>
+      </div>
 
-      <h2>Exercises</h2>
-      <div class="stack">
+      <section class="l-col l-gap-8" aria-labelledby="plan-exercises">
+        <h2 class="section-label" id="plan-exercises">
+          Exercises
+        </h2>
         <PlanList
           plan={plan}
           exMap={exMap}
@@ -191,87 +199,97 @@ export function Planner({ id }: { id: string }) {
           onReplace={(it) => setPicking({ kind: "replace", itemId: it.id, name: exMap.get(it.exercise_id)?.name_en ?? it.exercise_id })}
           onRemove={(it) => change(removeItem(plan, it.id, new Date().toISOString()))}
         />
-        {liveItems(plan).length ? null : <div class="empty">No exercises. Add one, or discard the plan.</div>}
-        <button type="button" class="btn btn-ghost btn-block" data-testid="plan-add" onClick={() => setPicking({ kind: "add" })}>
-          + Add exercise
+        {liveItems(plan).length ? null : <p class="state l-m0">No exercises. Add one, or discard the plan.</p>}
+        <button type="button" class="clay press btn t-muted l-row l-center l-gap-8" data-testid="plan-add" onClick={() => setPicking({ kind: "add" })}>
+          <IconPlus size={18} /> Add exercise
         </button>
-      </div>
+      </section>
 
-      <div class="stack" style={{ marginTop: "16px" }}>
-        <button type="button" class="btn btn-ghost btn-block" data-testid="plan-advice" disabled={!online || advising || !liveItems(plan).length} onClick={() => void getAdvice()}>
-          {advising ? "Getting advice…" : advice ? "Get new advice" : "Get advice"}
-        </button>
-        {!online ? (
-          <div class="why" data-testid="advice-offline">
-            Needs connection
+      <section class="card l-col l-gap-10" aria-labelledby="plan-advice-title">
+        <div class="l-row l-gap-12">
+          <div class="l-col l-gap-2 l-grow">
+            <h2 class="card__title l-m0" id="plan-advice-title">
+              Advice
+            </h2>
+            <span class="caption">The coach reads this plan once. Nothing changes until you tap Apply.</span>
           </div>
-        ) : null}
-        {adviceMsg ? (
-          <div class="banner warn" role="status" data-testid="advice-error" style={{ margin: 0 }}>
-            {adviceMsg}
-          </div>
-        ) : null}
-        {advice ? <AdviceCard res={advice.res} applied={advice.applied} names={exMap} onApply={applyAdvice} onUndo={undoAdvice} /> : null}
-      </div>
-
-      <div class="stack" style={{ marginTop: "16px" }}>
-        <button type="button" class="btn btn-primary btn-block" data-testid="plan-start" disabled={!!act || !liveItems(plan).length} onClick={() => void start()}>
-          Start session
-        </button>
-        {act ? <div class="why">Finish your open session first.</div> : null}
-        <div class="row">
-          <button type="button" class="btn btn-ghost" data-testid="plan-save" onClick={() => void save()}>
-            Save plan
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onClick={() => {
-              done();
-              navigate("home");
-            }}
-          >
-            {dirty ? "Cancel" : "Back"}
+          <button type="button" class="clay press btn btn--fit t-orange" data-testid="plan-advice" disabled={!online || advising || !liveItems(plan).length} onClick={() => void getAdvice()}>
+            {advising ? "Getting advice…" : advice ? "Get new advice" : "Get advice"}
           </button>
         </div>
-        <button type="button" class="btn btn-ghost btn-block" data-testid="plan-apply" disabled={!day || !edited || busy} onClick={() => setConfirm("apply")}>
+        {!online ? (
+          <p class="caption l-m0" data-testid="advice-offline">
+            Needs connection
+          </p>
+        ) : null}
+        {adviceMsg ? (
+          <p class="ex-card__meta t-orange l-m0" role="status" data-testid="advice-error">
+            {adviceMsg}
+          </p>
+        ) : null}
+        {advice ? <AdviceCard res={advice.res} applied={advice.applied} names={exMap} onApply={applyAdvice} onUndo={undoAdvice} /> : null}
+      </section>
+
+      <section class="l-col l-gap-10" aria-label="Plan actions">
+        <button type="button" class="clay press btn-lg t-pink" data-testid="plan-start" disabled={!!act || !liveItems(plan).length} onClick={() => void start()}>
+          Start session
+        </button>
+        {act ? <p class="caption l-m0">Finish your open session first.</p> : null}
+        <div class="l-row l-gap-8">
+          <button type="button" class="clay press btn t-muted l-grow" data-testid="plan-save" onClick={() => void save()}>
+            Save plan
+          </button>
+          {dirty ? (
+            <button
+              type="button"
+              class="clay press btn t-muted l-grow"
+              onClick={() => {
+                done();
+                navigate("home");
+              }}
+            >
+              Cancel
+            </button>
+          ) : null}
+        </div>
+        <button type="button" class="clay press btn t-muted" data-testid="plan-apply" disabled={!day || !edited || busy} onClick={() => setConfirm("apply")}>
           Apply to program…
         </button>
         {confirm === "apply" ? (
-          <div class="card stack" style={{ borderColor: "var(--accent)" }} data-testid="apply-confirm">
-            <div>
+          <div class="callout" data-testid="apply-confirm">
+            <p class="ex-card__meta l-m0">
               Make this the program's <b>{dayName}</b> from now on? A new program version becomes active; the current one is archived, not deleted. Your history does not change.
-            </div>
-            <div class="row">
-              <button type="button" class="btn btn-primary" disabled={busy} onClick={() => void apply()}>
+            </p>
+            <div class="l-row l-gap-8">
+              <button type="button" class="clay press btn btn--fit t-pink" disabled={busy} onClick={() => void apply()}>
                 {busy ? "Applying…" : "Yes, apply"}
               </button>
-              <button type="button" class="btn btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>
+              <button type="button" class="clay press btn btn--fit t-muted" disabled={busy} onClick={() => setConfirm(null)}>
                 No
               </button>
             </div>
           </div>
         ) : null}
         {saved ? (
-          <button type="button" class="btn btn-danger btn-block" data-testid="plan-discard" onClick={() => setConfirm("discard")}>
+          <button type="button" class="clay press btn t-danger" data-testid="plan-discard" onClick={() => setConfirm("discard")}>
             Discard plan
           </button>
         ) : null}
         {confirm === "discard" ? (
-          <div class="card stack" style={{ borderColor: "var(--danger)" }} data-testid="discard-confirm">
-            <div>Discard this plan? {dayName} goes back to the program's default.</div>
-            <div class="row">
-              <button type="button" class="btn btn-danger" onClick={() => void discard()}>
+          <div class="callout" data-testid="discard-confirm">
+            <p class="ex-card__meta l-m0">Discard this plan? {dayName} goes back to the program's default.</p>
+            <div class="l-row l-gap-8">
+              <button type="button" class="clay press btn btn--fit t-danger" onClick={() => void discard()}>
                 Yes, discard
               </button>
-              <button type="button" class="btn btn-ghost" onClick={() => setConfirm(null)}>
+              <button type="button" class="clay press btn btn--fit t-muted" onClick={() => setConfirm(null)}>
                 No
               </button>
             </div>
           </div>
         ) : null}
-      </div>
-    </>
+      </section>
+    </main>
   );
 }
 
@@ -307,40 +325,40 @@ function AdviceCard({
   const fromCandidates = new Map(res.candidates.map((c) => [c.id, c.name]));
   const name = (id: string) => names.get(id)?.name_en ?? fromCandidates.get(id) ?? id;
   return (
-    <section class="card review advice stack" data-testid="advice-card">
-      <span class="eyebrow">Advice</span>
-      <p class="summary" dir="rtl" lang="fa" data-testid="advice-assessment">
+    <div class="l-col l-gap-10" data-testid="advice-card">
+      <p class="fa prose-fa l-m0" dir="rtl" lang="fa" data-testid="advice-assessment">
         {res.advice.assessment_fa}
       </p>
       {res.advice.suggestions.length ? (
-        res.advice.suggestions.map((s, i) => {
-          const done = applied.has(i);
-          return (
-            <div class={`sug${done ? " applied" : ""}`} data-testid={`advice-sug-${i}`} data-type={s.type}>
-              <div>
-                <div class="what">
-                  {what(s, name)}
-                  {done ? <span class="pill done" style={{ marginLeft: "6px" }}>Applied</span> : null}
-                </div>
-                <p class="why-fa" dir="rtl" lang="fa">
-                  {s.reason_fa}
-                </p>
-              </div>
-              {done ? (
-                <button type="button" class="btn btn-ghost btn-small" data-testid={`advice-undo-${i}`} onClick={() => onUndo(i)}>
-                  Undo
-                </button>
-              ) : (
-                <button type="button" class="btn btn-primary btn-small" data-testid={`advice-apply-${i}`} onClick={() => onApply(i, s)}>
-                  Apply
-                </button>
-              )}
-            </div>
-          );
-        })
+        <ul class="l-col list-plain">
+          {res.advice.suggestions.map((s, i) => {
+            const done = applied.has(i);
+            return (
+              <li class="list-row l-top" data-testid={`advice-sug-${i}`} data-type={s.type} data-applied={done ? "true" : "false"}>
+                <span class="list-row__text">
+                  <span class="t-title">
+                    {what(s, name)} {done ? <span class="badge">Applied</span> : null}
+                  </span>
+                  <span class="fa prose-fa ex-card__meta" dir="rtl" lang="fa">
+                    {s.reason_fa}
+                  </span>
+                </span>
+                {done ? (
+                  <button type="button" class="clay press btn-sm btn--fit t-muted" data-testid={`advice-undo-${i}`} onClick={() => onUndo(i)}>
+                    Undo
+                  </button>
+                ) : (
+                  <button type="button" class="clay press btn-sm btn--fit t-pink" data-testid={`advice-apply-${i}`} onClick={() => onApply(i, s)}>
+                    Apply
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       ) : (
-        <div class="why">No changes suggested.</div>
+        <p class="caption l-m0">No changes suggested.</p>
       )}
-    </section>
+    </div>
   );
 }

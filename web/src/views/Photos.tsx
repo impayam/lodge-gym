@@ -4,7 +4,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { daysBetween } from "../../../worker/lib/time";
 import type { Photo, Pose } from "../../../worker/lib/types";
-import { dateLong, fmtNum } from "../format";
+import { dateLong, dateShort, fmtNum } from "../format";
+import { IconCamera } from "../components/PulseIcons";
+import { ScreenHead } from "../components/ScreenHead";
+import { SyncStatus } from "../components/SyncStatus";
 import { addPhoto, deletePhoto, loadPhotos, photoSrc, today, useStore } from "../store";
 
 export const POSES: [Pose, string][] = [
@@ -35,43 +38,61 @@ export function PhotoPicker({ pose, date, sessionId, onDone, compact }: { pose: 
     setStatus(ok > 1 ? `${fmtNum(ok)} photos saved and queued for upload.` : "Photo saved and queued for upload.");
     onDone?.(ok);
   };
+  const status = state ? (
+    <span class="caption" role="status">
+      {state}
+    </span>
+  ) : null;
+  // A clay button holding the file input: the camera for the pose, or (in the gallery) the photo library.
+  const camera = (
+    <label class={`clay press btn btn--fit file-pick l-gap-8 ${compact ? "t-muted" : "t-pink"}`}>
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        data-testid={`camera-${pose}`}
+        onChange={(e) => {
+          const el = e.currentTarget as HTMLInputElement;
+          void handle(el.files).finally(() => (el.value = ""));
+        }}
+      />
+      <IconCamera size={18} />
+      {compact ? (
+        <>
+          <span class="l-sr">Camera, </span>
+          {poseLabel(pose)}
+        </>
+      ) : (
+        "Camera"
+      )}
+    </label>
+  );
+  if (compact)
+    return (
+      <div class="l-row l-gap-12">
+        {camera}
+        {status}
+      </div>
+    );
   return (
-    <div class="stack">
-      <div class="row picker">
-        <label class={`btn ${compact ? "btn-ghost btn-small" : "btn-primary"}`}>
+    <div class="l-col l-gap-8">
+      <div class="l-row l-gap-8">
+        {camera}
+        <label class="clay press btn btn--fit file-pick t-muted">
           <input
             type="file"
             accept="image/*"
-            capture="environment"
-            data-testid={`camera-${pose}`}
+            multiple
+            data-testid={`library-${pose}`}
             onChange={(e) => {
               const el = e.currentTarget as HTMLInputElement;
               void handle(el.files).finally(() => (el.value = ""));
             }}
           />
-          Camera{compact ? ` · ${poseLabel(pose)}` : ""}
+          From library
         </label>
-        {compact ? null : (
-          <label class="btn btn-ghost">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              data-testid={`library-${pose}`}
-              onChange={(e) => {
-                const el = e.currentTarget as HTMLInputElement;
-                void handle(el.files).finally(() => (el.value = ""));
-              }}
-            />
-            From library
-          </label>
-        )}
       </div>
-      {state ? (
-        <div class="why" role="status">
-          {state}
-        </div>
-      ) : null}
+      {status}
     </div>
   );
 }
@@ -81,34 +102,41 @@ function Compare({ a, b }: { a: Photo; b: Photo }) {
   const [pos, setPos] = useState(50);
   const [first, second] = [a, b].sort((x, y) => (x.local_date + x.created_at).localeCompare(y.local_date + y.created_at));
   const gap = daysBetween(first.local_date, second.local_date);
-  const cap = (p: Photo) => (
-    <figcaption>
-      {dateLong(p.local_date)} · {poseLabel(p.pose)}
-    </figcaption>
+  const figure = (p: Photo, alt: string) => (
+    <figure class="photo-thumb l-m0">
+      <span class="photo-thumb__frame well">
+        <img src={photoSrc(p, "full")} alt={alt} />
+      </span>
+      <figcaption class="caption num">
+        {dateShort(p.local_date)} · {poseLabel(p.pose)}
+      </figcaption>
+    </figure>
   );
   return (
-    <div class="stack" data-testid="compare">
+    <div class="l-col l-gap-10" data-testid="compare">
       {overlay ? (
-        <div class="overlay">
-          <img src={photoSrc(first, "full")} alt="Before" />
-          <img src={photoSrc(second, "full")} alt="After" class="top" style={{ clipPath: `inset(0 0 0 ${pos}%)` }} />
-          <input type="range" min={0} max={100} value={pos} aria-label="Move the divider between the two photos" onInput={(e) => setPos(Number((e.currentTarget as HTMLInputElement).value))} />
+        <div class="l-col l-gap-4">
+          <div class="photo-overlay well">
+            <img src={photoSrc(first, "full")} alt="Before" />
+            <img src={photoSrc(second, "full")} alt="After" style={{ clipPath: `inset(0 0 0 ${pos}%)` }} />
+          </div>
+          <input class="range" type="range" min={0} max={100} value={pos} aria-label="Move the divider between the two photos" onInput={(e) => setPos(Number((e.currentTarget as HTMLInputElement).value))} />
+          <span class="l-row l-between caption num">
+            <span>Before: {dateShort(first.local_date)}</span>
+            <span>After: {dateShort(second.local_date)}</span>
+          </span>
         </div>
       ) : (
-        <div class="cmp">
-          <figure>
-            <img src={photoSrc(first, "full")} alt="Before" />
-            {cap(first)}
-          </figure>
-          <figure>
-            <img src={photoSrc(second, "full")} alt="After" />
-            {cap(second)}
-          </figure>
+        <div class="l-grid-2 l-gap-8">
+          {figure(first, "Before")}
+          {figure(second, "After")}
         </div>
       )}
-      <div class="kv">
-        <span data-testid="gap">Gap: {fmtNum(gap)} {gap === 1 ? "day" : "days"}</span>
-        <button type="button" class="linkbtn" onClick={() => setOverlay(!overlay)}>
+      <div class="l-row l-between l-gap-8">
+        <span class="ex-card__meta num" data-testid="gap">
+          Gap: {fmtNum(gap)} {gap === 1 ? "day" : "days"}
+        </span>
+        <button type="button" class="clay press btn-sm btn--fit t-muted" onClick={() => setOverlay(!overlay)}>
           {overlay ? "Side by side" : "Overlay (slider)"}
         </button>
       </div>
@@ -120,20 +148,18 @@ function Viewer({ p, onClose }: { p: Photo; onClose: () => void }) {
   const [armed, setArmed] = useState(false);
   const pending = useStore((s) => Boolean(s.pendingPhotos[p.id]));
   return (
-    <div class="card stack" data-testid="viewer">
-      <img class="full" src={photoSrc(p, "full")} alt={`${poseLabel(p.pose)} photo, ${dateLong(p.local_date)}`} />
-      <div class="kv">
-        <span>
-          {dateLong(p.local_date)} · {poseLabel(p.pose)} {pending ? <span class="pill">queued for upload</span> : null}
-        </span>
-      </div>
-      <div class="row">
-        <button type="button" class="btn btn-ghost" onClick={onClose}>
+    <section class="card l-col l-gap-10" data-testid="viewer" aria-label="Photo">
+      <img class="photo-full" src={photoSrc(p, "full")} alt={`${poseLabel(p.pose)} photo, ${dateLong(p.local_date)}`} />
+      <span class="ex-card__meta num">
+        {dateLong(p.local_date)} · {poseLabel(p.pose)} {pending ? <span class="badge">queued for upload</span> : null}
+      </span>
+      <div class="l-row l-gap-8">
+        <button type="button" class="clay press btn t-muted l-grow" onClick={onClose}>
           Close
         </button>
         <button
           type="button"
-          class="btn btn-danger"
+          class="clay press btn t-danger l-grow"
           onClick={() => {
             if (!armed) return setArmed(true);
             void deletePhoto(p.id);
@@ -143,7 +169,7 @@ function Viewer({ p, onClose }: { p: Photo; onClose: () => void }) {
           {armed ? "Sure? Delete" : "Delete photo"}
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -173,34 +199,42 @@ export function Photos({ compare = false, open: openFirst }: { compare?: boolean
   };
 
   return (
-    <>
-      <h2>Add photos</h2>
-      <div class="card stack">
-        <p class="cue" style={{ margin: 0 }}>
-          For a fair comparison, take each photo in the same light, place and angles. Photos are resized on the phone and their location data is removed.
-        </p>
-        <div class="seg" role="group" aria-label="Photo pose">
+    <main class="page" data-testid="photos">
+      <ScreenHead title="Progress photos" sub="Me">
+        {/* New photos wait in the queue until they upload. */}
+        <SyncStatus />
+      </ScreenHead>
+      <section class="card l-col l-gap-12" aria-labelledby="photos-add">
+        <div class="l-col l-gap-4">
+          <h2 class="card__title l-m0" id="photos-add">
+            Add photos
+          </h2>
+          <span class="caption">For a fair comparison, take each photo in the same light, place and angles. Photos are resized on the phone and their location data is removed.</span>
+        </div>
+        <span class="segmented l-full" role="group" aria-label="Photo pose">
           {POSES.map(([k, label]) => (
-            <button type="button" aria-pressed={pose === k} onClick={() => setPose(k)}>
+            <button type="button" class="press l-grow" aria-pressed={pose === k} onClick={() => setPose(k)}>
               {label}
             </button>
           ))}
-        </div>
+        </span>
         <PhotoPicker pose={pose} date={today()} sessionId={null} />
-      </div>
+      </section>
 
-      <h2>Compare</h2>
-      <div class="card stack">
+      <section class="card l-col l-gap-12" aria-labelledby="photos-compare">
+        <h2 class="card__title l-m0" id="photos-compare">
+          Compare
+        </h2>
         {comparing ? (
           pair.length === 2 ? (
             <Compare a={pair[0]} b={pair[1]} />
           ) : (
-            <div class="why">Pick two photos below to see them side by side.{pair.length === 1 ? " (one selected)" : ""}</div>
+            <p class="state l-m0">Pick two photos below to see them side by side.{pair.length === 1 ? " (one selected)" : ""}</p>
           )
         ) : null}
         <button
           type="button"
-          class="btn btn-ghost btn-block"
+          class="clay press btn t-muted"
           onClick={() => {
             setComparing(!comparing);
             setPicked([]);
@@ -209,40 +243,39 @@ export function Photos({ compare = false, open: openFirst }: { compare?: boolean
         >
           {comparing ? "Done comparing" : "Pick two photos to compare"}
         </button>
-      </div>
+      </section>
 
       {viewing ? <Viewer p={viewing} onClose={() => setOpen(null)} /> : null}
 
-      <h2>Photos</h2>
-      <div class="seg" role="group" aria-label="Pose filter" style={{ marginBottom: "10px" }}>
-        <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
+      <div class="chip-wrap" role="group" aria-label="Pose filter">
+        <button type="button" class="clay press chip" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
           All
         </button>
         {POSES.map(([k, label]) => (
-          <button type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}>
+          <button type="button" class="clay press chip" aria-pressed={filter === k} onClick={() => setFilter(k)}>
             {label}
           </button>
         ))}
       </div>
-      {!shown.length ? <div class="empty">No photos yet. After each session you can take a front, side and back photo.</div> : null}
+      {!shown.length ? <p class="state l-m0">No photos yet. After each session you can take a front, side and back photo.</p> : null}
       {[...groups].map(([date, list]) => (
-        <>
-          <h2>
-            {dateLong(date)}
-          </h2>
-          <div class="photos" data-testid="photo-group">
+        <section class="l-col l-gap-8" aria-label={dateLong(date)}>
+          <h2 class="section-label num">{dateLong(date)}</h2>
+          <div class="l-grid-3 l-gap-8" data-testid="photo-group">
             {list.map((p) => (
-              <button type="button" class={`ph${picked.includes(p.id) ? " sel" : ""}`} aria-pressed={picked.includes(p.id)} data-testid="photo" onClick={() => tap(p)}>
-                <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo, ${dateLong(p.local_date)}`} loading="lazy" />
-                <span class="d">
+              <button type="button" class="photo-thumb press" aria-pressed={comparing ? picked.includes(p.id) : undefined} data-testid="photo" onClick={() => tap(p)}>
+                <span class="photo-thumb__frame well">
+                  <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo, ${dateLong(p.local_date)}`} loading="lazy" />
+                </span>
+                <span>
                   {poseLabel(p.pose)}
                   {pendingIds[p.id] ? " · queued" : ""}
                 </span>
               </button>
             ))}
           </div>
-        </>
+        </section>
       ))}
-    </>
+    </main>
   );
 }

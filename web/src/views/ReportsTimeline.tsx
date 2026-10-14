@@ -17,7 +17,7 @@ import * as ldb from "../localdb";
 import type { BootData } from "../localdb";
 import { dayInfo } from "../model";
 import { navigate, openSaved, setState, useStore } from "../store";
-import { IconChevron } from "../components/PulseIcons";
+import { IconBack, IconChevron } from "../components/PulseIcons";
 import { OverviewBody } from "./Overview";
 import { WeeklyReviewCard } from "./Review";
 import { ReportBody } from "./SessionReport";
@@ -239,35 +239,45 @@ function useSaved<T>(cached: () => Promise<T | null | undefined> | T | null | un
 }
 
 function Status({ load }: { load: Load<unknown> }) {
-  if (load.state === "loading") return <div class="why">Loading the saved report…</div>;
-  if (load.state === "offline") return <div class="why">Opening a saved report needs a connection.</div>;
-  if (load.state === "gone") return <div class="why">This report is no longer available.</div>;
-  return load.offline ? <div class="why">Offline: showing the last saved copy.</div> : null;
+  if (load.state === "loading")
+    return (
+      <div class="card l-col l-gap-8" aria-label="Loading the saved report">
+        <span class="skeleton skeleton--line" />
+        <span class="skeleton skeleton--line" />
+      </div>
+    );
+  if (load.state === "offline") return <p class="state l-m0">Opening a saved report needs a connection.</p>;
+  if (load.state === "gone") return <p class="state l-m0">This report is no longer available.</p>;
+  return load.offline ? <p class="caption l-m0">Offline: showing the last saved copy.</p> : null;
 }
 
 /** The screen: one saved report, read-only, opened from the History timeline. */
 export function SavedReport({ item }: { item: TimelineItem }) {
   const boot = useStore((s) => s.boot)!;
+  const tz = boot.settings.timezone;
   return (
-    <>
-      <button type="button" class="linkbtn" onClick={() => navigate("history")}>
-        ← History
-      </button>
-      <section class="sess-head" data-testid="saved-report" data-kind={item.kind}>
-        <div class="sess-title">
-          <div>
-            <div class="eyebrow">{KIND_LABEL[item.kind]} · read-only</div>
-            <b>{detail(item, boot)}</b>
-          </div>
+    <main class="page" data-testid="saved-report" data-kind={item.kind}>
+      <header class="screen-head">
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to History" data-testid="back" onClick={() => navigate("history")}>
+          <IconBack size={20} />
+        </button>
+        <div class="l-col l-grow">
+          <span class="screen-head__sub">{KIND_LABEL[item.kind]} · read-only</span>
+          <h1 class="screen-head__title l-m0">{detail(item, boot)}</h1>
         </div>
-        <div class="why num">{dateLong(item.date)}</div>
-      </section>
-      <div style={{ marginTop: "14px" }}>
-        {item.kind === "session" ? <SavedSession id={item.id} tz={boot.settings.timezone} /> : item.kind === "overview" ? <SavedOverview id={item.id} tz={boot.settings.timezone} /> : <SavedReview id={item.id} />}
-      </div>
-    </>
+      </header>
+      <span class="ex-card__meta num">{dateLong(item.date)}</span>
+      {item.kind === "session" ? <SavedSession id={item.id} tz={tz} /> : item.kind === "overview" ? <SavedOverview id={item.id} tz={tz} /> : <SavedReview id={item.id} />}
+    </main>
   );
 }
+
+/** When a saved report was written, and by which model. */
+const Written = ({ at, model, tz }: { at: string; model: string; tz: string }) => (
+  <span class="caption num">
+    Written {instantShort(at, tz)} · {hm(at, tz)} · {model}
+  </span>
+);
 
 function SavedSession({ id, tz }: { id: string; tz: string }) {
   const load = useSaved<ReportView>(
@@ -281,17 +291,9 @@ function SavedSession({ id, tz }: { id: string; tz: string }) {
     <>
       <Status load={load} />
       {load.state === "ok" ? (
-        <section class="card review report stack" data-testid="saved-body">
-          <div class="kv">
-            <span class="eyebrow">Session report</span>
-            <span class="muted num" style={{ fontSize: "12px" }}>
-              {instantShort(load.data.created_at, tz)} · {hm(load.data.created_at, tz)}
-            </span>
-          </div>
+        <section class="card l-col l-gap-12" data-testid="saved-body" aria-label="Session report">
+          <Written at={load.data.created_at} model={load.data.model} tz={tz} />
           <ReportBody view={load.data} />
-          <div class="kv rp-foot">
-            <small class="muted">{load.data.model}</small>
-          </div>
         </section>
       ) : null}
     </>
@@ -304,17 +306,9 @@ function SavedOverview({ id, tz }: { id: string; tz: string }) {
     <>
       <Status load={load} />
       {load.state === "ok" ? (
-        <section class="card review report overview stack" data-testid="saved-body">
-          <div class="kv">
-            <span class="eyebrow">Training overview</span>
-            <span class="muted num" style={{ fontSize: "12px" }}>
-              {instantShort(load.data.created_at, tz)} · {hm(load.data.created_at, tz)}
-            </span>
-          </div>
+        <section class="card l-col l-gap-12" data-testid="saved-body" aria-label="Training overview">
+          <Written at={load.data.created_at} model={load.data.model} tz={tz} />
           <OverviewBody view={load.data} />
-          <div class="kv rp-foot">
-            <small class="muted">{load.data.model}</small>
-          </div>
         </section>
       ) : null}
     </>
@@ -330,7 +324,7 @@ function SavedReview({ id }: { id: string }) {
     <>
       <Status load={load} />
       {load.state === "ok" ? (
-        <div data-testid="saved-body">
+        <div class="l-col" data-testid="saved-body">
           <WeeklyReviewCard review={load.data} />
         </div>
       ) : null}

@@ -225,21 +225,17 @@ export function Session({ id }: { id: string }) {
           </button>
         </header>
         <p class="ex-card__cue">Drag or use the arrows to reorder. Select 2 or 3 exercises to group them. An exercise with done sets can't be removed.</p>
-        <div class="legacy legacy--overlay">
-          <div class="stack">
-            <PlanList
-              plan={planForSession(boot, s, plan, exMap, new Date().toISOString())}
-              exMap={exMap}
-              mode="session"
-              onChange={(next) => void savePlan(next)}
-              progress={(eid) => {
-                const mine = s.sets.filter((x) => x.exercise_id === eid);
-                return `${mine.filter((x) => x.done).length} of ${mine.length} sets done`;
-              }}
-              onRemove={(it) => void removeExercise(it.exercise_id, exMap.get(it.exercise_id)?.name_en ?? it.exercise_id)}
-            />
-          </div>
-        </div>
+        <PlanList
+          plan={planForSession(boot, s, plan, exMap, new Date().toISOString())}
+          exMap={exMap}
+          mode="session"
+          onChange={(next) => void savePlan(next)}
+          progress={(eid) => {
+            const mine = s.sets.filter((x) => x.exercise_id === eid);
+            return `${mine.filter((x) => x.done).length} of ${mine.length} sets done`;
+          }}
+          onRemove={(it) => void removeExercise(it.exercise_id, exMap.get(it.exercise_id)?.name_en ?? it.exercise_id)}
+        />
       </div>
     );
 
@@ -545,7 +541,6 @@ function BodyWeight({ session: s }: { session: WorkoutSession }) {
         Body weight today ({s.unit}), optional, saved for the reports
       </span>
       <Stepper
-        pulse
         value={bodyToday?.unit === s.unit || !bodyToday ? (bodyToday?.value ?? null) : null}
         placeholder={bodyToday && bodyToday.unit !== s.unit ? `${fmtNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
         base={lastBody ?? 0}
@@ -1027,7 +1022,6 @@ function SetEditor({
             Seconds
           </span>
           <Stepper
-            pulse
             value={x.seconds}
             placeholder={fmtNum(defaults.seconds)}
             base={defaults.seconds}
@@ -1046,7 +1040,6 @@ function SetEditor({
               {labels.weight}
             </span>
             <Stepper
-              pulse
               value={x.weight}
               placeholder={defaults.weightText}
               base={g.prefillWeight ?? 0}
@@ -1062,7 +1055,6 @@ function SetEditor({
               {labels.reps}
             </span>
             <Stepper
-              pulse
               value={x.reps}
               placeholder={extra ? "–" : fmtNum(plan.reps_max)}
               base={extra ? 0 : plan.reps_max}

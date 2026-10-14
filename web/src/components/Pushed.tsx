@@ -26,6 +26,8 @@ export function Pushed({ onBack, children }: { onBack: () => void; children: Com
 
     const down = (e: PointerEvent) => {
       if (!e.isPrimary || pointer !== null || e.clientX > EDGE_ZONE) return;
+      // Selected text under the finger would start a native drag instead of the swipe.
+      window.getSelection()?.removeAllRanges();
       pointer = e.pointerId;
       mode = "pending";
       x0 = lastX = e.clientX;
@@ -86,17 +88,23 @@ export function Pushed({ onBack, children }: { onBack: () => void; children: Com
       e.preventDefault();
       e.stopPropagation();
     };
+    // A native drag (of selected text or a link under the finger) would cancel an edge swipe that has started.
+    const nativeDrag = (e: DragEvent) => {
+      if (pointer !== null) e.preventDefault();
+    };
     el.addEventListener("pointerdown", down);
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
     el.addEventListener("click", click, true);
+    el.addEventListener("dragstart", nativeDrag);
     return () => {
       el.removeEventListener("pointerdown", down);
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
       el.removeEventListener("click", click, true);
+      el.removeEventListener("dragstart", nativeDrag);
     };
   }, []);
 

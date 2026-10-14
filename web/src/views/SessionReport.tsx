@@ -9,9 +9,12 @@ import type { BalanceStatus } from "../../../worker/lib/reports";
 import { fetchReport, lastReport, requestReport, sessionUnsynced, unavailableReason, type ReportResponse } from "../ai";
 import { ApiError, errorText, NetworkError } from "../api";
 import { STATUS_ICON, STATUS_NAME } from "../components/MuscleMap";
+import { IconBack } from "../components/PulseIcons";
+import { SyncStatus } from "../components/SyncStatus";
 import { dateLong, fmtNum, hm, instantShort } from "../format";
+import { dayTitle } from "../lib/lifts";
 import { dayInfo } from "../model";
-import { navigate, photoSrc, useStore } from "../store";
+import { goBack, navigate, photoSrc, useStore } from "../store";
 import { PhotoPicker, poseLabel } from "./Photos";
 
 /** A session that ended this recently may not be queued on the server yet: keep asking for a little while. */
@@ -91,59 +94,71 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
 
   const view = res?.report ?? null;
   return (
-    <section class="card review report stack" data-testid="session-report" data-phase={phase} aria-busy={phase === "checking" || phase === "writing"}>
-      <div class="kv">
-        <span class="eyebrow">Session report</span>
+    <section class="card l-col l-gap-12" data-testid="session-report" data-phase={phase} aria-busy={phase === "checking" || phase === "writing"} aria-labelledby="report-title">
+      <div class="l-col l-gap-2">
+        <h2 class="card__title l-m0" id="report-title">
+          Session report
+        </h2>
         {view && phase === "ready" ? (
-          <span class="muted num" style={{ fontSize: "12px" }}>
+          <span class="caption num">
             {instantShort(view.created_at, tz)} · {hm(view.created_at, tz)}
+            {view.status === "ok" ? ` · ${view.model}` : ""}
           </span>
         ) : null}
       </div>
-      {phase === "checking" ? <div class="why">Loading the report…</div> : null}
-      {phase === "unsynced" ? (
-        <div class="why" data-testid="report-pending">
-          Report pending: it is written when this session reaches the server.
+      {phase === "checking" ? (
+        <div class="l-col l-gap-8" aria-label="Loading the report">
+          <span class="skeleton skeleton--line" />
+          <span class="skeleton skeleton--line" />
         </div>
+      ) : null}
+      {phase === "unsynced" ? (
+        <p class="state l-m0" data-testid="report-pending">
+          Report pending: it is written when this session reaches the server.
+        </p>
       ) : null}
       {phase === "writing" ? (
-        <div class="rp-wait" data-testid="report-loading">
-          <span class="spin" aria-hidden="true" /> Writing your report…
+        <div class="l-col l-gap-8" data-testid="report-loading">
+          <span class="caption">Writing your report…</span>
+          <span class="skeleton skeleton--line" />
+          <span class="skeleton skeleton--line" />
         </div>
       ) : null}
-      {phase === "offline" ? <div class="why">The report needs a connection.</div> : null}
+      {phase === "offline" ? <p class="state l-m0">The report needs a connection.</p> : null}
       {phase === "none" ? (
         <>
-          <div class="why">No report for this session yet.</div>
-          <button type="button" class="btn btn-primary btn-block" data-testid="report-write" disabled={busy} onClick={() => void write()}>
+          <p class="state l-m0">No report for this session yet.</p>
+          <button type="button" class="clay press btn t-pink" data-testid="report-write" disabled={busy} onClick={() => void write()}>
             Write report
           </button>
         </>
       ) : null}
       {phase === "ready" && view?.status === "error" ? (
-        <div class="stack" data-testid="report-unavailable">
-          <b>Report unavailable</b>
-          <span class="why">{unavailableReason(view.error_code)}</span>
-          <button type="button" class="btn btn-primary btn-block" data-testid="report-retry" disabled={busy} onClick={() => void write()}>
-            Retry
-          </button>
+        <div class="l-col l-gap-8" data-testid="report-unavailable">
+          <span class="ex-card__meta">
+            <b class="t-orange">Report unavailable</b> — {unavailableReason(view.error_code)}
+          </span>
+          <div class="l-row">
+            <button type="button" class="clay press btn-sm btn--fit t-pink" data-testid="report-retry" disabled={busy} onClick={() => void write()}>
+              Retry
+            </button>
+          </div>
         </div>
       ) : null}
       {phase === "ready" && view?.status === "ok" && view.report ? (
         <>
           <ReportBody view={view} />
-          <div class="kv rp-foot">
-            <small class="muted">{view.model}</small>
-            <button type="button" class="linkbtn" data-testid="report-regenerate" disabled={busy} onClick={() => void write()}>
+          <div class="l-row">
+            <button type="button" class="clay press btn-sm btn--fit t-muted" data-testid="report-regenerate" disabled={busy} onClick={() => void write()}>
               Regenerate
             </button>
           </div>
         </>
       ) : null}
       {note ? (
-        <div class="banner warn" role="status">
+        <p class="caption t-orange l-m0" role="status">
           {note}
-        </div>
+        </p>
       ) : null}
     </section>
   );
@@ -167,11 +182,11 @@ function nextChange(n: NextTimeRow): string {
 
 export function ReportBody({ view }: { view: ReportView }) {
   const r = view.report!;
-  const list = (title: string, items: string[], mark: string, cls = "") =>
+  const list = (title: string, items: string[], mark: string, testid: string, warn = false) =>
     items.length ? (
-      <div>
-        <b class="rv-title">{title}</b>
-        <ul class={`rv-list ${cls}`} dir="rtl" lang="fa">
+      <div class="l-col l-gap-4" data-testid={testid}>
+        <h3 class={`card__title l-m0${warn ? " t-orange" : ""}`}>{title}</h3>
+        <ul class="fa prose-fa" dir="rtl" lang="fa">
           {items.map((h) => (
             <li>
               <span aria-hidden="true">{mark}</span> {h}
@@ -182,31 +197,31 @@ export function ReportBody({ view }: { view: ReportView }) {
     ) : null;
   const para = (title: string, text: string | null, testid: string) =>
     text ? (
-      <div data-testid={testid}>
-        <b class="rv-title">{title}</b>
-        <p class="rp-note" dir="rtl" lang="fa">
+      <div class="l-col l-gap-4" data-testid={testid}>
+        <h3 class="card__title l-m0">{title}</h3>
+        <p class="fa prose-fa" dir="rtl" lang="fa">
           {text}
         </p>
       </div>
     ) : null;
   return (
     <>
-      <p class="summary" dir="rtl" lang="fa" data-testid="report-summary">
+      <p class="fa prose-fa" dir="rtl" lang="fa" data-testid="report-summary">
         {r.summary_fa}
       </p>
-      {list("Highlights", r.highlights, "✓")}
+      {list("Highlights", r.highlights, "✓", "report-highlights")}
       {r.volume.length ? (
-        <div>
-          <b class="rv-title">Volume (fractional sets)</b>
-          <table class="rp-vol num" data-testid="report-volume">
+        <div class="l-col l-gap-4">
+          <h3 class="card__title l-m0">Volume (fractional sets)</h3>
+          <table class="data-table num" data-testid="report-volume">
             <thead>
               <tr>
-                <th>Group</th>
-                <th>Today</th>
-                <th>Week</th>
-                <th>Target</th>
-                <th>
-                  <span class="sr-only">Status</span>
+                <th scope="col">Group</th>
+                <th scope="col">Today</th>
+                <th scope="col">Week</th>
+                <th scope="col">Target</th>
+                <th scope="col">
+                  <span class="l-sr">Status</span>
                 </th>
               </tr>
             </thead>
@@ -217,8 +232,8 @@ export function ReportBody({ view }: { view: ReportView }) {
                   <td>{fmtNum(v.today, 1)}</td>
                   <td>{fmtNum(v.week, 1)}</td>
                   <td>{v.target == null ? "–" : fmtNum(v.target, 1)}</td>
-                  <td class={`st-${v.status}`} title={STATUS_NAME[v.status as BalanceStatus]}>
-                    {STATUS_ICON[v.status as BalanceStatus]} <span class="sr-only">{STATUS_NAME[v.status as BalanceStatus]}</span>
+                  <td class={v.status === "under" || v.status === "over" ? "t-orange" : v.status === "on" ? "t-violet" : "t-muted"} title={STATUS_NAME[v.status as BalanceStatus]}>
+                    <span aria-hidden="true">{STATUS_ICON[v.status as BalanceStatus]}</span> <span class="l-sr">{STATUS_NAME[v.status as BalanceStatus]}</span>
                   </td>
                 </tr>
               ))}
@@ -229,19 +244,19 @@ export function ReportBody({ view }: { view: ReportView }) {
       {para("Extra exercises", r.extras_note_fa, "report-extras")}
       {para("Skipped", r.missed_note_fa, "report-missed")}
       {r.next_time.length ? (
-        <div data-testid="report-next">
-          <b class="rv-title">Next time</b>
-          <ul class="rp-next">
+        <div class="l-col" data-testid="report-next">
+          <h3 class="card__title l-m0">Next time</h3>
+          <ul class="l-col list-plain">
             {r.next_time.map((n) => (
-              <li data-testid={`next-${n.exercise_id}`} data-change={n.change}>
-                <div class="kv">
-                  <span>{n.name}</span>
-                  <span class="num">
-                    <b>{nextTarget(n)}</b> <small class="muted">{nextChange(n)}</small>
+              <li class="list-row l-col l-top l-gap-4" data-testid={`next-${n.exercise_id}`} data-change={n.change}>
+                <span class="l-row l-between l-gap-8 l-full">
+                  <span class="t-title">{n.name}</span>
+                  <span class="list-row__value">
+                    <b>{nextTarget(n)}</b> <span class="caption">{nextChange(n)}</span>
                   </span>
-                </div>
+                </span>
                 {n.note_fa ? (
-                  <p class="rp-note" dir="rtl" lang="fa">
+                  <p class="fa prose-fa ex-card__meta l-m0 l-full" dir="rtl" lang="fa">
                     {n.note_fa}
                   </p>
                 ) : null}
@@ -250,7 +265,7 @@ export function ReportBody({ view }: { view: ReportView }) {
           </ul>
         </div>
       ) : null}
-      {list("Watch out", r.warnings, "!", "warn")}
+      {list("Watch out", r.warnings, "!", "report-warnings", true)}
     </>
   );
 }
@@ -269,56 +284,62 @@ export function SessionReportScreen({ id, fresh }: { id: string; fresh: boolean 
   const day = dayInfo(boot, s.program_day_id);
   const sessionPhotos = photos.filter((p) => p.session_id === s.id);
   return (
-    <>
-      <section class="sess-head" data-testid="report-screen">
-        <div class="sess-title">
-          <div>
-            <div class="eyebrow">{fresh ? "Session saved" : "Session report"}</div>
-            <b>{day.name_en}</b>
-          </div>
-          <span class="pill done">Done</span>
+    <main class="page" data-testid="report-screen">
+      <header class="screen-head">
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back" data-testid="back" onClick={goBack}>
+          <IconBack size={20} />
+        </button>
+        <div class="l-col l-grow">
+          <span class="screen-head__sub">{fresh ? "Session saved" : "Finished session"}</span>
+          <h1 class="screen-head__title l-m0">{dayTitle(day.name_en)}</h1>
         </div>
-        <div class="why num">
-          {dateLong(s.local_date)} · {hm(s.started_at, tz)}
-          {s.ended_at ? `–${hm(s.ended_at, tz)}` : ""}
-        </div>
-      </section>
+        {/* The report waits for this session to reach the server. */}
+        <SyncStatus />
+      </header>
+      <span class="ex-card__meta num">
+        {dateLong(s.local_date)} · {hm(s.started_at, tz)}
+        {s.ended_at ? `–${hm(s.ended_at, tz)}` : ""}
+      </span>
 
-      <div style={{ marginTop: "14px" }}>
-        <ReportPanel sessionId={s.id} />
-      </div>
+      <ReportPanel sessionId={s.id} />
 
       {prompt ? (
-        <section class="card photo-prompt stack" style={{ marginTop: "14px" }} data-testid="photo-prompt">
-          <b>Progress photos today?</b>
-          <span class="why">Front, side and back; optional.</span>
+        <section class="card l-col l-gap-10" data-testid="photo-prompt" aria-labelledby="photo-prompt-title">
+          <div class="l-col l-gap-2">
+            <h2 class="card__title l-m0" id="photo-prompt-title">
+              Progress photos today?
+            </h2>
+            <span class="caption">Front, side and back; optional.</span>
+          </div>
           {(["front", "side", "back"] as const).map((pose) => (
             <PhotoPicker pose={pose} date={s.local_date} sessionId={s.id} compact />
           ))}
-          <button type="button" class="btn btn-ghost btn-block" onClick={() => setPrompt(false)}>
+          <button type="button" class="clay press btn t-muted" onClick={() => setPrompt(false)}>
             Later
           </button>
         </section>
       ) : null}
       {sessionPhotos.length ? (
-        <div class="photos" style={{ marginTop: "10px" }} data-testid="session-photos">
+        <div class="l-grid-4 l-gap-8" data-testid="session-photos">
           {sessionPhotos.map((p) => (
-            <button type="button" class="ph" onClick={() => navigate("photos")}>
-              <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo`} loading="lazy" />
-              <span class="d">{poseLabel(p.pose)}</span>
+            <button type="button" class="photo-thumb press" onClick={() => navigate("photos")}>
+              <span class="photo-thumb__frame well">
+                <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo`} loading="lazy" />
+              </span>
+              <span aria-hidden="true">{poseLabel(p.pose)}</span>
             </button>
           ))}
         </div>
       ) : null}
 
-      <div class="row" style={{ marginTop: "14px" }}>
-        <button type="button" class="btn btn-ghost" data-testid="report-session" onClick={() => navigate("session", s.id)}>
+      <div class="l-row l-gap-8">
+        <button type="button" class="clay press btn t-muted l-grow" data-testid="report-session" onClick={() => navigate("session", s.id)}>
           Session details
         </button>
-        <button type="button" class="btn btn-ghost" onClick={() => navigate("home")}>
+        <button type="button" class="clay press btn t-muted l-grow" onClick={() => navigate("home")}>
           Home
         </button>
       </div>
-    </>
+    </main>
   );
 }

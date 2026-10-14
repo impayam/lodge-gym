@@ -325,6 +325,7 @@ textarea.input { height: auto; min-height: 88px; padding: 10px 12px; line-height
 .card--tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 12px; border-radius: 18px; }
 .prose-fa { margin: 0; font-size: 15px; line-height: 1.75; color: var(--ink-2); }          /* Persian text: with .fa, dir="rtl" lang="fa" */
 ul.prose-fa { padding: 0; list-style: none; }                                          /* items carry their own mark */
+.list-plain { margin: 0; padding: 0; list-style: none; }                                 /* a list whose rows carry their own layout */
 .callout { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 16px; background: var(--well); box-shadow: var(--sh-well); }
 .callout[data-bad="true"] .card__title { color: var(--orange); }
 .bar-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 70px; gap: 10px; align-items: center; }
@@ -432,6 +433,59 @@ fieldset.form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .file-pick { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }   /* a clay button holding a file input */
 .file-pick input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .file-pick:focus-within { outline: 2px solid var(--orange); outline-offset: 3px; }
+
+/* ---------- Planner and the session's Reorder and group (plan step 10): rows that drag, select, move and open ---------- */
+.plan-list { display: flex; flex-direction: column; gap: 8px; }
+.plan-item { padding: 4px 6px 4px 0; border-radius: 18px; }                                 /* with .card */
+.page--session .plan-item { border: 1px solid rgba(255,255,255,.08); background: var(--session-card); box-shadow: none; }
+.plan-item[data-dragging="true"], .plan-group[data-dragging="true"] { outline: 2px solid var(--pink); outline-offset: 2px; }
+.plan-item__row { display: flex; align-items: center; gap: 4px; min-height: 56px; }
+.plan-handle { flex: none; width: 34px; align-self: stretch; display: grid; place-items: center; color: var(--ink-3); touch-action: none; cursor: grab; }
+.plan-handle svg { width: 12px; height: 20px; fill: currentColor; }
+.plan-select { flex: none; width: 40px; height: 44px; display: grid; place-items: center; }
+.plan-select input { width: 20px; height: 20px; margin: 0; accent-color: var(--pink); }
+.plan-tag { flex: none; min-width: 30px; font: 700 13px var(--font-ui); color: var(--violet-ink); text-align: center; }
+.plan-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; }
+.plan-move { flex: none; display: flex; gap: 6px; }
+.plan-move > button { width: 40px; height: 44px; border-radius: 14px; font-size: 16px; }
+.plan-edit { display: flex; flex-direction: column; gap: 12px; padding: 12px 8px 10px 14px; border-top: 1px solid var(--divider); }
+.plan-group { display: flex; flex-direction: column; gap: 8px; padding: 6px 8px 10px; border-radius: 20px; background: var(--well); box-shadow: var(--sh-well), inset 3px 0 0 var(--violet); }
+.plan-group__head { display: flex; align-items: center; gap: 4px; min-height: 44px; }
+.plan-group__foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0 4px; font-size: 13px; color: var(--ink-2); }
+.plan-groupbar { position: sticky; z-index: 3; bottom: calc(env(safe-area-inset-bottom) + 90px); display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: 13px; }   /* with .card, above the tab bar */
+.page--session .plan-groupbar { bottom: calc(env(safe-area-inset-bottom) + 12px); }
+.num-stepper--sm { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 6px; }
+.num-stepper--sm > button, .num-stepper--sm .num-stepper__input { height: 44px; border-radius: var(--r-btn); }
+.num-stepper--sm > button { font-size: 20px; }
+.num-stepper--sm .num-stepper__input { font-size: 20px; }
+.prose-fa--clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }   /* a long review, until Show more */
+
+/* ---------- A select with a chevron (the native arrow is hidden by .input) ---------- */
+.select-field { position: relative; display: block; min-width: 0; }
+.select-field > .input { padding-right: 36px; }
+.select-field > svg { position: absolute; right: 12px; top: 50%; transform: translateY(-50%) rotate(90deg); color: var(--ink-3); pointer-events: none; }
+
+/* ---------- Progress photos (plan step 10): a picked thumbnail, the viewer, compare side by side or as an overlay ---------- */
+.photo-thumb[aria-pressed="true"] .photo-thumb__frame { outline: 2px solid var(--pink); outline-offset: 2px; }
+.photo-full { display: block; width: 100%; height: auto; border-radius: 14px; }
+.photo-overlay { position: relative; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; }
+.photo-overlay img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.range { width: 100%; height: 44px; margin: 0; accent-color: var(--pink); }
+
+/* ---------- A table of words (e.g. the Shortcuts fields): no right alignment ---------- */
+.data-table--text th + th, .data-table--text td + td { text-align: left; }        /* words, not numbers: no right alignment */
+.data-table--text td { padding-right: 8px; vertical-align: top; }
+
+/* ---------- Sign-in gates (plan step 10): one centred column with the app icon, a line and one action ---------- */
+.gate { justify-content: center; width: 100%; max-width: 440px; margin: 0 auto; padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }   /* with .page */
+.gate__logo { width: 72px; height: 72px; border-radius: 18px; box-shadow: var(--sh-card); }
+.gate__codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 14px; border-radius: var(--r-btn); font: 600 16px var(--font-num); letter-spacing: .04em; color: var(--ink); }   /* with .well */
+.input--code { text-align: center; letter-spacing: .04em; }
+
+/* ---------- New program (plan step 10): the suggested week, training days pressed in ---------- */
+.week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.week-strip > span { height: 40px; display: grid; place-items: center; border-radius: 10px; font-size: 11px; color: var(--ink-3); }
+.week-strip > [data-on="true"] { background: var(--well); box-shadow: var(--sh-well); color: var(--pink); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed, .swipe, .rest__arc { transition: none; }

@@ -1,6 +1,8 @@
 import type { DayExercise } from "../../../worker/lib/types";
 import { fmtNum, instantShort, ytLink } from "../format";
 import { activeProgramInfo, exerciseMap, programName, styleLabel } from "../model";
+import { IconPlay } from "../components/PulseIcons";
+import { ScreenHead } from "../components/ScreenHead";
 import { openProgramEditor, useStore } from "../store";
 
 export function targetText(p: Pick<DayExercise, "sets" | "reps_min" | "reps_max" | "is_time" | "per_leg">) {
@@ -59,55 +61,61 @@ export function Program() {
   const list = rules(info?.style ?? null, info?.days_per_week ?? days.length, days.some((d) => d.exercises.some((x) => x.superset_tag)), info?.style === "strength");
   const since = info?.activations[info.activations.length - 1]?.started_at;
   return (
-    <>
-      <h2 data-testid="program-name">
-        {programName(info, boot.program.name)}{" "}
-        <small>
-          {info?.generated_by === "generator" ? "" : "· original program "}
-          {since ? <span class="nowrap">· since {instantShort(since, boot.settings.timezone)}</span> : null}
-        </small>
-      </h2>
-      <div class="card">
-        <ul class="rules" data-testid="program-rules">
+    <main class="page" data-testid="program">
+      <ScreenHead title={<span data-testid="program-name">{programName(info, boot.program.name)}</span>} sub="Program" />
+      <span class="ex-card__meta num">
+        {info?.generated_by === "generator" ? "Made with New program" : "Original program"}
+        {since ? ` · since ${instantShort(since, boot.settings.timezone)}` : ""}
+      </span>
+      <section class="card l-col l-gap-12" aria-labelledby="program-rules-title">
+        <h2 class="card__title l-m0" id="program-rules-title">
+          How it works
+        </h2>
+        <ul class="prose-list" data-testid="program-rules">
           {list.map((r) => (
             <li>{r}</li>
           ))}
         </ul>
-        <button type="button" class="btn btn-ghost btn-small" style={{ marginTop: "8px" }} data-testid="program-new" onClick={() => openProgramEditor()}>
+        <button type="button" class="clay press btn t-pink" data-testid="program-new" onClick={() => openProgramEditor()}>
           New program
         </button>
-      </div>
+      </section>
       {days.map((d) => (
-        <>
-          <h2>
-            {d.name_en} <small>· about {fmtNum(d.est_minutes)} min</small>
+        <section class="l-col l-gap-8" aria-label={d.name_en}>
+          <h2 class="section-label num">
+            {d.name_en} · about {fmtNum(d.est_minutes)} min
           </h2>
-          <div class="card prog-day">
+          <div class="card card--list">
             {d.exercises.map((p) => {
               const e = exMap.get(p.exercise_id)!;
               const rir = rirText(p);
               return (
-                <div class="prog-item">
-                  <div>
-                    <b>
-                      {p.is_main ? <span class="mainb">Main</span> : null}
+                <div class="list-row" data-testid="program-exercise">
+                  <span class="list-row__text">
+                    <span class="t-title">
+                      {p.superset_tag ? <span class="t-violet">{p.superset_tag} </span> : null}
                       {e.name_en}
-                      {p.superset_tag ? <span class="tag">{p.superset_tag}</span> : null}
-                    </b>
-                    <small>
+                      {p.is_main ? (
+                        <>
+                          {" "}
+                          <span class="badge">Main</span>
+                        </>
+                      ) : null}
+                    </span>
+                    <span class="caption num">
                       {targetText(p)}
                       {rir ? ` · ${rir}` : ""} · rest {fmtNum(p.rest_sec)} s
-                    </small>
-                  </div>
-                  <a href={ytLink(e.name_en)} target="_blank" rel="noopener noreferrer">
-                    Watch form video ↗
+                    </span>
+                  </span>
+                  <a class="btn-icon btn-icon--soft press" href={ytLink(e.name_en)} target="_blank" rel="noopener noreferrer" aria-label={`Form video: ${e.name_en}`}>
+                    <IconPlay />
                   </a>
                 </div>
               );
             })}
           </div>
-        </>
+        </section>
       ))}
-    </>
+    </main>
   );
 }

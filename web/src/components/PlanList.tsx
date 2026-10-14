@@ -101,10 +101,7 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
     if (!d || !list) return;
     if (e.clientY < 90) window.scrollBy(0, -10);
     else if (e.clientY > window.innerHeight - 130) window.scrollBy(0, 10);
-    const els =
-      d.kind === "block"
-        ? [...list.querySelectorAll<HTMLElement>(":scope > [data-block]")]
-        : [...list.querySelectorAll<HTMLElement>(`[data-group="${d.tag}"] [data-member]`)];
+    const els = d.kind === "block" ? [...list.querySelectorAll<HTMLElement>(":scope > [data-block]")] : [...list.querySelectorAll<HTMLElement>(`[data-group="${d.tag}"] [data-member]`)];
     let to = d.index;
     els.forEach((el, i) => {
       const r = el.getBoundingClientRect();
@@ -123,13 +120,7 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
     setDragging(null);
   };
   const handle = (d: Drag, key: string, label: string) => (
-    <span
-      class="phandle"
-      role="img"
-      aria-label={`Drag to move ${label}`}
-      data-testid={`handle-${key}`}
-      onPointerDown={(e) => startDrag(e, d, key)}
-    >
+    <span class="plan-handle" role="img" aria-label={`Drag to move ${label}`} data-testid={`handle-${key}`} onPointerDown={(e) => startDrag(e, d, key)}>
       <svg viewBox="0 0 12 20" aria-hidden="true">
         {[4, 10, 16].map((y) => (
           <>
@@ -147,10 +138,7 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
     const isOpen = open === it.id;
     const canUp = member ? member.index > 0 : blockIndex > 0;
     const canDown = member ? member.index < member.size - 1 : blockIndex < blocks.length - 1;
-    const meta =
-      mode === "session"
-        ? (progress?.(it.exercise_id) ?? "")
-        : `${targetText(target)} · rest ${fmtNum(it.rest_sec ?? 0)} s`;
+    const meta = mode === "session" ? (progress?.(it.exercise_id) ?? "") : `${targetText(target)} · rest ${fmtNum(it.rest_sec ?? 0)} s`;
     const origin =
       it.origin === "replaced" && it.replaced_exercise_id
         ? `instead of ${exMap.get(it.replaced_exercise_id)?.name_en ?? it.replaced_exercise_id}`
@@ -158,43 +146,48 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
           ? "added"
           : "";
     return (
-      <div key={it.id} class={`pitem-wrap${dragging === it.id ? " dragging" : ""}`} data-member={member ? "" : undefined} data-block={member ? undefined : ""} data-testid={`pitem-${it.exercise_id}`}>
-        <div class="pitem">
-          {member
-            ? handle({ kind: "member", index: member.index, itemId: it.id, tag: member.tag }, it.id, n)
-            : handle({ kind: "block", index: blockIndex, itemId: it.id, tag: null }, it.id, n)}
+      <div
+        key={it.id}
+        class="card plan-item"
+        data-dragging={dragging === it.id ? "true" : undefined}
+        data-member={member ? "" : undefined}
+        data-block={member ? undefined : ""}
+        data-testid={`pitem-${it.exercise_id}`}
+      >
+        <div class="plan-item__row">
+          {member ? handle({ kind: "member", index: member.index, itemId: it.id, tag: member.tag }, it.id, n) : handle({ kind: "block", index: blockIndex, itemId: it.id, tag: null }, it.id, n)}
           {member ? (
-            <span class="tag ptag">
+            <span class="plan-tag">
               {member.tag}
               {member.index + 1}
             </span>
           ) : (
-            <label class="psel">
+            <label class="plan-select">
               <input type="checkbox" checked={chosen.includes(it.id)} aria-label={`Select ${n}`} onChange={() => toggleSelect(it.id)} />
             </label>
           )}
-          <button type="button" class="pname" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : it.id)}>
-            <b>{n}</b>
-            <small class="num">
+          <button type="button" class="plan-name" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : it.id)}>
+            <b class="t-title">{n}</b>
+            <span class="caption num">
               {meta}
-              {origin ? <span class="porigin"> · {origin}</span> : null}
-            </small>
+              {origin ? <span class="t-violet"> · {origin}</span> : null}
+            </span>
           </button>
-          <span class="pmove">
-            <button type="button" aria-label={`Move ${n} up`} disabled={!canUp} onClick={() => change(moveItem(latest.current, it.id, -1, nowISO()))}>
+          <span class="plan-move">
+            <button type="button" class="clay press t-muted" aria-label={`Move ${n} up`} disabled={!canUp} onClick={() => change(moveItem(latest.current, it.id, -1, nowISO()))}>
               ↑
             </button>
-            <button type="button" aria-label={`Move ${n} down`} disabled={!canDown} onClick={() => change(moveItem(latest.current, it.id, 1, nowISO()))}>
+            <button type="button" class="clay press t-muted" aria-label={`Move ${n} down`} disabled={!canDown} onClick={() => change(moveItem(latest.current, it.id, 1, nowISO()))}>
               ↓
             </button>
           </span>
         </div>
         {isOpen ? (
-          <div class="pedit" data-testid={`pedit-${it.exercise_id}`}>
+          <div class="plan-edit" data-testid={`pedit-${it.exercise_id}`}>
             {mode === "plan" ? (
-              <div class="pfields">
-                <label>
-                  <span>Sets</span>
+              <div class="l-grid-2 l-gap-12">
+                <div class="form-field">
+                  <span class="form-field__label">Sets</span>
                   <Stepper
                     value={it.sets}
                     placeholder="3"
@@ -204,39 +197,12 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
                     decimals={false}
                     label={`Sets, ${n}`}
                     testId={`sets-${it.exercise_id}`}
+                    small
                     onChange={(v) => v != null && v <= MAX_SETS && change(updateItem(latest.current, it.id, { sets: v }, nowISO()))}
                   />
-                </label>
-                <label>
-                  <span>{it.is_time ? "Seconds from" : "Reps from"}</span>
-                  <Stepper
-                    value={it.reps_min}
-                    placeholder="–"
-                    base={it.reps_min ?? 8}
-                    step={it.is_time ? 5 : 1}
-                    min={0}
-                    decimals={false}
-                    label={`${it.is_time ? "Seconds" : "Reps"} from, ${n}`}
-                    testId={`repsmin-${it.exercise_id}`}
-                    onChange={(v) => change(updateItem(latest.current, it.id, { reps_min: v }, nowISO()))}
-                  />
-                </label>
-                <label>
-                  <span>to</span>
-                  <Stepper
-                    value={it.reps_max}
-                    placeholder="–"
-                    base={it.reps_max ?? 12}
-                    step={it.is_time ? 5 : 1}
-                    min={it.reps_min ?? 0}
-                    decimals={false}
-                    label={`${it.is_time ? "Seconds" : "Reps"} to, ${n}`}
-                    testId={`repsmax-${it.exercise_id}`}
-                    onChange={(v) => change(updateItem(latest.current, it.id, { reps_max: v }, nowISO()))}
-                  />
-                </label>
-                <label>
-                  <span>Rest (s)</span>
+                </div>
+                <div class="form-field">
+                  <span class="form-field__label">Rest (s)</span>
                   <Stepper
                     value={it.rest_sec}
                     placeholder="90"
@@ -246,18 +212,49 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
                     decimals={false}
                     label={`Rest in seconds, ${n}`}
                     testId={`rest-${it.exercise_id}`}
+                    small
                     onChange={(v) => v != null && v <= 600 && change(updateItem(latest.current, it.id, { rest_sec: v }, nowISO()))}
                   />
-                </label>
+                </div>
+                <div class="form-field">
+                  <span class="form-field__label">{it.is_time ? "Seconds from" : "Reps from"}</span>
+                  <Stepper
+                    value={it.reps_min}
+                    placeholder="–"
+                    base={it.reps_min ?? 8}
+                    step={it.is_time ? 5 : 1}
+                    min={0}
+                    decimals={false}
+                    label={`${it.is_time ? "Seconds" : "Reps"} from, ${n}`}
+                    testId={`repsmin-${it.exercise_id}`}
+                    small
+                    onChange={(v) => change(updateItem(latest.current, it.id, { reps_min: v }, nowISO()))}
+                  />
+                </div>
+                <div class="form-field">
+                  <span class="form-field__label">{it.is_time ? "Seconds to" : "Reps to"}</span>
+                  <Stepper
+                    value={it.reps_max}
+                    placeholder="–"
+                    base={it.reps_max ?? 12}
+                    step={it.is_time ? 5 : 1}
+                    min={it.reps_min ?? 0}
+                    decimals={false}
+                    label={`${it.is_time ? "Seconds" : "Reps"} to, ${n}`}
+                    testId={`repsmax-${it.exercise_id}`}
+                    small
+                    onChange={(v) => change(updateItem(latest.current, it.id, { reps_max: v }, nowISO()))}
+                  />
+                </div>
               </div>
             ) : null}
-            <div class="pactions">
+            <div class="l-row l-gap-8">
               {mode === "plan" && onReplace ? (
-                <button type="button" class="btn btn-ghost btn-small" onClick={() => onReplace(it)}>
+                <button type="button" class="clay press btn btn--fit t-muted" onClick={() => onReplace(it)}>
                   Replace
                 </button>
               ) : null}
-              <button type="button" class="btn btn-danger btn-small" onClick={() => onRemove(it)}>
+              <button type="button" class="clay press btn btn--fit t-danger" onClick={() => onRemove(it)}>
                 Remove
               </button>
             </div>
@@ -269,21 +266,41 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
 
   return (
     <>
-      <div class="plist" ref={listRef} data-testid="plan-list">
+      <div class="plan-list" ref={listRef} data-testid="plan-list">
         {blocks.map((b, bi) =>
           b.tag ? (
-            <div key={"g" + b.items.map((it) => it.id).sort().join()} class={`pgroup${dragging === "g" + b.tag ? " dragging" : ""}`} data-block="" data-group={b.tag} data-testid={`pgroup-${b.tag}`}>
-              <div class="pghead">
+            <div
+              key={
+                "g" +
+                b.items
+                  .map((it) => it.id)
+                  .sort()
+                  .join()
+              }
+              class="plan-group"
+              data-dragging={dragging === "g" + b.tag ? "true" : undefined}
+              data-block=""
+              data-group={b.tag}
+              data-testid={`pgroup-${b.tag}`}
+            >
+              <div class="plan-group__head">
                 {handle({ kind: "block", index: bi, itemId: null, tag: b.tag }, "g" + b.tag, `${groupKind(b.items.length)} ${b.tag}`)}
-                <b>
+                <b class="t-title t-violet l-grow">
                   {groupKind(b.items.length)} {b.tag}
                 </b>
-                <span class="pmove">
-                  <button type="button" aria-label={`Move ${groupKind(b.items.length)} ${b.tag} up`} disabled={bi === 0} onClick={() => change(moveGroup(latest.current, b.tag!, -1, nowISO()))}>
+                <span class="plan-move">
+                  <button
+                    type="button"
+                    class="clay press t-muted"
+                    aria-label={`Move ${groupKind(b.items.length)} ${b.tag} up`}
+                    disabled={bi === 0}
+                    onClick={() => change(moveGroup(latest.current, b.tag!, -1, nowISO()))}
+                  >
                     ↑
                   </button>
                   <button
                     type="button"
+                    class="clay press t-muted"
                     aria-label={`Move ${groupKind(b.items.length)} ${b.tag} down`}
                     disabled={bi === blocks.length - 1}
                     onClick={() => change(moveGroup(latest.current, b.tag!, 1, nowISO()))}
@@ -293,21 +310,23 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
                 </span>
               </div>
               {b.items.map((it, i) => row(it, bi, { tag: b.tag!, index: i, size: b.items.length }))}
-              <div class="pgfoot">
-                <span>Rest after each round</span>
-                <Stepper
-                  value={b.items[0].group_rest_sec}
-                  placeholder="90"
-                  base={b.items[0].group_rest_sec ?? 90}
-                  step={15}
-                  min={0}
-                  decimals={false}
-                  label={`Rest after each round of ${groupKind(b.items.length)} ${b.tag}, seconds`}
-                  testId={`grouprest-${b.tag}`}
-                  onChange={(v) => v != null && v <= 600 && change(setGroupRest(latest.current, b.tag!, v, nowISO()))}
-                />
-                <span>s</span>
-                <button type="button" class="linkbtn" onClick={() => change(ungroup(latest.current, b.tag!, nowISO()))}>
+              <div class="plan-group__foot">
+                <span class="form-field__label l-full">Rest after each round, seconds</span>
+                <span class="l-grow">
+                  <Stepper
+                    value={b.items[0].group_rest_sec}
+                    placeholder="90"
+                    base={b.items[0].group_rest_sec ?? 90}
+                    step={15}
+                    min={0}
+                    decimals={false}
+                    label={`Rest after each round of ${groupKind(b.items.length)} ${b.tag}, seconds`}
+                    testId={`grouprest-${b.tag}`}
+                    small
+                    onChange={(v) => v != null && v <= 600 && change(setGroupRest(latest.current, b.tag!, v, nowISO()))}
+                  />
+                </span>
+                <button type="button" class="clay press btn-sm btn--fit t-muted" onClick={() => change(ungroup(latest.current, b.tag!, nowISO()))}>
                   Ungroup
                 </button>
               </div>
@@ -318,14 +337,14 @@ export function PlanList({ plan, exMap, onChange, mode, progress, onReplace, onR
         )}
       </div>
       {chosen.length ? (
-        <div class="groupbar" role="region" aria-label="Group the selected exercises" data-testid="groupbar">
-          <span>
+        <div class="card plan-groupbar" role="region" aria-label="Group the selected exercises" data-testid="groupbar">
+          <span class="l-grow num">
             {fmtNum(chosen.length)} selected{chosen.length === 1 || chosen.length > 3 ? ": pick 2 or 3" : ""}
           </span>
-          <button type="button" class="btn btn-primary btn-small" disabled={!canGroup(plan, chosen)} onClick={group}>
+          <button type="button" class="clay press btn-sm btn--fit t-pink" disabled={!canGroup(plan, chosen)} onClick={group}>
             {chosen.length === 3 ? "Group as tri-set" : chosen.length === 2 ? "Group as superset" : "Group"}
           </button>
-          <button type="button" class="linkbtn" onClick={() => setSelected([])}>
+          <button type="button" class="clay press btn-sm btn--fit t-muted" onClick={() => setSelected([])}>
             Clear
           </button>
         </div>

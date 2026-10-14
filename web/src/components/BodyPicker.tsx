@@ -20,6 +20,7 @@ import { loadLibrary, useStore } from "../store";
 import { CATEGORY_LABEL, EquipmentIcon, equipmentLabel, muscleLabel } from "../views/Library";
 import { IconPlay } from "./PulseIcons";
 import { token } from "../lib/tokens";
+import { Select } from "./Select";
 
 interface Place {
   step: "body" | "list";
@@ -293,13 +294,13 @@ function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: 
       </div>
       <h2 class="screen-head__title l-m0">{muscleLabel(muscle)}</h2>
       <div class="l-grid-2 l-gap-8">
-        <select class="input" aria-label="Equipment" value={place.equipment} onChange={(e) => go({ equipment: (e.currentTarget as HTMLSelectElement).value as Equipment | "" })}>
+        <Select aria-label="Equipment" value={place.equipment} onChange={(e) => go({ equipment: (e.currentTarget as HTMLSelectElement).value as Equipment | "" })}>
           <option value="">All equipment</option>
           {EQUIPMENT.map((k) => (
             <option value={k}>{equipmentLabel(k)}</option>
           ))}
-        </select>
-        <select class="input" aria-label="Category" value={place.category} onChange={(e) => go({ category: (e.currentTarget as HTMLSelectElement).value as CategoryFilter })}>
+        </Select>
+        <Select aria-label="Category" value={place.category} onChange={(e) => go({ category: (e.currentTarget as HTMLSelectElement).value as CategoryFilter })}>
           <option value="counted">Strength (counted)</option>
           <option value="all">All categories</option>
           {CATEGORIES.map((c) => (
@@ -308,7 +309,7 @@ function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: 
               {countsVolume(c) ? "" : " (not counted)"}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {library === null ? <span class="skeleton" style={{ height: "76px" }} aria-label="Loading the library" /> : null}
       <div class="l-col l-gap-8" data-testid="pick-primary">

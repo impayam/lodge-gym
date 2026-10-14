@@ -201,6 +201,37 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 - `.ex-row__main` is the tappable part of a row that also holds another button (the form video in the body picker).
 - `.file-pick` hides the native file control inside a clay button; the chosen file name is shown beside it.
 
+### Screens without a mockup (plan step 10)
+
+```html
+<header class="screen-head"><button class="clay press btn-icon t-muted" aria-label="Back">‹</button>
+  <div><span class="screen-head__sub">Me</span><h1 class="screen-head__title">Settings</h1></div></header>   <!-- every pushed screen -->
+<span class="select-field"><select class="input">…</select><svg>chevron</svg></span>
+<ul class="list-plain">…</ul>                                                        <!-- rows carry their own layout -->
+
+<div class="plan-list">                                                              <!-- planner, session Reorder and group -->
+  <div class="card plan-item" data-dragging="true"><div class="plan-item__row">
+    <span class="plan-handle" role="img" aria-label="Drag to move …">⋮⋮</span>
+    <label class="plan-select"><input type="checkbox"></label>                       <!-- grouped rows: <span class="plan-tag">A1</span> -->
+    <button class="plan-name"><b class="t-title">…</b><span class="caption">3 × 8–12 · rest 90 s</span></button>
+    <span class="plan-move"><button class="clay press">↑</button><button class="clay press">↓</button></span></div>
+    <div class="plan-edit">…<div class="num-stepper num-stepper--sm">…</div>…</div></div>
+  <div class="plan-group"><div class="plan-group__head">…</div>…<div class="plan-group__foot">…</div></div>
+</div>
+<div class="card plan-groupbar">2 selected <button class="clay press btn-sm t-pink">Group as superset</button></div>
+
+<button class="photo-thumb press" aria-pressed="true">…</button>                    <!-- picked for compare -->
+<img class="photo-full"> <div class="photo-overlay well"><img><img style="clip-path: …"></div> <input class="range" type="range">
+<table class="data-table data-table--text">…</table>                                 <!-- words, left aligned -->
+<div class="week-strip"><span data-on="true">Day 1</span><span>Rest</span>…</div>
+<main class="page gate"><img class="gate__logo"><h1 class="h-page">GYM time</h1>…</main>   <!-- sign-in gates -->
+<div class="well gate__codes"><span>XXXX-XXXX-XXXX</span>…</div> <input class="input input--code">
+<p class="fa prose-fa prose-fa--clamp" dir="rtl" lang="fa">…</p>                     <!-- a long review until Show more -->
+```
+- The plan list's group is pressed in with the violet side line of `.card--grouped`; in the session its rows use the session card fill and purple clay.
+- `.plan-groupbar` sticks above the tab bar (in the session, above the bottom edge).
+- `.week-strip` training days are pressed in with pink text (6.1:1); rest days stay flat with `--ink-3`.
+
 ## Don't
 
 - No new colors, no gradients other than the page background, clay and card fills.

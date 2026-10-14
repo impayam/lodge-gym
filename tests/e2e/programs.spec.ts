@@ -53,12 +53,12 @@ test("generate, swap an exercise, change sets, approve (SPEC-v2 §8.8 E2E 1)", a
   for (const i of [0, 1, 2]) await expect(page.getByTestId(`np-day-${i}`)).toBeVisible();
   await expect(page.getByTestId("np-violations")).toHaveCount(0);
   await expect(page.getByTestId("np-volume").locator("tr[data-group]")).toHaveCount(10);
-  await expect(page.getByTestId("np-day-1").locator(".np-item").first()).toHaveAttribute("data-ex", "bench");
-  await expect(page.getByTestId("np-day-1").locator(".np-item").first()).toContainText("RIR 1–3");
+  await expect(page.getByTestId("np-day-1").getByTestId("np-item").first()).toHaveAttribute("data-ex", "bench");
+  await expect(page.getByTestId("np-day-1").getByTestId("np-item").first()).toContainText("RIR 1–3");
 
   // Swap: a secondary for another exercise with the same movement and main muscle.
   const day0 = page.getByTestId("np-day-0");
-  const items = day0.locator(".np-item");
+  const items = day0.getByTestId("np-item");
   let swapped: { index: number; from: string; to: string } | null = null;
   for (let k = 1; k < (await items.count()) && !swapped; k++) {
     await page.getByTestId(`np-swap-0-${k}`).click();
@@ -75,11 +75,11 @@ test("generate, swap an exercise, change sets, approve (SPEC-v2 §8.8 E2E 1)", a
 
   // Sets change within the slot's range; the check re-runs.
   const plusId = (await page.locator('[data-testid^="np-plus-"]:not([disabled])').first().getAttribute("data-testid"))!;
-  const row = page.locator(".np-item", { has: page.getByTestId(plusId) });
-  const before = (await row.locator("small").first().textContent())!;
+  const row = page.getByTestId("np-item").filter({ has: page.getByTestId(plusId) });
+  const before = (await row.getByTestId("np-target").textContent())!;
   const sets = Number(before.split(" ")[0]);
   await page.getByTestId(plusId).click();
-  await expect(row.locator("small").first()).toHaveText(before.replace(/^\d+/, String(sets + 1)));
+  await expect(row.getByTestId("np-target")).toHaveText(before.replace(/^\d+/, String(sets + 1)));
 
   await page.getByTestId("np-approve").click();
   await expect(page.getByTestId("np-confirm")).toContainText("“Full body · 4 days” is archived");
@@ -89,7 +89,7 @@ test("generate, swap an exercise, change sets, approve (SPEC-v2 §8.8 E2E 1)", a
   await expect(page.getByTestId("program-name")).toContainText("Full body · 3 days");
   await expect(page.getByTestId("program-rules")).toContainText("3 sessions a week");
   await expect(page.getByTestId("program-rules")).not.toContainText("light week");
-  await expect(page.locator(".prog-item").filter({ has: page.locator("b", { hasText: /^(Main)?Barbell Bench Press$/ }) })).toContainText("RIR 1–3");
+  await expect(page.getByTestId("program-exercise").filter({ has: page.locator(".t-title", { hasText: /^Barbell Bench Press( Main)?$/ }) })).toContainText("RIR 1–3");
   await tab(page, "Train");
   await expect(page.getByTestId("week-strip")).toContainText("of 3");
   await expect(page.getByTestId("next-card")).toContainText("The program changed: start with Day 1 of the new program.");

@@ -6,8 +6,15 @@ import { deviceLabel, localUnlock, loginWithPasskey, recover, registerPasskey } 
 import { onLoggedIn, refresh, setState } from "../store";
 
 function Logo() {
-  return <img class="logo" src="/icons/icon-192.png" alt="" width={72} height={72} />;
+  return <img class="gate__logo" src="/icons/icon-192.png" alt="" width={72} height={72} />;
 }
+
+/** The error line under a gate's action; always present so a new message is announced. */
+const Err = ({ text }: { text: string }) => (
+  <p class="ex-card__meta t-orange l-m0" role="alert">
+    {text}
+  </p>
+);
 
 export function Setup() {
   const [token, setToken] = useState("");
@@ -30,17 +37,17 @@ export function Setup() {
 
   if (codes)
     return (
-      <div class="gate wrap">
+      <main class="page gate">
         <Logo />
-        <h1>Face ID is set up</h1>
-        <p>These 10 recovery codes are shown only this once. Keep them somewhere safe (a locked note or a password manager). Each code works once.</p>
-        <div class="codes" data-testid="recovery-codes">
+        <h1 class="h-page">Face ID is set up</h1>
+        <p class="ex-card__meta l-m0">These 10 recovery codes are shown only this once. Keep them somewhere safe (a locked note or a password manager). Each code works once.</p>
+        <div class="well gate__codes" data-testid="recovery-codes">
           {codes.map((c) => (
             <span>{c}</span>
           ))}
         </div>
         <button
-          class="btn btn-primary btn-block"
+          class="clay press btn-lg t-pink"
           type="button"
           onClick={async () => {
             history.replaceState(null, "", "/");
@@ -49,22 +56,28 @@ export function Setup() {
         >
           I saved the codes, continue
         </button>
-      </div>
+      </main>
     );
 
   return (
-    <div class="gate wrap">
+    <main class="page gate">
       <Logo />
-      <h1>Set up GYM time</h1>
-      <p>Enter the setup code (SETUP_TOKEN) to register Face ID on this device.</p>
-      <input type="password" autoComplete="off" placeholder="Setup code" value={token} onInput={(e) => setToken((e.currentTarget as HTMLInputElement).value)} />
-      <button class="btn btn-primary btn-block" type="button" disabled={busy || !token.trim()} onClick={submit}>
+      <h1 class="h-page">Set up GYM time</h1>
+      <p class="ex-card__meta l-m0">Enter the setup code (SETUP_TOKEN) to register Face ID on this device.</p>
+      <input
+        class="input input--code"
+        type="password"
+        autoComplete="off"
+        aria-label="Setup code"
+        placeholder="Setup code"
+        value={token}
+        onInput={(e) => setToken((e.currentTarget as HTMLInputElement).value)}
+      />
+      <button class="clay press btn-lg t-pink" type="button" disabled={busy || !token.trim()} onClick={submit}>
         Register Face ID
       </button>
-      <div class="err" role="alert">
-        {err}
-      </div>
-    </div>
+      <Err text={err} />
+    </main>
   );
 }
 
@@ -100,34 +113,40 @@ export function Login() {
   };
 
   return (
-    <div class="gate wrap">
+    <main class="page gate">
       <Logo />
-      <h1>GYM time</h1>
+      <h1 class="h-page">GYM time</h1>
       {mode === "login" ? (
         <>
-          <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={login} data-testid="login">
+          <button class="clay press btn-lg t-pink" type="button" disabled={busy} onClick={login} data-testid="login">
             Sign in with Face ID
           </button>
-          <button class="linkbtn" type="button" onClick={() => setMode("code")}>
+          <button class="clay press btn t-muted" type="button" onClick={() => setMode("code")}>
             I can't use my passkey (recovery code)
           </button>
         </>
       ) : (
         <>
-          <p>Enter one of your recovery codes. After that you need to register a new passkey.</p>
-          <input autoComplete="off" autoCapitalize="characters" placeholder="XXXX-XXXX-XXXX" value={code} onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value)} />
-          <button class="btn btn-primary btn-block" type="button" disabled={busy || !code.trim()} onClick={useCode}>
+          <p class="ex-card__meta l-m0">Enter one of your recovery codes. After that you need to register a new passkey.</p>
+          <input
+            class="input input--code num"
+            autoComplete="off"
+            autoCapitalize="characters"
+            aria-label="Recovery code"
+            placeholder="XXXX-XXXX-XXXX"
+            value={code}
+            onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value)}
+          />
+          <button class="clay press btn-lg t-pink" type="button" disabled={busy || !code.trim()} onClick={useCode}>
             Continue
           </button>
-          <button class="linkbtn" type="button" onClick={() => setMode("login")}>
+          <button class="clay press btn t-muted" type="button" onClick={() => setMode("login")}>
             Back to Face ID sign-in
           </button>
         </>
       )}
-      <div class="err" role="alert">
-        {err}
-      </div>
-    </div>
+      <Err text={err} />
+    </main>
   );
 }
 
@@ -147,17 +166,15 @@ export function Recovery() {
     }
   };
   return (
-    <div class="gate wrap">
+    <main class="page gate">
       <Logo />
-      <h1>Register a new passkey</h1>
-      <p>Recovery code accepted. Now register Face ID on this device (you have 15 minutes).</p>
-      <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={register}>
+      <h1 class="h-page">Register a new passkey</h1>
+      <p class="ex-card__meta l-m0">Recovery code accepted. Now register Face ID on this device (you have 15 minutes).</p>
+      <button class="clay press btn-lg t-pink" type="button" disabled={busy} onClick={register}>
         Register Face ID
       </button>
-      <div class="err" role="alert">
-        {err}
-      </div>
-    </div>
+      <Err text={err} />
+    </main>
   );
 }
 
@@ -187,29 +204,27 @@ export function Locked() {
     }
   };
   return (
-    <div class="gate wrap">
+    <main class="page gate">
       <Logo />
-      <h1>Locked</h1>
-      <p>Unlock with Face ID to continue.</p>
-      <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={unlock}>
+      <h1 class="h-page">Locked</h1>
+      <p class="ex-card__meta l-m0">Unlock with Face ID to continue.</p>
+      <button class="clay press btn-lg t-pink" type="button" disabled={busy} onClick={unlock}>
         Unlock with Face ID
       </button>
-      <div class="err" role="alert">
-        {err}
-      </div>
-    </div>
+      <Err text={err} />
+    </main>
   );
 }
 
 export function FirstOffline() {
   return (
-    <div class="gate wrap">
+    <main class="page gate">
       <Logo />
-      <h1>GYM time</h1>
-      <p>The first sign-in on this device needs an internet connection. After that the app also works offline.</p>
-      <button class="btn btn-primary btn-block" type="button" onClick={() => void refresh()}>
+      <h1 class="h-page">GYM time</h1>
+      <p class="ex-card__meta l-m0">The first sign-in on this device needs an internet connection. After that the app also works offline.</p>
+      <button class="clay press btn-lg t-pink" type="button" onClick={() => void refresh()}>
         Try again
       </button>
-    </div>
+    </main>
   );
 }

@@ -25,6 +25,7 @@ export const IconProgram = svg("M4 6h16M4 12h16M4 18h10");
 export const IconPlanner = svg("M4 6h16v14H4zM4 10h16M9 14h6");
 export const IconSpark = svg("M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z");
 export const IconDownload = svg("M12 4v11M7 10l5 5 5-5M5 20h14");
+export const IconWatch = svg("M8 7h8v10H8zM9.5 7l1-4h3l1 4M9.5 17l1 4h3l1-4");
 export const IconSettings = svg("M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3");
 
 /** Done mark on the set check (mockup 02: 3 px stroke). */

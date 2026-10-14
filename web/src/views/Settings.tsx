@@ -8,6 +8,9 @@ import { activeProgramInfo, programName, styleLabel } from "../model";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
 import { deviceLabel, registerPasskey } from "../passkey";
+import { IconChevron, IconWatch } from "../components/PulseIcons";
+import { ScreenHead } from "../components/ScreenHead";
+import { Select } from "../components/Select";
 import { loadProgramVersions, logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
 
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
@@ -37,114 +40,138 @@ export function Settings() {
   };
 
   return (
-    <>
-      <h2>Settings</h2>
-      <div class="card settings-list">
-        <div class="field">
-          <span class="lbl">Default weight unit (for new sessions)</span>
-          <span class="seg" role="group" aria-label="Weight unit">
+    <main class="page" data-testid="settings">
+      <ScreenHead title="Settings" sub="Me" />
+      <section class="card l-col l-gap-14" aria-label="General">
+        <div class="form-field">
+          <span class="form-field__label" id="s-unit">
+            Default weight unit (for new sessions)
+          </span>
+          <span class="segmented l-full" role="group" aria-labelledby="s-unit">
             {(["lb", "kg"] as const).map((u) => (
-              <button type="button" aria-pressed={st.unit === u} onClick={() => set({ unit: u })}>
+              <button type="button" class="press l-grow" aria-pressed={st.unit === u} onClick={() => set({ unit: u })}>
                 {u}
               </button>
             ))}
           </span>
         </div>
-        <div class="field">
-          <label for="s-week">Week starts on</label>
-          <select id="s-week" value={st.week_start} onChange={(e) => set({ week_start: (e.currentTarget as HTMLSelectElement).value as WeekStart })}>
+        <div class="form-field">
+          <label class="form-field__label" for="s-week">
+            Week starts on
+          </label>
+          <Select id="s-week" value={st.week_start} onChange={(e) => set({ week_start: (e.currentTarget as HTMLSelectElement).value as WeekStart })}>
             <option value="sat">Saturday</option>
             <option value="sun">Sunday</option>
             <option value="mon">Monday</option>
-          </select>
+          </Select>
         </div>
-        <div class="field">
-          <label for="s-relock">Lock again with Face ID after the app is in the background for</label>
-          <select id="s-relock" value={String(st.relock_minutes)} onChange={(e) => set({ relock_minutes: Number((e.currentTarget as HTMLSelectElement).value) })}>
+        <div class="form-field">
+          <label class="form-field__label" for="s-relock">
+            Lock again with Face ID after the app is in the background for
+          </label>
+          <Select id="s-relock" value={String(st.relock_minutes)} onChange={(e) => set({ relock_minutes: Number((e.currentTarget as HTMLSelectElement).value) })}>
             <option value="0">Off</option>
             {[1, 5, 15, 30, 60].map((m) => (
               <option value={String(m)}>{fmtNum(m)} min</option>
             ))}
-          </select>
+          </Select>
         </div>
-        <div class="field">
-          <label for="s-tz">Time zone</label>
-          <select id="s-tz" value={st.timezone} onChange={(e) => set({ timezone: (e.currentTarget as HTMLSelectElement).value })}>
+        <div class="form-field">
+          <label class="form-field__label" for="s-tz">
+            Time zone
+          </label>
+          <Select id="s-tz" value={st.timezone} onChange={(e) => set({ timezone: (e.currentTarget as HTMLSelectElement).value })}>
             {zones.map((z) => (
               <option value={z}>{z}</option>
             ))}
-          </select>
+          </Select>
         </div>
-      </div>
+      </section>
 
-      <h2>Program</h2>
+      <h2 class="section-label">Program</h2>
       <ProgramSettings />
 
-      <h2>Connections</h2>
-      <button type="button" class="setlink" onClick={() => navigate("watch")} data-testid="open-watch">
-        <span>
-          Apple Watch
-          <br />
-          <small>Token, shortcut setup, latest watch data</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </button>
+      <h2 class="section-label">Connections</h2>
+      <section class="card card--list" aria-label="Connections">
+        <button type="button" class="list-row press" data-testid="open-watch" onClick={() => navigate("watch")}>
+          <span class="well icon-well t-orange">
+            <IconWatch />
+          </span>
+          <span class="list-row__text">
+            <span class="t-title">Apple Watch</span>
+            <span class="caption">Token, shortcut setup, latest watch data</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+      </section>
 
-      <h2>Devices</h2>
-      <div class="card stack">
-        <p class="why" style={{ margin: 0 }}>
+      <h2 class="section-label">Devices</h2>
+      <section class="card l-col l-gap-10" aria-label="Devices">
+        <p class="ex-card__meta l-m0">
           Passkeys usually sync across your Apple devices through iCloud Keychain. For a device that doesn't sync, open this page on that device and tap “Add device”.
         </p>
-        <button class="btn btn-ghost btn-block" type="button" disabled={busy} onClick={addDevice}>
+        <button class="clay press btn t-muted" type="button" disabled={busy} onClick={addDevice}>
           Add device
         </button>
-        <div class="why">{msg}</div>
-      </div>
+        {msg ? (
+          <p class="caption l-m0" role="status">
+            {msg}
+          </p>
+        ) : null}
+      </section>
 
-      <h2>Rest-timer notification</h2>
+      <h2 class="section-label">Rest-timer notification</h2>
       <PushSettings />
 
-      <h2>Sync</h2>
-      <div class="card stack">
-        <div class="kv">
-          <span>Waiting to send</span>
-          <span class="num">{fmtNum(sync.pending)}</span>
+      <h2 class="section-label">Sync</h2>
+      <section class="card l-col l-gap-10" aria-label="Sync">
+        <div class="l-col">
+          <Fact label="Waiting to send" value={fmtNum(sync.pending)} />
+          <Fact label="Status" value={sync.online ? (sync.error ? sync.error : "Online") : "Offline"} />
         </div>
-        <div class="kv">
-          <span>Status</span>
-          <span>{sync.online ? (sync.error ? sync.error : "Online") : "Offline"}</span>
-        </div>
-        <button class="btn btn-ghost btn-block" type="button" onClick={() => void syncNow()}>
+        <button class="clay press btn t-muted" type="button" onClick={() => void syncNow()}>
           Sync now
         </button>
-      </div>
+      </section>
 
-      <h2>About</h2>
-      <div class="card stack" data-testid="about">
+      <h2 class="section-label">About</h2>
+      <section class="card" data-testid="about" aria-label="About">
         {/* CC BY-SA 4.0 attribution of the picker's 3D model (SPEC-v6 §1, web/public/models/ANATOMY-SOURCE.md). */}
-        <div class="why">
+        <p class="ex-card__meta l-m0">
           3D anatomy model:{" "}
-          <a href="https://github.com/hpfrei/body-anatomy-3d-viewer" target="_blank" rel="noopener noreferrer">
+          <a class="t-pink" href="https://github.com/hpfrei/body-anatomy-3d-viewer" target="_blank" rel="noopener noreferrer">
             Body Anatomy 3D Viewer
           </a>{" "}
           by hpfrei, based on{" "}
-          <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener noreferrer">
+          <a class="t-pink" href="https://www.z-anatomy.com/" target="_blank" rel="noopener noreferrer">
             Z-Anatomy
           </a>
           ,{" "}
-          <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">
+          <a class="t-pink" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">
             CC BY-SA 4.0
           </a>
           .
-        </div>
-      </div>
+        </p>
+      </section>
 
-      <div class="stack" style={{ marginTop: "22px" }}>
-        <button class="btn btn-danger btn-block" type="button" onClick={() => void logout()}>
-          Sign out
-        </button>
-      </div>
-    </>
+      <button class="clay press btn t-danger" type="button" onClick={() => void logout()}>
+        Sign out
+      </button>
+    </main>
+  );
+}
+
+/** A label and its value on one row (a divider between rows). */
+function Fact({ label, value, testid }: { label: string; value: preact.ComponentChildren; testid?: string }) {
+  return (
+    <div class="list-row">
+      <span class="list-row__text ex-card__meta">{label}</span>
+      <span class="list-row__value" data-testid={testid}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -160,40 +187,32 @@ function ProgramSettings() {
       .catch(() => setDrafts(null));
   }, []);
   return (
-    <div class="card stack" data-testid="program-settings">
-      <div class="kv">
-        <span>Current program</span>
-        <span>
-          {programName(info, boot.program.name)}
-          {since ? ` · since ${instantShort(since, boot.settings.timezone)}` : ""}
-        </span>
+    <section class="card l-col l-gap-10" data-testid="program-settings" aria-label="Program">
+      <div class="l-col">
+        <Fact label="Current program" value={`${programName(info, boot.program.name)}${since ? ` · since ${instantShort(since, boot.settings.timezone)}` : ""}`} />
+        <Fact label="Style" value={styleLabel(info?.style ?? null)} />
       </div>
-      <div class="kv">
-        <span>Style</span>
-        <span>{styleLabel(info?.style ?? null)}</span>
-      </div>
-      <button type="button" class="btn btn-primary btn-block" data-testid="new-program" onClick={() => openProgramEditor()}>
+      <button type="button" class="clay press btn t-pink" data-testid="new-program" onClick={() => openProgramEditor()}>
         New program
       </button>
       {drafts?.length ? (
-        <div class="stack">
-          <div class="why">Drafts</div>
+        <div class="l-col">
+          <h3 class="form-field__label l-m0">Drafts</h3>
           {drafts.map((d) => (
-            <button type="button" class="setlink" data-testid="open-draft" onClick={() => openProgramEditor(d.id)}>
-              <span>
-                {d.name}
-                <br />
-                <small>Saved {instantShort(d.created_at, boot.settings.timezone)}</small>
+            <button type="button" class="list-row press" data-testid="open-draft" onClick={() => openProgramEditor(d.id)}>
+              <span class="list-row__text">
+                <span class="t-title">{d.name}</span>
+                <span class="caption num">Saved {instantShort(d.created_at, boot.settings.timezone)}</span>
               </span>
-              <span aria-hidden="true">→</span>
+              <span class="list-row__chevron">
+                <IconChevron size={16} />
+              </span>
             </button>
           ))}
         </div>
       ) : null}
-      <p class="why" style={{ margin: 0 }}>
-        Past programs are in History, where you can switch back to one.
-      </p>
-    </div>
+      <p class="caption l-m0">Past programs are in History, where you can switch back to one.</p>
+    </section>
   );
 }
 
@@ -215,40 +234,38 @@ export function AiSettings() {
   }, [online]);
   const keyProblem = u ? (u.key === "missing" ? "Report unavailable — API key not set" : u.key_status === "invalid" ? "Report unavailable — API key expired or invalid" : null) : null;
   return (
-    <div class="card stack" data-testid="ai-settings">
+    <section class="card l-col l-gap-10" data-testid="ai-settings" aria-label="AI reports">
       {keyProblem ? (
-        <div class="banner bad" role="alert" data-testid="ai-key-problem" style={{ margin: 0 }}>
-          {keyProblem}
-        </div>
+        <p class="callout l-m0" data-bad="true" role="alert" data-testid="ai-key-problem">
+          <b class="t-orange">{keyProblem}</b>
+        </p>
       ) : null}
-      <div class="kv">
-        <span>This month</span>
-        <span class="num" data-testid="ai-cost">
-          {u
-            ? `${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`
-            : failed
-              ? "Needs connection"
-              : "–"}
-        </span>
+      <div class="l-col">
+        <Fact
+          label="This month"
+          testid="ai-cost"
+          value={
+            u
+              ? `${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`
+              : failed
+                ? "Needs connection"
+                : "–"
+          }
+        />
+        {u ? (
+          <>
+            <Fact
+              label="Today"
+              value={`${fmtNum(u.today.reports)}/${fmtNum(u.limits.report)} reports · ${fmtNum(u.today.overviews)}/${fmtNum(u.limits.overview)} overviews · ${fmtNum(u.today.advice)}/${fmtNum(u.limits.advice)} advice`}
+            />
+            <Fact label="Model" value={u.model} />
+          </>
+        ) : null}
       </div>
-      {u ? (
-        <>
-          <div class="kv">
-            <span>Today</span>
-            <span class="num">
-              {fmtNum(u.today.reports)}/{fmtNum(u.limits.report)} reports · {fmtNum(u.today.overviews)}/{fmtNum(u.limits.overview)} overviews · {fmtNum(u.today.advice)}/{fmtNum(u.limits.advice)} advice
-            </span>
-          </div>
-          <div class="kv">
-            <span>Model</span>
-            <span>{u.model}</span>
-          </div>
-        </>
-      ) : null}
-      <p class="why" style={{ margin: 0 }}>
+      <p class="caption l-m0">
         A short Persian report is written after each session, then the training overview in Reports is updated. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
-    </div>
+    </section>
   );
 }
 
@@ -271,24 +288,23 @@ export function Backups() {
   };
   const latest = list?.[0];
   return (
-    <div class="card stack" data-testid="backups">
-      <p class="why" style={{ margin: 0 }}>
-        Every Monday a full copy (sessions, sets, watch data, body weight and the photo list) is saved automatically, and the last 12 copies are kept.
-      </p>
-      <div class="kv">
-        <span>Latest automatic backup</span>
-        <span data-testid="last-backup">{latest ? `${dateLong(latest.uploaded.slice(0, 10))} · ${fmtNum(Math.round(latest.bytes / 1024))} KB` : list ? "None yet" : "–"}</span>
-      </div>
-      <div class="row">
-        <button type="button" class="btn btn-ghost" disabled={!latest} onClick={() => void get("/backups/latest")}>
+    <section class="card l-col l-gap-10" data-testid="backups" aria-label="Backup and export">
+      <p class="ex-card__meta l-m0">Every Monday a full copy (sessions, sets, watch data, body weight and the photo list) is saved automatically, and the last 12 copies are kept.</p>
+      <Fact label="Latest automatic backup" testid="last-backup" value={latest ? `${dateLong(latest.uploaded.slice(0, 10))} · ${fmtNum(Math.round(latest.bytes / 1024))} KB` : list ? "None yet" : "–"} />
+      <div class="l-row l-gap-8">
+        <button type="button" class="clay press btn btn--fit t-muted l-grow" disabled={!latest} onClick={() => void get("/backups/latest")}>
           Download latest backup
         </button>
-        <button type="button" class="btn btn-ghost" data-testid="export-now" onClick={() => void get("/export")}>
+        <button type="button" class="clay press btn btn--fit t-pink l-grow" data-testid="export-now" onClick={() => void get("/export")}>
           Full export now
         </button>
       </div>
-      {msg ? <div class="why">{msg}</div> : null}
-    </div>
+      {msg ? (
+        <p class="caption t-orange l-m0" role="status">
+          {msg}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -318,20 +334,17 @@ function PushSettings() {
     }
   };
   return (
-    <div class="card stack" data-testid="push-settings">
-      <p class="why" style={{ margin: 0 }}>
+    <section class="card l-col l-gap-10" data-testid="push-settings" aria-label="Rest-timer notification">
+      <p class="ex-card__meta l-m0">
         When a rest starts, the server keeps its end time and sends a notification right on time, so the phone can be locked or the app closed. {isStandalone() ? "" : "On iPhone this works only from the Home Screen app."}
       </p>
-      <div class="kv">
-        <span>Status</span>
-        <span data-testid="push-status">{on === null ? "–" : on ? "On" : "Off"}</span>
-      </div>
-      <div class="row">
+      <Fact label="Status" testid="push-status" value={on === null ? "–" : on ? "On" : "Off"} />
+      <div class="l-row l-gap-8">
         {on ? (
           <>
             <button
               type="button"
-              class="btn btn-ghost"
+              class="clay press btn btn--fit t-muted l-grow"
               disabled={busy}
               onClick={async () => {
                 setMsg("");
@@ -347,7 +360,7 @@ function PushSettings() {
             </button>
             <button
               type="button"
-              class="btn btn-ghost"
+              class="clay press btn btn--fit t-muted l-grow"
               disabled={busy}
               onClick={async () => {
                 await disablePush();
@@ -359,16 +372,16 @@ function PushSettings() {
             </button>
           </>
         ) : (
-          <button type="button" class="btn btn-primary" disabled={busy} data-testid="enable-push" onClick={() => void enable()}>
+          <button type="button" class="clay press btn t-muted l-grow" disabled={busy} data-testid="enable-push" onClick={() => void enable()}>
             Turn on notifications
           </button>
         )}
       </div>
       {msg ? (
-        <div class="why" role="status">
+        <p class="caption l-m0" role="status">
           {msg}
-        </div>
+        </p>
       ) : null}
-    </div>
+    </section>
   );
 }

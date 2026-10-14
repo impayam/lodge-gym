@@ -12,6 +12,7 @@ import { errorText } from "../api";
 import { BodyPicker } from "../components/BodyPicker";
 import { Pushed } from "../components/Pushed";
 import { IconBack, IconBarbell, IconBody, IconCable, IconDumbbell, IconPlay, IconSearch } from "../components/PulseIcons";
+import { Select } from "../components/Select";
 import { TimeChart } from "../components/TimeChart";
 import { dateLong, dayMonth, fmtNum, ytLink } from "../format";
 import { BIG_THREE } from "../lib/lifts";
@@ -76,12 +77,6 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   cardio: "Cardio",
 };
 const SOURCE_LABEL: Record<Exercise["source"], string> = { seed: "Program", fedb: "free-exercise-db", manual: "Added by hand", custom: "Your exercise" };
-
-/** The exercise's photo (custom and library exercises), for screens still on the old styles. */
-export function ExerciseThumb({ ex }: { ex: Exercise }) {
-  const m = ex.media[0];
-  return m ? <img class="exthumb" src={mediaSrc(m)} alt="" loading="lazy" /> : <span class="exthumb placeholder" aria-hidden="true" />;
-}
 
 const EQUIPMENT_ICON: Record<Exercise["equipment"], (p: { size?: number }) => preact.JSX.Element> = {
   barbell: IconBarbell,
@@ -212,24 +207,24 @@ export function ExerciseList({
       {more ? (
         <div id={`${testId ?? "list"}-filters`} class="l-col l-gap-8">
           <div class="l-grid-3 l-gap-8">
-            <select class="input" aria-label="Muscle" value={f.muscle} onChange={(e) => set({ muscle: (e.currentTarget as HTMLSelectElement).value })}>
+            <Select aria-label="Muscle" value={f.muscle} onChange={(e) => set({ muscle: (e.currentTarget as HTMLSelectElement).value })}>
               <option value="">All muscles</option>
               {CANONICAL_MUSCLES.map((m) => (
                 <option value={m}>{muscleLabel(m)}</option>
               ))}
-            </select>
-            <select class="input" aria-label="Equipment" value={f.equipment} onChange={(e) => set({ equipment: (e.currentTarget as HTMLSelectElement).value })}>
+            </Select>
+            <Select aria-label="Equipment" value={f.equipment} onChange={(e) => set({ equipment: (e.currentTarget as HTMLSelectElement).value })}>
               <option value="">All equipment</option>
               {EQUIPMENT.map(([k, label]) => (
                 <option value={k}>{label}</option>
               ))}
-            </select>
-            <select class="input" aria-label="Pattern" value={f.pattern} onChange={(e) => set({ pattern: (e.currentTarget as HTMLSelectElement).value })}>
+            </Select>
+            <Select aria-label="Pattern" value={f.pattern} onChange={(e) => set({ pattern: (e.currentTarget as HTMLSelectElement).value })}>
               <option value="">All patterns</option>
               {(Object.keys(PATTERN_LABEL) as Pattern[]).map((p) => (
                 <option value={p}>{PATTERN_LABEL[p]}</option>
               ))}
-            </select>
+            </Select>
           </div>
           {onArchived ? (
             <div class="l-row">
@@ -373,11 +368,11 @@ function CustomForm({ initial, onDone, onCancel }: { initial: Exercise | null; o
           <label class="form-field__label" for="cx-primary">
             Primary muscle
           </label>
-          <select id="cx-primary" class="input" value={primary} onChange={(e) => setPrimary((e.currentTarget as HTMLSelectElement).value)}>
+          <Select id="cx-primary" value={primary} onChange={(e) => setPrimary((e.currentTarget as HTMLSelectElement).value)}>
             {CANONICAL_MUSCLES.map((m) => (
               <option value={m}>{muscleLabel(m)}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <fieldset class="form-field">
           <legend class="form-field__label">Secondary muscles</legend>
@@ -399,33 +394,33 @@ function CustomForm({ initial, onDone, onCancel }: { initial: Exercise | null; o
             <label class="form-field__label" for="cx-eq">
               Equipment
             </label>
-            <select id="cx-eq" class="input" value={equipment} onChange={(e) => setEquipment((e.currentTarget as HTMLSelectElement).value as Exercise["equipment"])}>
+            <Select id="cx-eq" value={equipment} onChange={(e) => setEquipment((e.currentTarget as HTMLSelectElement).value as Exercise["equipment"])}>
               {EQUIPMENT.map(([k, label]) => (
                 <option value={k}>{label}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div class="form-field">
             <label class="form-field__label" for="cx-pattern">
               Pattern
             </label>
-            <select id="cx-pattern" class="input" value={pattern} onChange={(e) => setPattern((e.currentTarget as HTMLSelectElement).value as Pattern | "")}>
+            <Select id="cx-pattern" value={pattern} onChange={(e) => setPattern((e.currentTarget as HTMLSelectElement).value as Pattern | "")}>
               <option value="">None</option>
               {(Object.keys(PATTERN_LABEL) as Pattern[]).map((p) => (
                 <option value={p}>{PATTERN_LABEL[p]}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
         <div class="form-field">
           <label class="form-field__label" for="cx-category">
             Category
           </label>
-          <select id="cx-category" class="input" value={category} onChange={(e) => setCategory((e.currentTarget as HTMLSelectElement).value as Category)}>
+          <Select id="cx-category" value={category} onChange={(e) => setCategory((e.currentTarget as HTMLSelectElement).value as Category)}>
             {CATEGORIES.map((k) => (
               <option value={k}>{CATEGORY_LABEL[k]}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div class="form-field">
           <span class="form-field__label" id="cx-photo-label">

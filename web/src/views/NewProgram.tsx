@@ -36,8 +36,11 @@ import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
 import { fmtNum, instantShort, plural } from "../format";
 import { activeProgramInfo, activeSession, programName, recentSwitch } from "../model";
+import { IconSearch } from "../components/PulseIcons";
+import { ScreenHead } from "../components/ScreenHead";
+import { Select } from "../components/Select";
 import { allExercises, flash, generateProposal, loadLibrary, loadProgramVersions, navigate, saveProgramDraft, switchProgram, useStore } from "../store";
-import { ExerciseThumb, equipmentLabel } from "./Library";
+import { EquipmentIcon, equipmentLabel } from "./Library";
 import { rirText, targetText } from "./Program";
 
 const SLOT_LABEL: Readonly<Record<Slot, string>> = { main: "Main", secondary: "Secondary", accessory: "Accessory", isolation: "Isolation", core: "Core" };
@@ -176,28 +179,25 @@ export function NewProgram() {
 
   if (!plan || !params || !days || !check || !targets)
     return (
-      <>
-        <button type="button" class="btn btn-ghost btn-small" onClick={() => navigate("settings")}>
-          ← Settings
-        </button>
-        <h2>New program</h2>
+      <main class="page" data-testid="new-program-screen">
+        <ScreenHead title="New program" sub="Settings" onBack={() => navigate("settings")} />
         <Inputs input={input} setInput={setInput} exMap={exMap} />
         {msg ? (
-          <div class="banner" role="alert">
-            {msg}
-          </div>
+          <p class="callout l-m0 ex-card__meta" data-bad="true" role="alert">
+            <b class="t-orange">{msg}</b>
+          </p>
         ) : null}
         <button
           type="button"
-          class="btn btn-primary btn-block"
+          class="clay press btn-lg t-pink"
           data-testid="np-generate"
           disabled={busy || !resolveStyle(input.style, input.days_per_week) || (input.style === "strength" && input.equipment !== "full_gym")}
           onClick={() => void generate({ ...input, seed: newSeed() })}
         >
           {busy ? "Working…" : "Make a proposal"}
         </button>
-        <p class="why">Needs an internet connection. Nothing changes until you approve the program.</p>
-      </>
+        <p class="caption l-m0">Needs an internet connection. Nothing changes until you approve the program.</p>
+      </main>
     );
 
   const usedRole = new Map<string, Slot>();
@@ -225,88 +225,80 @@ export function NewProgram() {
   const minutes = check.minutes;
   const name = `${STYLE_NAME[plan.style as ResolvedStyle]} · ${plan.days_per_week} days`;
 
+  const issues = (title: string, list: { message: string }[], testid: string, bad: boolean) => (
+    <section class="callout" data-bad={String(bad)} data-testid={testid} role={bad ? "alert" : undefined}>
+      <h2 class="card__title l-m0">{title}</h2>
+      <ul class="prose-list ex-card__meta">
+        {list.map((v) => (
+          <li>{v.message}</li>
+        ))}
+      </ul>
+    </section>
+  );
   return (
-    <>
-      <button type="button" class="btn btn-ghost btn-small" onClick={() => (programId ? navigate("settings") : setDays(null))}>
-        ← {programId ? "Settings" : "Change the inputs"}
-      </button>
-      <h2 data-testid="np-name">
-        {name} <small>· {params.session_minutes} min sessions{programId ? " · draft" : ""}</small>
-      </h2>
-      <div class="card stack">
+    <main class="page" data-testid="new-program-screen">
+      <ScreenHead
+        title={<span data-testid="np-name">{name}</span>}
+        sub={programId ? "Draft" : "Proposal"}
+        backLabel={programId ? "Back to Settings" : "Change the inputs"}
+        onBack={() => (programId ? navigate("settings") : setDays(null))}
+      />
+      <span class="ex-card__meta num">{params.session_minutes} min sessions</span>
+      <section class="card l-col l-gap-10" aria-label="Suggested week">
         <WeekStrip offsets={plan.days.map((d) => d.offset)} />
-        <div class="why">
-          {plural(plan.days_per_week, "session")} a week, about {fmtNum(Math.min(...minutes))}–{fmtNum(Math.max(...minutes))} min each. New programs start at full volume
-          and the target RIR from the first session; weights continue from your last sessions.
-        </div>
-      </div>
+        <p class="caption l-m0">
+          {plural(plan.days_per_week, "session")} a week, about {fmtNum(Math.min(...minutes))}–{fmtNum(Math.max(...minutes))} min each. New programs start at full volume and the target RIR from
+          the first session; weights continue from your last sessions.
+        </p>
+      </section>
 
-      {check.violations.length ? (
-        <div class="card issues bad" data-testid="np-violations" role="alert">
-          <b>Fix before approving</b>
-          <ul>
-            {check.violations.map((v) => (
-              <li>{v.message}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {check.warnings.length ? (
-        <div class="card issues" data-testid="np-warnings">
-          <b>Worth knowing</b>
-          <ul>
-            {check.warnings.map((w) => (
-              <li>{w.message}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      {check.violations.length ? issues("Fix before approving", check.violations, "np-violations", true) : null}
+      {check.warnings.length ? issues("Worth knowing", check.warnings, "np-warnings", false) : null}
 
       {plan.days.map((d, di) => (
-        <section data-testid={`np-day-${di}`}>
-          <h2>
-            {d.name_en} <small>· about {fmtNum(minutes[di])} min</small>
+        <section class="l-col l-gap-8" data-testid={`np-day-${di}`} aria-label={d.name_en}>
+          <h2 class="section-label num">
+            {d.name_en} · about {fmtNum(minutes[di])} min
           </h2>
-          <div class="card prog-day">
+          <div class="card card--list">
             {d.exercises.map((x, k) => {
               const e = exMap.get(x.exercise_id);
               const swapping = swapAt?.day === di && swapAt.index === k;
               const alts = swapping ? alternatives(di, x) : [];
+              const label = e?.name_en ?? x.exercise_id;
               return (
-                <div class="np-item" data-ex={x.exercise_id}>
-                  <div class="np-row">
-                    <div class="np-meta">
-                      <b>
-                        <span class={`slotb s-${x.slot}`}>{SLOT_LABEL[x.slot]}</span>
-                        {e?.name_en ?? x.exercise_id}
-                        {x.superset_tag ? <span class="tag">{x.superset_tag}</span> : null}
-                      </b>
-                      <small>
-                        {targetText(x)} · {rirText(x)} · rest {fmtNum(x.rest_sec)} s
-                      </small>
-                    </div>
-                    <div class="np-ctl">
-                      <span class="seg" role="group" aria-label={`Sets of ${e?.name_en ?? "exercise"}`}>
-                        <button type="button" aria-label="One set less" data-testid={`np-minus-${di}-${k}`} disabled={x.sets <= x.set_range[0]} onClick={() => edit(di, k, { sets: x.sets - 1 })}>
-                          −
-                        </button>
-                        <button type="button" aria-label="One set more" data-testid={`np-plus-${di}-${k}`} disabled={x.sets >= x.set_range[1]} onClick={() => edit(di, k, { sets: x.sets + 1 })}>
-                          +
-                        </button>
+                <div class="list-row l-col l-top l-gap-8" data-testid="np-item" data-ex={x.exercise_id}>
+                  <div class="l-row l-gap-8 l-full">
+                    <span class="list-row__text">
+                      <span class={x.slot === "main" ? "ex-card__kicker t-pink" : "ex-card__kicker"}>
+                        {SLOT_LABEL[x.slot]}
+                        {x.superset_tag ? <span class="t-violet"> · {x.superset_tag}</span> : null}
                       </span>
-                      <button type="button" class="btn btn-ghost btn-small" data-testid={`np-swap-${di}-${k}`} aria-expanded={swapping} onClick={() => setSwapAt(swapping ? null : { day: di, index: k })}>
-                        Swap
+                      <span class="t-title">{label}</span>
+                      <span class="caption num" data-testid="np-target">
+                        {targetText(x)} · {rirText(x)} · rest {fmtNum(x.rest_sec)} s
+                      </span>
+                    </span>
+                    <span class="plan-move" role="group" aria-label={`Sets of ${label}`}>
+                      <button type="button" class="clay press t-muted" aria-label="One set less" data-testid={`np-minus-${di}-${k}`} disabled={x.sets <= x.set_range[0]} onClick={() => edit(di, k, { sets: x.sets - 1 })}>
+                        −
                       </button>
-                    </div>
+                      <button type="button" class="clay press t-muted" aria-label="One set more" data-testid={`np-plus-${di}-${k}`} disabled={x.sets >= x.set_range[1]} onClick={() => edit(di, k, { sets: x.sets + 1 })}>
+                        +
+                      </button>
+                    </span>
+                    <button type="button" class="clay press btn-sm btn--fit t-muted" data-testid={`np-swap-${di}-${k}`} aria-expanded={swapping} onClick={() => setSwapAt(swapping ? null : { day: di, index: k })}>
+                      Swap
+                    </button>
                   </div>
                   {swapping ? (
-                    <div class="np-swap" data-testid="np-swap-list">
-                      <div class="why">Same movement and main muscle{e ? ` as ${e.name_en}` : ""}:</div>
+                    <div class="l-col l-gap-8 l-full" data-testid="np-swap-list">
+                      <span class="caption">Same movement and main muscle{e ? ` as ${e.name_en}` : ""}:</span>
                       {alts.length ? (
                         alts.map((a) => (
                           <button
                             type="button"
-                            class="exrow"
+                            class="card press ex-row"
                             data-testid="np-swap-option"
                             data-id={a.id}
                             onClick={() => {
@@ -314,18 +306,20 @@ export function NewProgram() {
                               setSwapAt(null);
                             }}
                           >
-                            <ExerciseThumb ex={a} />
-                            <span class="meta">
-                              <b>{a.name_en}</b>
-                              <small>
+                            <span class={`well icon-well ${historyIds.has(a.id) ? "t-violet" : "icon-well--off"}`}>
+                              <EquipmentIcon equipment={a.equipment} size={22} />
+                            </span>
+                            <span class="list-row__text">
+                              <b class="t-title">{a.name_en}</b>
+                              <span class="caption">
                                 {equipmentLabel(a.equipment)}
                                 {historyIds.has(a.id) ? " · you have done this" : ""}
-                              </small>
+                              </span>
                             </span>
                           </button>
                         ))
                       ) : (
-                        <div class="empty">No other exercise in the library has the same movement and main muscle.</div>
+                        <p class="state l-m0">No other exercise in the library has the same movement and main muscle.</p>
                       )}
                     </div>
                   ) : null}
@@ -336,70 +330,74 @@ export function NewProgram() {
         </section>
       ))}
 
-      <h2>Weekly sets per muscle</h2>
-      <div class="card">
-        <table class="fields np-volume" data-testid="np-volume">
+      <h2 class="section-label">Weekly sets per muscle</h2>
+      <section class="card l-col l-gap-10" aria-label="Weekly sets per muscle">
+        <table class="data-table num" data-testid="np-volume">
           <thead>
             <tr>
-              <th>Muscle</th>
-              <th>Planned</th>
-              <th>Target</th>
+              <th scope="col">Muscle</th>
+              <th scope="col">Planned</th>
+              <th scope="col">Target</th>
             </tr>
           </thead>
           <tbody>
             {check.volume.map((v) => {
               const st = v.target ? (v.planned < 0.8 * v.target ? "under" : v.planned > 1.2 * v.target ? "over" : "on") : "on";
               return (
-                <tr data-group={v.group} class={`vol-${st}`}>
+                <tr data-group={v.group} data-status={st}>
                   <td>{groupName(v.group)}</td>
-                  <td class="num">{fmtNum(v.planned)}</td>
-                  <td class="num">{fmtNum(v.target)}</td>
+                  <td class={st === "on" ? "" : "t-orange"}>
+                    {st === "under" ? <span aria-hidden="true">▼ </span> : st === "over" ? <span aria-hidden="true">▲ </span> : null}
+                    {fmtNum(v.planned)}
+                    {st === "on" ? null : <span class="l-sr">, {st === "under" ? "under target" : "over target"}</span>}
+                  </td>
+                  <td>{fmtNum(v.target)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        <p class="why">Fractional sets: a set counts 1 for its main muscle and 0.5 for a muscle it trains secondarily. Targets start from your current program.</p>
-      </div>
+        <p class="caption l-m0">Fractional sets: a set counts 1 for its main muscle and 0.5 for a muscle it trains secondarily. Targets start from your current program.</p>
+      </section>
 
       {msg ? (
-        <div class="banner" role="alert" data-testid="np-msg">
-          {msg}
-        </div>
+        <p class="callout l-m0 ex-card__meta" data-bad="true" role="alert" data-testid="np-msg">
+          <b class="t-orange">{msg}</b>
+        </p>
       ) : null}
 
       {confirming ? (
-        <div class="card stack np-confirm" data-testid="np-confirm">
-          <div>
+        <section class="callout" data-testid="np-confirm" aria-label="Approve program">
+          <p class="ex-card__meta l-m0">
             <b>{name}</b> becomes your program from the next session. {active ? <>“{programName(active)}” is archived; its sessions stay in History and you can switch back.</> : null}
-          </div>
+          </p>
           {switchedAt ? (
-            <div class="ss-note" data-testid="np-switch-notice">
+            <p class="ex-card__meta t-orange l-m0" data-testid="np-switch-notice">
               You last switched programs on {instantShort(switchedAt, boot.settings.timezone)}. Switching more than once in 3 weeks makes progress hard to judge.
-            </div>
+            </p>
           ) : null}
-          {openSession ? <div class="ss-note">Finish or delete the open session first.</div> : null}
-          <div class="row">
-            <button type="button" class="btn btn-primary" data-testid="np-confirm-yes" disabled={busy || !!openSession} onClick={() => void approve()}>
+          {openSession ? <p class="ex-card__meta t-orange l-m0">Finish or delete the open session first.</p> : null}
+          <div class="l-row l-gap-8">
+            <button type="button" class="clay press btn btn--fit t-pink" data-testid="np-confirm-yes" disabled={busy || !!openSession} onClick={() => void approve()}>
               {busy ? "Working…" : "Yes, start this program"}
             </button>
-            <button type="button" class="btn btn-ghost" onClick={() => setConfirming(false)}>
+            <button type="button" class="clay press btn btn--fit t-muted" onClick={() => setConfirming(false)}>
               Cancel
             </button>
           </div>
-        </div>
+        </section>
       ) : (
-        <div class="stack" style={{ marginTop: "12px" }}>
-          <button type="button" class="btn btn-primary btn-block" data-testid="np-approve" disabled={busy || check.violations.length > 0} onClick={() => setConfirming(true)}>
+        <div class="l-col l-gap-10">
+          <button type="button" class="clay press btn-lg t-pink" data-testid="np-approve" disabled={busy || check.violations.length > 0} onClick={() => setConfirming(true)}>
             Approve program
           </button>
-          <div class="row">
-            <button type="button" class="btn btn-ghost" data-testid="np-save" disabled={busy} onClick={() => void saveDraft()}>
+          <div class="l-row l-gap-8">
+            <button type="button" class="clay press btn t-muted l-grow" data-testid="np-save" disabled={busy} onClick={() => void saveDraft()}>
               Save draft
             </button>
             <button
               type="button"
-              class="btn btn-ghost"
+              class="clay press btn t-muted l-grow"
               data-testid="np-regenerate"
               disabled={busy}
               onClick={() => {
@@ -412,16 +410,16 @@ export function NewProgram() {
           </div>
         </div>
       )}
-    </>
+    </main>
   );
 }
 
 /** The suggested week: which of seven days are training days. */
 function WeekStrip({ offsets }: { offsets: number[] }) {
   return (
-    <div class="weekstrip" aria-label={`Suggested week: training on days ${offsets.map((o) => o + 1).join(", ")} of 7`}>
+    <div class="week-strip" role="img" aria-label={`Suggested week: training on days ${offsets.map((o) => o + 1).join(", ")} of 7`}>
       {Array.from({ length: WEEKDAY_SLOTS }, (_, i) => (
-        <span class={offsets.includes(i) ? "on" : ""}>{offsets.includes(i) ? `Day ${offsets.indexOf(i) + 1}` : "Rest"}</span>
+        <span data-on={offsets.includes(i) ? "true" : undefined}>{offsets.includes(i) ? `Day ${offsets.indexOf(i) + 1}` : "Rest"}</span>
       ))}
     </div>
   );
@@ -435,106 +433,119 @@ function Inputs({ input, setInput, exMap }: { input: GeneratorInput; setInput: (
   const matches = needle
     ? [...exMap.values()].filter((e) => !e.archived_at && countsVolume(e.category) && !input.avoid.includes(e.id) && e.name_en.toLowerCase().includes(needle)).slice(0, 8)
     : [];
+  const toggle = <T,>(label: string, list: readonly [T, string][], value: T, pick: (v: T) => void, testid?: (v: T) => string) => (
+    <span class="segmented l-full" role="group" aria-label={label}>
+      {list.map(([v, text]) => (
+        <button type="button" class="press l-grow" aria-pressed={value === v} data-testid={testid?.(v)} onClick={() => pick(v)}>
+          {text}
+        </button>
+      ))}
+    </span>
+  );
   return (
-    <div class="card stack np-inputs">
-      <div class="field">
-        <span class="lbl">Days per week</span>
-        <span class="seg wide" role="group" aria-label="Days per week">
-          {[2, 3, 4, 5, 6].map((d) => (
-            <button type="button" aria-pressed={input.days_per_week === d} data-testid={`np-days-${d}`} onClick={() => set({ days_per_week: d })}>
-              {fmtNum(d)}
-            </button>
-          ))}
-        </span>
+    <section class="card l-col l-gap-14" aria-label="What the program should fit">
+      <div class="form-field">
+        <span class="form-field__label">Days per week</span>
+        {toggle(
+          "Days per week",
+          [2, 3, 4, 5, 6].map((d) => [d, fmtNum(d)] as [number, string]),
+          input.days_per_week,
+          (d) => set({ days_per_week: d }),
+          (d) => `np-days-${d}`
+        )}
       </div>
-      <div class="field">
-        <label for="np-style">Style</label>
-        <select id="np-style" data-testid="np-style" value={input.style} onChange={(e) => set({ style: (e.currentTarget as HTMLSelectElement).value as Style })}>
+      <div class="form-field">
+        <label class="form-field__label" for="np-style">
+          Style
+        </label>
+        <Select id="np-style" data-testid="np-style" value={input.style} onChange={(e) => set({ style: (e.currentTarget as HTMLSelectElement).value as Style })}>
           {STYLES.map((s) => (
             <option value={s}>{styleOption(s)}</option>
           ))}
-        </select>
-        <small class="why">
+        </Select>
+        <span class="caption">
           {resolved
             ? input.style === "auto"
               ? `Auto picks ${STYLE_NAME[resolved]} for ${input.days_per_week} days.`
               : ""
             : `${STYLE_NAME[input.style as ResolvedStyle]} runs ${ALLOWED_DAYS[input.style as ResolvedStyle].join(" or ")} days a week.`}
-        </small>
-      </div>
-      <div class="field">
-        <span class="lbl">Session length</span>
-        <span class="seg wide" role="group" aria-label="Session length">
-          {SESSION_MINUTES.map((m) => (
-            <button type="button" aria-pressed={input.session_minutes === m} onClick={() => set({ session_minutes: m })}>
-              {fmtNum(m)} min
-            </button>
-          ))}
         </span>
       </div>
-      <div class="field">
-        <span class="lbl">Equipment</span>
-        <span class="seg wide" role="group" aria-label="Equipment">
-          {(
-            [
-              ["full_gym", "Full gym"],
-              ["dumbbells", "Dumbbells only"],
-            ] as [EquipmentChoice, string][]
-          ).map(([v, label]) => (
-            <button type="button" aria-pressed={input.equipment === v} onClick={() => set({ equipment: v })}>
-              {label}
-            </button>
-          ))}
-        </span>
-        {input.style === "strength" && input.equipment !== "full_gym" ? <small class="why">The strength style needs a barbell: choose the full gym.</small> : null}
+      <div class="form-field">
+        <span class="form-field__label">Session length</span>
+        {toggle(
+          "Session length",
+          SESSION_MINUTES.map((m) => [m, `${fmtNum(m)} min`] as [GeneratorInput["session_minutes"], string]),
+          input.session_minutes,
+          (m) => set({ session_minutes: m })
+        )}
       </div>
-      <fieldset class="chipset">
-        <legend class="lbl">Priority muscles (+3 sets a week each)</legend>
-        {TARGET_GROUPS.map((g) => (
-          <label class="chipcheck">
-            <input
-              type="checkbox"
-              checked={input.priority_muscles.includes(g)}
-              onChange={(e) => {
-                const on = (e.currentTarget as HTMLInputElement).checked;
-                set({ priority_muscles: on ? [...input.priority_muscles, g] : input.priority_muscles.filter((x) => x !== g) });
-              }}
-            />
-            {groupName(g)}
-          </label>
-        ))}
+      <div class="form-field">
+        <span class="form-field__label">Equipment</span>
+        {toggle(
+          "Equipment",
+          [
+            ["full_gym", "Full gym"],
+            ["dumbbells", "Dumbbells only"],
+          ] as [EquipmentChoice, string][],
+          input.equipment,
+          (v) => set({ equipment: v })
+        )}
+        {input.style === "strength" && input.equipment !== "full_gym" ? <span class="caption t-orange">The strength style needs a barbell: choose the full gym.</span> : null}
+      </div>
+      <fieldset class="form-field">
+        <legend class="form-field__label">Priority muscles (+3 sets a week each)</legend>
+        <div class="chip-wrap">
+          {TARGET_GROUPS.map((g) => (
+            <label class="check-chip">
+              <input
+                type="checkbox"
+                checked={input.priority_muscles.includes(g)}
+                onChange={(e) => {
+                  const on = (e.currentTarget as HTMLInputElement).checked;
+                  set({ priority_muscles: on ? [...input.priority_muscles, g] : input.priority_muscles.filter((x) => x !== g) });
+                }}
+              />
+              {groupName(g)}
+            </label>
+          ))}
+        </div>
       </fieldset>
-      <div class="field">
-        <label for="np-avoid">Leave out (an injury, a machine your gym lacks)</label>
-        <input id="np-avoid" class="search" type="search" placeholder="Search exercises" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
+      <div class="form-field">
+        <label class="form-field__label" for="np-avoid">
+          Leave out (an injury, a machine your gym lacks)
+        </label>
+        <span class="search-field well">
+          <IconSearch />
+          <input id="np-avoid" class="search-field__input" type="search" placeholder="Search exercises" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
+        </span>
         {matches.length ? (
-          <div class="exlist" style={{ marginTop: "6px" }}>
+          <div class="l-col">
             {matches.map((e) => (
               <button
                 type="button"
-                class="exrow"
+                class="list-row press"
                 onClick={() => {
                   set({ avoid: [...input.avoid, e.id] });
                   setQ("");
                 }}
               >
-                <span class="meta">
-                  <b>{e.name_en}</b>
-                </span>
+                <span class="list-row__text t-title">{e.name_en}</span>
+                <span class="caption">Leave out</span>
               </button>
             ))}
           </div>
         ) : null}
         {input.avoid.length ? (
-          <div class="chips">
+          <div class="chip-wrap">
             {input.avoid.map((id) => (
-              <button type="button" class="chipcheck" aria-label={`Allow ${exMap.get(id)?.name_en ?? id} again`} onClick={() => set({ avoid: input.avoid.filter((x) => x !== id) })}>
+              <button type="button" class="clay press chip" aria-label={`Allow ${exMap.get(id)?.name_en ?? id} again`} onClick={() => set({ avoid: input.avoid.filter((x) => x !== id) })}>
                 {exMap.get(id)?.name_en ?? id} ×
               </button>
             ))}
           </div>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }
