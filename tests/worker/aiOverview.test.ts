@@ -220,7 +220,7 @@ describe("report timeline (History) and saved overviews", () => {
     await env.DB.prepare(
       "INSERT INTO session_reports (id, session_id, created_at, model, status, report_json, error, input_tokens, output_tokens) VALUES (?, ?, ?, 'claude-opus-5-5', 'error', NULL, 'api: mock', NULL, NULL)"
     )
-      .bind(ulid(), b.id, "2026-10-14T00:00:00.000Z")
+      .bind(ulid(), b.id, new Date(Date.now() + 60_000).toISOString())
       .run();
     // A failed overview is not listed; a Regenerate (no trigger) written Oct 11 at 21:00 Denver sits on Oct 11.
     const ok = await env.DB.prepare("SELECT overview_json FROM training_overviews WHERE status = 'ok' LIMIT 1").first<{ overview_json: string }>();
