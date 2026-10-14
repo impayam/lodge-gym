@@ -229,6 +229,36 @@ test("close-up: every area's muscle chips are fully visible above the tab bar, i
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
+/** Taps Front or Back and returns cos(yaw) for every frame drawn over the next 700 ms (a turn takes TURN_MS = 380). */
+const turnFrames = (page: Page, testId: "view-front" | "view-back") =>
+  page.evaluate(async (id) => {
+    const h = (window as unknown as { __anatomy: Hook }).__anatomy;
+    (document.querySelector(`[data-testid="${id}"]`) as HTMLElement).click();
+    const seen: number[] = [];
+    const end = performance.now() + 700;
+    while (performance.now() < end) {
+      await new Promise((r) => requestAnimationFrame(r));
+      seen.push(Math.cos(h.view!.yaw()));
+    }
+    return seen;
+  }, testId);
+const between = (frames: number[]) => frames.filter((c) => Math.abs(c) < 0.99).length;
+
+test("reduced motion: Front / Back turn the body at once, with no animated turn", async ({ page }) => {
+  await startSession(page);
+  const step = await openPicker(page);
+  await expect(step.getByTestId("anatomy-canvas")).toBeVisible();
+  // Control: with motion on, a turn passes through the angles in between.
+  expect(between(await turnFrames(page, "view-back"))).toBeGreaterThan(0);
+  await facing(page, -1);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const frames = await turnFrames(page, "view-front");
+  expect(between(frames)).toBe(0);
+  expect(frames.at(-1)!).toBeCloseTo(1, 3);
+  expect(await hook(page, (h) => h.view!.moving())).toBe(false);
+  await page.getByRole("button", { name: "Cancel" }).click();
+});
+
 test("fallback: without WebGL the chips alone pick the exercise, with a 3D unavailable note", async ({ page }) => {
   await page.addInitScript(() => {
     const get = HTMLCanvasElement.prototype.getContext;

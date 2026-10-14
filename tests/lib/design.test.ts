@@ -4,8 +4,6 @@ import { describe, expect, it } from "vitest";
 // SPEC-v8 §2: the UI is built only from the Pulse library (design/pulse). web/src/styles holds its copies.
 const files = env.TEST_UI_FILES;
 const LIBRARY = ["tokens.css", "components.css"];
-// Pre-Pulse styles, scoped under .legacy while screens move over; deleted with the last legacy screen (plan step 11).
-const LEGACY = "web/src/styles/legacy.css";
 
 describe("Pulse design rules", () => {
   it("web/src/styles holds exact copies of the design library", () => {
@@ -13,11 +11,18 @@ describe("Pulse design rules", () => {
   });
 
   it("no hex colour in web/src outside tokens.css and components.css (SPEC-v8 §2.1)", () => {
-    const allowed = new Set([...LIBRARY.map((f) => `web/src/styles/${f}`), LEGACY]);
+    const allowed = new Set(LIBRARY.map((f) => `web/src/styles/${f}`));
     const offenders = Object.entries(files)
       .filter(([p]) => p.startsWith("web/src/") && !allowed.has(p))
       .flatMap(([p, text]) => (text.match(/#[0-9a-fA-F]{3,8}/g) ?? []).map((m) => `${p}: ${m}`));
     expect(offenders).toEqual([]);
+  });
+
+  it("web/src/styles holds the library, base and layout only (the pre-Pulse styles are gone)", () => {
+    const styles = Object.keys(files).filter((p) => p.startsWith("web/src/styles/"));
+    expect(styles.sort()).toEqual(["base.css", "components.css", "layout.css", "tokens.css"].map((f) => `web/src/styles/${f}`));
+    const legacy = Object.entries(files).filter(([p, text]) => p.startsWith("web/src/") && /class(Name)?="[^"]*\blegacy\b/.test(text));
+    expect(legacy.map(([p]) => p)).toEqual([]);
   });
 
   it("layout.css holds layout properties only", () => {

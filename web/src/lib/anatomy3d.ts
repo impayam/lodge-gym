@@ -63,6 +63,7 @@ const SOLID = 255;
 // so they recede; the selected muscle in a lightened app accent that glows (emissive), clearly the brightest thing.
 /** The model colours, from the --model-* tokens (web/src/styles/tokens.css). */
 const modelColor = (part: "bg" | "muscle" | "context" | "bone") => token(`--model-${part}`);
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 /** Light from the upper front (camera-relative, so it follows the turn), a soft fill from the other side, low ambient. */
 const LIGHTS = { ambient: 0.35, key: 3.6, fill: 0.6 };
 
@@ -269,7 +270,8 @@ export class AnatomyView {
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enablePan = false;
     this.controls.minPolarAngle = this.controls.maxPolarAngle = Math.PI / 2;
-    this.controls.enableDamping = true;
+    // Reduced motion (SPEC-v8 §7): no glide after the finger lifts and no animated turn (see moveTo).
+    this.controls.enableDamping = !reducedMotion();
     this.controls.dampingFactor = 0.12;
     this.controls.rotateSpeed = 0.9;
     this.controls.zoomSpeed = 0.8;
@@ -329,7 +331,7 @@ export class AnatomyView {
 
   private moveTo(to: CameraPose, animate: boolean) {
     this.limits(to);
-    if (!animate) {
+    if (!animate || reducedMotion()) {
       this.move = null;
       this.apply(to);
       this.controls.update();
