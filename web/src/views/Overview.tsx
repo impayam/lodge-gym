@@ -4,7 +4,7 @@
 // with Retry. Both are cached on the device, so Reports shows the last copy offline.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { OverviewView } from "../../../worker/lib/ai/overview";
+import type { OverviewView, StoredMotivation } from "../../../worker/lib/ai/overview";
 import { cachedOverview, cachedSessionReports, fetchOverview, fetchSessionReports, requestOverview, unavailableReason, type OverviewResponse, type SessionReportItem } from "../ai";
 import { errorText, NetworkError } from "../api";
 import { dateLong, dayMonth, fmtNum, hm, instantShort } from "../format";
@@ -144,6 +144,13 @@ function UpdatedAfter({ view, tz }: { view: OverviewView; tz: string }) {
   );
 }
 
+/** The motivational line's label from the app's facts: which week it reports, and "under half of plan" in words. */
+export function motivationLabel(m: StoredMotivation): string {
+  const base = m.phase === "start" ? "New week" : m.phase === "mid" ? "This week so far" : "This week's result";
+  const label = m.announce_last_week && m.phase !== "start" ? `Last week's result · ${base}` : m.announce_last_week ? "Last week's result · New week" : base;
+  return m.bad ? `${label} · under half of plan` : label;
+}
+
 export function OverviewBody({ view }: { view: OverviewView }) {
   const o = view.overview;
   const lifts = o.lifts.filter((l) => l.sessions > 0);
@@ -177,6 +184,14 @@ export function OverviewBody({ view }: { view: OverviewView }) {
       <p class="summary" dir="rtl" lang="fa" data-testid="overview-summary">
         {o.summary_fa}
       </p>
+      {o.motivation ? (
+        <div class={`ov-motivation${o.motivation.bad ? " bad" : ""}`} data-testid="overview-motivation" data-phase={o.motivation.phase} data-bad={String(o.motivation.bad)}>
+          <b class="rv-title">{motivationLabel(o.motivation)}</b>
+          <p dir="rtl" lang="fa">
+            {o.motivation.text_fa}
+          </p>
+        </div>
+      ) : null}
       {lifts.length ? (
         <div>
           <b class="rv-title">Main lifts (estimated 1RM)</b>

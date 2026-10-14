@@ -579,3 +579,8 @@ img.full { aspect-ratio: auto; max-height: 70vh; object-fit: contain; }
 .rt-day { padding: 8px 12px 4px; }
 .rt-day + .rt-day { border-top: 1px solid var(--line); }
 .rt-date { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+
+/* The overview's weekly motivational line (Payam, 2026-10-14). The label says "under half of plan" in words. */
+.ov-motivation { padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); border-inline-start: 3px solid var(--accent); }
+.ov-motivation.bad { background: var(--plate-soft); border-inline-start-color: var(--warn); }
+.ov-motivation p { margin: 4px 0 0; font-size: 14px; text-align: right; }
