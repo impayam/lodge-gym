@@ -31,6 +31,8 @@ interface Props {
   area?: boolean;
   /** Value labels on the y-axis. */
   yAxis?: boolean;
+  /** The recessive horizontal grid (off on the small Me → Body trend, which keeps only its baseline). */
+  grid?: boolean;
   /** Date labels under the plot: first and last, with an optional text for the last. */
   xLabels?: { last?: string } | false;
   /** Start with the last point picked (single-series cards). */
@@ -58,7 +60,7 @@ const lastIndex = (col: (number | null)[]) => {
   return -1;
 };
 
-export function TimeChart({ series, height, label, unit, area, yAxis, xLabels = {}, pickLast, onPick, testid }: Props) {
+export function TimeChart({ series, height, label, unit, area, yAxis, grid = true, xLabels = {}, pickLast, onPick, testid }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const plot = useRef<uPlot | null>(null);
   const [pick, setPick] = useState<number | null>(null);
@@ -113,7 +115,7 @@ export function TimeChart({ series, height, label, unit, area, yAxis, xLabels = 
           gap: yAxis ? 4 : 0,
           space: 36,
           ticks: { show: false },
-          grid: { stroke: token("--gridline"), width: 1 },
+          grid: { show: grid, stroke: token("--gridline"), width: 1 },
           values: (_u, splits) => splits.map((v) => (yAxis ? fmtNum(Math.round(v)) : "")),
         },
       ],
@@ -166,7 +168,7 @@ export function TimeChart({ series, height, label, unit, area, yAxis, xLabels = 
       u.destroy();
       plot.current = null;
     };
-  }, [key, height, table]);
+  }, [key, height, table, grid]);
 
   const step = (d: number) => {
     const u = plot.current;

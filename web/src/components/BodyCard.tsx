@@ -34,6 +34,7 @@ export function BodyCard() {
             <TimeChart
               series={[{ label: "Body weight", color: "--violet", points: days }]}
               height={56}
+              grid={false}
               unit={unit}
               xLabels={false}
               label={`Body weight from ${fmtNum(days[0].value)} ${unit} on ${dayMonth(days[0].date)} to ${fmtNum(last.value)} ${unit} on ${dayMonth(last.date)}, ${plural(days.length, "day")} logged`}
