@@ -1,0 +1,111 @@
+/* GYM time — "Pulse" component library (source of truth).
+   Copy to web/src/styles/components.css, imported after tokens.css.
+   Every screen is built ONLY from these classes plus layout (flex/grid/gap).
+   If a screen needs something not here, stop and ask Payam before inventing it. */
+
+/* ---------- Page ---------- */
+.page {
+  min-height: 100dvh;
+  background: var(--bg);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) calc(env(safe-area-inset-bottom) + 120px);
+  display: flex; flex-direction: column; gap: var(--gap);
+}
+.page--session { background: var(--session-bg); padding-bottom: calc(env(safe-area-inset-bottom) + 100px); }
+.num { font-variant-numeric: tabular-nums; }
+.fa { font-family: var(--font-fa); }            /* use with dir="rtl" lang="fa" */
+.h-page { margin: 0; font-size: 28px; font-weight: 600; }
+.caption { font-size: 12px; color: var(--ink-3); }
+.big-num { font-family: var(--font-num); font-weight: 600; line-height: 1; }
+
+/* ---------- Press feedback (every tappable element) ---------- */
+.press { transition: transform var(--t-press) var(--ease-out), box-shadow var(--t-press), background var(--t-press); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.press:active { transform: scale(.96); }
+.press:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
+
+/* ---------- Clay button (raised, puffy). Text/icon carries the color, never the fill ---------- */
+.clay {
+  border: 0;
+  background: linear-gradient(180deg, var(--clay-top) 0%, var(--clay-bottom) 100%);
+  box-shadow: var(--sh-clay);
+  color: var(--ink-2);
+  font-family: var(--font-ui); font-weight: 700;
+}
+.clay:active { background: linear-gradient(180deg, #19191C 0%, #222226 100%); box-shadow: var(--sh-clay-pressed); }
+.clay:disabled { opacity: .4; pointer-events: none; }
+.btn-lg { height: 58px; border-radius: var(--r-btn-lg); font-size: 17px; }
+.btn    { height: 44px; border-radius: var(--r-btn);    font-size: 14px; padding: 0 16px; }
+.btn-sm { height: 38px; border-radius: var(--r-btn-sm); font-size: 13px; padding: 0 14px; }
+.btn-icon { width: 46px; height: 46px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.t-pink { color: var(--pink); } .t-orange { color: var(--orange); } .t-violet { color: var(--violet-ink); } .t-muted { color: var(--ink-2); }
+
+/* ---------- Pressed-in well (selected state, inputs, icon holders) ---------- */
+.well { background: var(--well); box-shadow: var(--sh-well); }
+.selected { background: var(--well) !important; box-shadow: var(--sh-well) !important; color: var(--pink) !important; }
+
+/* ---------- Card (box). Quieter than buttons, darker than the page ---------- */
+.card { background: linear-gradient(180deg, var(--card-top) 0%, var(--card-bottom) 100%); border-radius: var(--r-card); box-shadow: var(--sh-card); padding: var(--pad-card); }
+.card--hero { border-radius: var(--r-hero); padding: 18px; }
+.card__head { display: flex; justify-content: space-between; align-items: baseline; }
+.card__title { font-size: 14px; font-weight: 600; }
+
+/* ---------- Segmented control / chips ---------- */
+.segmented { display: inline-flex; gap: 4px; padding: 4px; border-radius: var(--r-pill); background: var(--well); box-shadow: var(--sh-well); }
+.segmented > button { height: 32px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink-3); font: 600 12px var(--font-ui); }
+.segmented > button[aria-selected="true"] { background: linear-gradient(180deg, var(--clay-top), var(--clay-bottom)); box-shadow: var(--sh-clay); color: var(--pink); }
+.chip { height: 36px; padding: 0 14px; border-radius: var(--r-pill); font: 600 13px var(--font-ui); }
+.chip[aria-pressed="true"] { background: var(--well); box-shadow: var(--sh-well); color: var(--pink); }
+
+/* ---------- Bottom tab bar: 5 icon-only tabs, floating clay capsule ---------- */
+.tabbar { position: fixed; left: var(--gutter); right: var(--gutter); bottom: calc(env(safe-area-inset-bottom) + 10px); height: 68px; border-radius: var(--r-nav);
+  background: linear-gradient(180deg, var(--clay-top), var(--clay-bottom)); box-shadow: var(--sh-clay);
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; }
+.tabbar__indicator { position: absolute; top: 8px; left: 0; height: 52px; border-radius: var(--r-tab); background: var(--well); box-shadow: var(--sh-well);
+  width: calc((100% / 5) - 12px); transform: translateX(calc(var(--i) * 100% + var(--i) * 12px + 6px)); transition: transform var(--t-slide) var(--ease-out); }
+.tabbar > a { position: relative; height: 52px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
+.tabbar > a[aria-current="page"] { color: var(--pink); }
+.tabbar svg { width: 24px; height: 24px; }
+
+/* ---------- Floating coach button ---------- */
+.fab { position: fixed; right: var(--gutter); bottom: calc(env(safe-area-inset-bottom) + 96px); width: 56px; height: 56px; border-radius: 20px; color: var(--orange); }
+
+/* ---------- Bottom sheet ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); transition: opacity 200ms; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; border-radius: 28px 28px 0 0; background: var(--card-top); padding: 10px var(--gutter) calc(env(safe-area-inset-bottom) + 20px);
+  transform: translateY(105%); transition: transform var(--t-sheet) var(--ease-out); }
+.sheet[open] { transform: translateY(0); }
+.sheet__grabber { display: block; width: 40px; height: 5px; margin: 0 auto 10px; border-radius: 999px; background: #3A3F46; }
+
+/* ---------- Set row (active session) ---------- */
+.set-row { display: grid; grid-template-columns: 36px 1fr 1fr 52px; gap: 8px; align-items: center; padding: 6px 4px; border-radius: 14px; }
+.set-row--current { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--effort) 40%, transparent); }
+.set-row--done { opacity: .6; }
+.set-check { width: 52px; height: 44px; border-radius: 14px; border: 0; display: flex; align-items: center; justify-content: center; }
+.set-check[aria-pressed="false"] { background: linear-gradient(180deg, #2E2838, #201B29); box-shadow: var(--sh-clay); color: var(--ink); }
+.set-check[aria-pressed="true"]  { background: #0F0C14; box-shadow: var(--sh-well); color: var(--effort); }
+.set-check[aria-pressed="true"] svg { animation: pop 260ms var(--ease-out); }
+@keyframes pop { 0% { transform: scale(.6); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+/* ---------- Rest timer pill ---------- */
+.rest { position: fixed; left: var(--gutter); right: var(--gutter); bottom: calc(env(safe-area-inset-bottom) + 90px); height: 68px; border-radius: 20px;
+  background: rgba(36,29,48,.92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.10);
+  display: flex; align-items: center; gap: 12px; padding: 0 10px 0 12px;
+  transform: translateY(24px); opacity: 0; pointer-events: none; transition: transform var(--t-sheet) var(--ease-out), opacity 200ms; }
+.rest[data-active="true"] { transform: none; opacity: 1; pointer-events: auto; }
+
+/* ---------- Bars vs target ---------- */
+.target-bar { position: relative; height: 10px; border-radius: 999px; background: var(--track); box-shadow: var(--sh-track); }
+.target-bar__fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; }
+.target-bar__tick { position: absolute; top: -3px; width: 2px; height: 16px; border-radius: 1px; background: var(--ink); }
+
+/* ---------- Chat ---------- */
+.msg-user { align-self: flex-end; max-width: 80%; padding: 11px 14px; border-radius: 20px 20px 6px 20px; background: var(--bubble-user); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); font-size: 15px; line-height: 1.6; }
+.msg-coach { max-width: 94%; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.75; color: #E4E4E8; }
+.composer { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 22px; background: var(--well); box-shadow: var(--sh-well); }
+
+@media (prefers-reduced-motion: reduce) {
+  .press, .tabbar__indicator, .sheet, .rest, .scrim { transition: none; }
+  .set-check[aria-pressed="true"] svg { animation: none; }
+}

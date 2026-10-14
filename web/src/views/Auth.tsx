@@ -55,7 +55,7 @@ export function Setup() {
   return (
     <div class="gate wrap">
       <Logo />
-      <h1>Set up Lodge Gym</h1>
+      <h1>Set up GYM time</h1>
       <p>Enter the setup code (SETUP_TOKEN) to register Face ID on this device.</p>
       <input type="password" autoComplete="off" placeholder="Setup code" value={token} onInput={(e) => setToken((e.currentTarget as HTMLInputElement).value)} />
       <button class="btn btn-primary btn-block" type="button" disabled={busy || !token.trim()} onClick={submit}>
@@ -102,7 +102,7 @@ export function Login() {
   return (
     <div class="gate wrap">
       <Logo />
-      <h1>Lodge Gym</h1>
+      <h1>GYM time</h1>
       {mode === "login" ? (
         <>
           <button class="btn btn-primary btn-block" type="button" disabled={busy} onClick={login} data-testid="login">
@@ -205,7 +205,7 @@ export function FirstOffline() {
   return (
     <div class="gate wrap">
       <Logo />
-      <h1>Lodge Gym</h1>
+      <h1>GYM time</h1>
       <p>The first sign-in on this device needs an internet connection. After that the app also works offline.</p>
       <button class="btn btn-primary btn-block" type="button" onClick={() => void refresh()}>
         Try again

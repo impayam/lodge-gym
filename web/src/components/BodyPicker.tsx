@@ -18,6 +18,7 @@ import { dayMonth, fmtNum, ytLink } from "../format";
 import type { AnatomyView } from "../lib/anatomy3d";
 import { loadLibrary, useStore } from "../store";
 import { CATEGORY_LABEL, ExerciseThumb, equipmentLabel, muscleLabel } from "../views/Library";
+import { token } from "../lib/tokens";
 
 interface Place {
   step: "body" | "list";
@@ -64,7 +65,7 @@ export function BodyPicker({ sessionId, onPick }: { sessionId: string; onPick: (
   return <BodyStep place={place} go={go} />;
 }
 
-const accentColor = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0f6e5f";
+const accentColor = () => token("--model-accent");
 
 function BodyStep({ place, go }: { place: Place; go: Go }) {
   const host = useRef<HTMLDivElement>(null);

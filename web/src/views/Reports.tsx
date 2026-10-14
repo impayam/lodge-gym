@@ -69,7 +69,7 @@ function Actions({ card, csvPath, title }: { card: () => Promise<Blob>; csvPath?
   return (
     <div class="stack" style={{ marginTop: "14px" }}>
       <div class="row">
-        <button type="button" class="btn btn-ghost" data-testid="share-png" onClick={() => void run(async () => ({ blob: await card(), filename: "lodge-gym-report.png" }))}>
+        <button type="button" class="btn btn-ghost" data-testid="share-png" onClick={() => void run(async () => ({ blob: await card(), filename: "gym-time-report.png" }))}>
           Share image
         </button>
         {csvPath ? (
@@ -204,7 +204,7 @@ function WeekView() {
           </div>
         </>
       ) : null}
-      <Actions card={card} csvPath={`/reports/week?start=${r.range.start}&format=csv`} title="Lodge Gym weekly report" />
+      <Actions card={card} csvPath={`/reports/week?start=${r.range.start}&format=csv`} title="GYM time weekly report" />
     </>
   );
 }
@@ -296,7 +296,7 @@ function MonthView() {
           ))}
         </>
       ) : null}
-      <Actions card={card} csvPath={`/reports/month?month=${key}&format=csv`} title="Lodge Gym monthly report" />
+      <Actions card={card} csvPath={`/reports/month?month=${key}&format=csv`} title="GYM time monthly report" />
     </>
   );
 }
@@ -365,7 +365,7 @@ function ProgressView() {
         </p>
         <MuscleMap muscles={r.balance.muscles} />
       </div>
-      <Actions card={card} title="Lodge Gym progress" />
+      <Actions card={card} title="GYM time progress" />
     </>
   );
 }

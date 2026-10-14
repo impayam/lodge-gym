@@ -10,7 +10,7 @@ test("settings: download a full export now and the latest automatic backup", asy
   const dl = page.waitForEvent("download");
   await card.getByTestId("export-now").click();
   const file = await dl;
-  expect(file.suggestedFilename()).toMatch(/^lodge-gym-export-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(file.suggestedFilename()).toMatch(/^gym-time-export-\d{4}-\d{2}-\d{2}\.json$/);
   const text = Buffer.concat(await (await file.createReadStream()).toArray()).toString("utf8");
   expect(JSON.parse(text).app).toBe("lodge-gym");
   // No cron run in local dev yet: the latest-backup button stays disabled.

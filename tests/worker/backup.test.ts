@@ -22,7 +22,7 @@ const listBackups = async () => (await env.PHOTOS.list({ prefix: BACKUP_PREFIX }
 describe("export and weekly backup", () => {
   it("GET /api/export returns the full JSON as a download", async () => {
     const res = await client.fetch("/api/export");
-    expect(res.headers.get("Content-Disposition")).toMatch(/^attachment; filename="lodge-gym-export-\d{4}-\d{2}-\d{2}\.json"$/);
+    expect(res.headers.get("Content-Disposition")).toMatch(/^attachment; filename="gym-time-export-\d{4}-\d{2}-\d{2}\.json"$/);
     const data = (await res.json()) as { app: string; sessions: WorkoutSession[]; settings: unknown; health_workouts: unknown[]; body_metrics: unknown[]; photos: unknown[] };
     expect(data.app).toBe("lodge-gym");
     const s = data.sessions.find((x) => x.id === "BK1")!;

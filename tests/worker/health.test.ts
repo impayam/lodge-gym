@@ -96,7 +96,7 @@ describe("POST /api/health/raw with Heart Rate + Active Energy samples", () => {
     const res = await shortcut(JSON.stringify(samplesIso));
     const body = (await res.json()) as { sessions: number; hr_samples: number; energy_samples: number; stored: number; message: string };
     expect(body).toMatchObject({ sessions: 1, hr_samples: 6, energy_samples: 6, stored: 0 });
-    expect(body.message).toBe("Lodge Gym: watch data saved for 1 session.");
+    expect(body.message).toBe("GYM time: watch data saved for 1 session.");
     const [r] = await sessionRows();
     expect(r).toMatchObject({ matched_session_id: s.id, hr_avg: 142.5, hr_max: 160, active_kcal: 40.5, duration_sec: 3600, started_at: s.started_at, ended_at: s.ended_at });
     expect(r.external_key).toBe(`session:${s.id}`);

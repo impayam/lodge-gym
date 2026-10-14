@@ -1,5 +1,6 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { defineConfig } from "vitest/config";
 
 const migrations = await readD1Migrations("./migrations");
@@ -17,6 +18,18 @@ const glbNodes = glbJson.nodes.map((n) => {
   return { name: n.name, type: n.extras?.type ?? null, mesh: n.mesh !== undefined, min: a?.min ?? null, max: a?.max ?? null };
 });
 
+// The UI sources and the Pulse design library (SPEC-v8 §2), for the design-rule tests (tests/lib/design.test.ts).
+const uiFiles: Record<string, string> = {};
+const readTree = (dir: string) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) readTree(p);
+    else if (/\.(ts|tsx|css|html|md)$/.test(e.name)) uiFiles[p] = readFileSync(p, "utf8");
+  }
+};
+readTree("web/src");
+readTree("design/pulse");
+
 export default defineConfig({
   plugins: [
     cloudflareTest({
@@ -26,8 +39,8 @@ export default defineConfig({
           TEST_MIGRATIONS: migrations,
           TEST_SEED_SQL: seedSql,
           TEST_GLB_NODES: glbNodes,
-          // The app stylesheet, for the 3D map colours that must equal the dark theme's status tokens.
-          TEST_STYLES: readFileSync("./web/src/styles.css", "utf8"),
+          // web/src and design/pulse sources by path: design-rule tests and the 3D map's colour tokens.
+          TEST_UI_FILES: uiFiles,
           SETUP_TOKEN: "test-setup-token-0123456789",
           // Tests never call the real Anthropic API: the model is mocked (worker/ai.ts aiTransport), and anything that
           // slips past the mock goes to a host that does not exist.

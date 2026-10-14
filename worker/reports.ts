@@ -40,7 +40,7 @@ reportRoutes.get("/week", async (c) => {
   if (!DATE_RE.test(start)) return fail(c, 400, "invalid_input", "The week date is not valid.");
   if (c.req.query("format") === "csv") {
     const r = weekRange(start, d.settings.week_start);
-    return csv(setsCsv(d, r.start, r.end), `lodge-gym-week-${r.start}.csv`);
+    return csv(setsCsv(d, r.start, r.end), `gym-time-week-${r.start}.csv`);
   }
   return c.json(weeklyReport(d, start));
 });
@@ -51,7 +51,7 @@ reportRoutes.get("/month", async (c) => {
   if (!MONTH_RE.test(key)) return fail(c, 400, "invalid_input", "The month is not valid.");
   if (c.req.query("format") === "csv") {
     const r = monthRange(key);
-    return csv(setsCsv(d, r.start, r.end), `lodge-gym-month-${key}.csv`);
+    return csv(setsCsv(d, r.start, r.end), `gym-time-month-${key}.csv`);
   }
   return c.json(monthlyReport(d, key));
 });

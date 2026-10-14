@@ -75,7 +75,7 @@ export const exportRoutes = new Hono<AppBindings>();
 
 exportRoutes.get("/export", async (c) => {
   const data = await buildExport(c.env);
-  return download(JSON.stringify(data), `lodge-gym-export-${localDate(data.settings.timezone)}.json`);
+  return download(JSON.stringify(data), `gym-time-export-${localDate(data.settings.timezone)}.json`);
 });
 
 exportRoutes.get("/backups", async (c) => {

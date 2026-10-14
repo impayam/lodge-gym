@@ -311,9 +311,9 @@ export async function ingestRaw(c: import("hono").Context<AppBindings>) {
   if (sessionsUpdated) parts.push(`watch data saved for ${n(sessionsUpdated, "session")}`);
   if (parsed.workouts.length) parts.push(`${n(parsed.workouts.length, "workout")} received, ${matched} matched to a session`);
   const message = parts.length
-    ? `Lodge Gym: ${parts.join("; ")}.`
+    ? `GYM time: ${parts.join("; ")}.`
     : parsed.hr_samples || parsed.energy_samples
-      ? "Lodge Gym: data received, but no session is logged in this time window."
-      : "Lodge Gym: data received, but it contained no samples.";
+      ? "GYM time: data received, but no session is logged in this time window."
+      : "GYM time: data received, but it contained no samples.";
   return c.json({ ok: true, ...summary, message });
 }

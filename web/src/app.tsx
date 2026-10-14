@@ -69,7 +69,7 @@ export function App() {
       <div class="wrap">
         <header class="top">
           <div class="brand">
-            <b>Lodge Gym</b>
+            <b>GYM time</b>
             <small>{dateLong(t)}</small>
           </div>
           <StatusChip />

@@ -18,7 +18,7 @@ test("first-run setup, recovery codes, /setup closes, logout and Face ID login",
   });
 
   await page.goto("/setup");
-  await expect(page.getByRole("heading", { name: "Set up Lodge Gym" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up GYM time" })).toBeVisible();
   await page.getByPlaceholder("Setup code").fill("wrong-token");
   await page.getByRole("button", { name: "Register Face ID" }).click();
   await expect(page.getByRole("alert")).toContainText("The setup code is wrong");

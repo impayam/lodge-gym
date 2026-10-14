@@ -137,7 +137,7 @@ test("Heart Rate + Active Energy samples: per-session stats on the Apple Watch p
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Cookie: "" },
       data: JSON.stringify(payload),
     });
-    expect(await res.json()).toMatchObject({ sessions: 1, hr_samples: 5, energy_samples: 4, message: "Lodge Gym: watch data saved for 1 session." });
+    expect(await res.json()).toMatchObject({ sessions: 1, hr_samples: 5, energy_samples: 4, message: "GYM time: watch data saved for 1 session." });
   }
   expect(sql("SELECT COUNT(*) AS n FROM health_workouts")).toEqual([{ n: 1 }]);
 

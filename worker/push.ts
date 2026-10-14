@@ -138,6 +138,6 @@ pushRoutes.post("/rest/cancel", async (c) => {
 });
 
 pushRoutes.post("/test", async (c) => {
-  const r = await stub(c.env).sendNow({ title: "Lodge Gym", body: "Test notification: rest-timer notifications work.", tag: "test" }, new URL(c.req.url).origin);
+  const r = await stub(c.env).sendNow({ title: "GYM time", body: "Test notification: rest-timer notifications work.", tag: "test" }, new URL(c.req.url).origin);
   return c.json({ ok: true, ...r });
 });

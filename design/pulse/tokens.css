@@ -36,6 +36,7 @@
   --orange: #FF5A1F;              /* targets, coach button, secondary action. 4.8:1 on clay */
   --violet: #9A7BF2;              /* data: lines, "on target" bars */
   --violet-ink: #B9A3FF;          /* data numbers as text, 8.3:1 */
+  --danger: #FF6B6B;              /* destructive actions only (Delete…), always with a text label and the confirm dialog */
 
   /* ---------- Data colors (validated with the colorblind checker, dark, on #1C1726/#16171A) ----------
      Fixed order for multi-series charts: orange, violet, pink. Never place pink next to orange. */
@@ -54,6 +55,27 @@
   --effort-3: #FB923C;            /* All in      (>= 0.67) */
   --session-bg: #120F1A;          /* session screen base (CONFIRM §6) */
   --session-card: rgba(28,23,38,.86);
+
+  /* ---------- 3D anatomy model and the shared report image ----------
+     Values moved unchanged from the pre-Pulse app (Payam, 2026-10-14). Drawn outside CSS (WebGL, canvas), so the
+     code reads them at runtime (web/src/lib/tokens.ts). */
+  --model-bg: #101413;
+  --model-muscle: #8c4841;
+  --model-context: #3b2725;       /* tissue around the muscles; also the "Not mapped" legend swatch */
+  --model-bone: #262422;
+  --model-accent: #3fbfa6;        /* the selected muscle (the 3D view lifts it to at least 50% lightness) */
+  --model-under: #e3a93a;         /* 3D muscle map status colors (Reports), always with icon + label */
+  --model-on: #56c98a;
+  --model-over: #f08a4b;
+  --model-untracked: #3fbfa6;
+  --model-none: #5a4b49;
+  --share-bg: #0f1513;            /* PNG report card shared from Reports */
+  --share-surface: #18201d;
+  --share-accent: #3fbfa6;
+  --share-muted: #8a9993;
+  --share-ink-2: #b5c2bc;
+  --share-ink: #e7eeea;
+  --share-line: #2c3833;
 
   /* ---------- Shadows ---------- */
   --sh-clay: inset 0 1.5px 0 rgba(255,255,255,.11), inset 0 -3px 6px rgba(0,0,0,.35), 0 7px 15px rgba(0,0,0,.42), 0 1.5px 3px rgba(0,0,0,.32);

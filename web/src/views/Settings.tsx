@@ -270,7 +270,7 @@ function Backups() {
     setMsg("");
     try {
       const { blob, filename } = await fetchFile(path);
-      await shareOrDownload(blob, filename, "Lodge Gym backup");
+      await shareOrDownload(blob, filename, "GYM time backup");
     } catch (e) {
       setMsg(e instanceof Error && e.message === "http_404" ? "No automatic backup has been made yet." : errorText(e));
     }
@@ -314,7 +314,7 @@ function PushSettings() {
       if (r === "enabled") {
         setOn(true);
         setMsg("Enabled. When a rest ends you get a notification, even with the app in the background.");
-      } else if (r === "denied") setMsg("Notifications were not allowed. Turn them on in Settings → Notifications → Lodge Gym.");
+      } else if (r === "denied") setMsg("Notifications were not allowed. Turn them on in Settings → Notifications → GYM time.");
       else if (r === "not-standalone") setMsg("On iPhone, notifications work only in the app installed on the Home Screen. Open the app from its Home Screen icon.");
       else setMsg("This browser doesn't support web notifications (iPhone needs iOS 16.4 or later).");
     } catch (e) {

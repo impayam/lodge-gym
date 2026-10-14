@@ -36,6 +36,7 @@ import { CANONICAL_MUSCLES, type Muscle } from "../../../worker/lib/muscles";
 import { GLB_URL } from "./anatomy-asset";
 import { AREA_PRESETS, FOV_DEG, TURN_MS, cameraPosition, frameBox, lerpPose, minDistance, nearestYaw, yawOf, type Box, type CameraPose, type Vec3 } from "./anatomy-camera";
 import { anatomyOf, baseName } from "./anatomy-map";
+import { token } from "./tokens";
 
 type Kind = "muscle" | "bone" | "other";
 interface Part {
@@ -60,7 +61,8 @@ const PICK_SIZE = 2 * PICK_RADIUS + 1;
 const SOLID = 255;
 // Muscles in a muted red, a little dark so the key light shapes them; bones and other tissue close to the stage colour
 // so they recede; the selected muscle in a lightened app accent that glows (emissive), clearly the brightest thing.
-const COLORS = { background: "#101413", muscle: "#8c4841", context: "#3b2725", bone: "#262422" };
+/** The model colours, from the --model-* tokens (web/src/styles/tokens.css). */
+const modelColor = (part: "bg" | "muscle" | "context" | "bone") => token(`--model-${part}`);
 /** Light from the upper front (camera-relative, so it follows the turn), a soft fill from the other side, low ambient. */
 const LIGHTS = { ambient: 0.35, key: 3.6, fill: 0.6 };
 
@@ -234,7 +236,7 @@ export class AnatomyView {
     hook.view = this;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.pickTarget.texture.colorSpace = NoColorSpace;
-    this.scene.background = new Color(COLORS.background);
+    this.scene.background = new Color(modelColor("bg"));
     // The stage is always dark: lift a dark accent (the light theme's) so the selection stays the brightest thing.
     const glow = new Color(o.accent);
     const hsl = { h: 0, s: 0, l: 0 };
@@ -242,9 +244,9 @@ export class AnatomyView {
     glow.setHSL(hsl.h, hsl.s, Math.max(hsl.l, 0.5));
     const surface = (color: string | Color) => new MeshStandardMaterial({ color, roughness: 0.62, metalness: 0 });
     this.mats = {
-      muscle: surface(COLORS.muscle),
-      context: surface(COLORS.context),
-      bone: new MeshStandardMaterial({ color: COLORS.bone, roughness: 0.9, metalness: 0 }),
+      muscle: surface(modelColor("muscle")),
+      context: surface(modelColor("context")),
+      bone: new MeshStandardMaterial({ color: modelColor("bone"), roughness: 0.9, metalness: 0 }),
       highlight: new MeshStandardMaterial({ color: glow, emissive: glow.clone().multiplyScalar(0.35), roughness: 0.5, metalness: 0 }),
       hidden: new MeshBasicMaterial({ color: new Color().setRGB(SOLID / 255, 0, 0, LinearSRGBColorSpace), toneMapped: false }),
       ids: new Map(
@@ -404,7 +406,7 @@ export class AnatomyView {
         // Reports: unmapped muscles, and in a close-up the other areas' muscles, dark; mapped ones in their colour.
         if (!p.muscle || (this.area && !this.tappable(p.muscle))) p.mesh.material = this.mats.context;
         else {
-          const t = this.tint(tints.get(p.muscle) ?? COLORS.muscle);
+          const t = this.tint(tints.get(p.muscle) ?? modelColor("muscle"));
           p.mesh.material = p.muscle === this.selected ? t.glow : t.base;
         }
       } else if (p.muscle && p.muscle === this.selected) p.mesh.material = this.mats.highlight;

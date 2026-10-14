@@ -11,13 +11,15 @@ import type { Muscle } from "../../../worker/lib/muscles";
 import type { BalanceStatus, MuscleRow } from "../../../worker/lib/reports";
 import { fmtNum } from "../format";
 import type { AnatomyView } from "../lib/anatomy3d";
-import { STAGE_STATUS_COLOR, muscleState, stageTints } from "../lib/anatomy-status";
+import { STAGE_STATUS_TOKEN, muscleState, stageTints } from "../lib/anatomy-status";
+import { token } from "../lib/tokens";
 import { muscleLabel } from "../views/Library";
 
 /** SPEC-v6 §5: a model that has not loaded after 10 s gives way to the fallback. */
 const LOAD_TIMEOUT_MS = 10_000;
 
-const accentColor = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0f6e5f";
+const accentColor = () => token("--model-accent");
+const stageStatusColor = (status: BalanceStatus) => token(STAGE_STATUS_TOKEN[status]);
 
 export interface StatusText {
   name: Record<BalanceStatus, string>;
@@ -68,7 +70,7 @@ export function BalanceStage({ muscles, text, fallback }: { muscles: MuscleRow[]
           onFacing: (v) => go({ view: v }),
           accent: accentColor(),
           openedAt,
-          tints: stageTints(rowsRef.current),
+          tints: stageTints(rowsRef.current, stageStatusColor),
         })
       )
       .then((v) => {
@@ -94,7 +96,7 @@ export function BalanceStage({ muscles, text, fallback }: { muscles: MuscleRow[]
 
   // New numbers (another week, a sync): new colours.
   useEffect(() => {
-    view3d.current?.setTints(stageTints(muscles));
+    view3d.current?.setTints(stageTints(muscles, stageStatusColor));
   }, [muscles]);
 
   function zoom(area: BodyArea | null, view: FigureView) {
@@ -169,7 +171,7 @@ export function BalanceStage({ muscles, text, fallback }: { muscles: MuscleRow[]
                   : `${fmtNum(st.row?.fractional ?? 0, 1)} sets this week, no target`}
               </span>
             </span>
-            <span class="balance-st" style={{ color: STAGE_STATUS_COLOR[st.status] }}>
+            <span class="balance-st" style={{ color: stageStatusColor(st.status) }}>
               {text.icon[st.status]} {text.name[st.status]}
             </span>
           </div>
@@ -178,11 +180,11 @@ export function BalanceStage({ muscles, text, fallback }: { muscles: MuscleRow[]
       <div class="legend balance-legend" data-testid="balance-legend">
         {(["under", "on", "over", "untracked", "none"] as BalanceStatus[]).map((s) => (
           <span>
-            <i class="sw" style={{ background: STAGE_STATUS_COLOR[s] }} /> {text.icon[s]} {text.name[s]}
+            <i class="sw" style={{ background: stageStatusColor(s) }} /> {text.icon[s]} {text.name[s]}
           </span>
         ))}
         <span>
-          <i class="sw" style={{ background: "#3b2725" }} /> Not mapped
+          <i class="sw" style={{ background: "var(--model-context)" }} /> Not mapped
         </span>
       </div>
     </>

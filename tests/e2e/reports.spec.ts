@@ -52,12 +52,12 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   const csvDownload = page.waitForEvent("download");
   await page.getByTestId("export-csv").click();
   const csv = await csvDownload;
-  expect(csv.suggestedFilename()).toMatch(/^lodge-gym-week-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(csv.suggestedFilename()).toMatch(/^gym-time-week-\d{4}-\d{2}-\d{2}\.csv$/);
   const csvText = await (await csv.createReadStream()).toArray().then((b) => Buffer.concat(b).toString("utf8"));
   expect(csvText.split("\r\n")[0]).toBe("﻿date,day,exercise,exercise_fa,set,weight,unit,reps,seconds,rir,done");
   const pngDownload = page.waitForEvent("download");
   await page.getByTestId("share-png").click();
-  expect((await pngDownload).suggestedFilename()).toBe("lodge-gym-report.png");
+  expect((await pngDownload).suggestedFilename()).toBe("gym-time-report.png");
 
   // Previous week.
   await page.getByRole("button", { name: "← Previous week" }).click();
