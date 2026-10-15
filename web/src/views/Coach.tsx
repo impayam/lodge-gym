@@ -116,6 +116,9 @@ export function Coach() {
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
   const draftThread = useRef<string>(ulid());
+  // The chat on screen. A load or an answer that finishes after Payam has moved to another chat leaves the screen alone.
+  const shown = useRef<string>(draftThread.current);
+  const isShown = (id: string) => shown.current === id;
 
   useEffect(() => {
     void loadAllHistory();
@@ -128,19 +131,23 @@ export function Coach() {
   const done = Object.values(sessions).filter((s) => s.status === "done" && (!since || s.local_date >= since)).length;
 
   const open = async (id: string) => {
+    if (!isShown(id)) setLive(null);
+    shown.current = id;
     setThreadId(id);
     setMode("chat");
     setLoadFailure(null);
     try {
       const r = await loadThread(id);
+      if (!isShown(id)) return;
       setData(r.data);
       setOffline(r.offline);
     } catch (e) {
-      setLoadFailure(e);
+      if (isShown(id)) setLoadFailure(e);
     }
   };
   const newChat = () => {
     draftThread.current = ulid();
+    shown.current = draftThread.current;
     setThreadId(null);
     setData(null);
     setLive(null);
@@ -164,8 +171,10 @@ export function Coach() {
     });
   };
   const finish = async (id: string) => {
+    if (!isShown(id)) return;
     try {
       const r = await loadThread(id);
+      if (!isShown(id)) return;
       setData(r.data);
       setOffline(r.offline);
     } catch {
@@ -175,10 +184,16 @@ export function Coach() {
   };
   const run = async (questionId: string, call: (on: (e: CoachEvent) => void) => Promise<void>, id: string) => {
     setLive({ questionId, blocks: new Map(), tool: null, cards: [], error: null });
+    // Once Payam leaves this chat, the rest of the answer only goes to the server; the chat shows it when reopened.
+    let left = false;
+    const on = (e: CoachEvent) => {
+      left ||= !isShown(id);
+      if (!left) onEvent(questionId)(e);
+    };
     try {
-      await call(onEvent(questionId));
+      await call(on);
     } catch (e) {
-      onEvent(questionId)({ type: "error", code: "network", message: errorText(e) });
+      on({ type: "error", code: "network", message: errorText(e) });
     }
     await finish(id);
   };
@@ -199,6 +214,7 @@ export function Coach() {
     };
     const now = new Date().toISOString();
     setData((d) => ({ thread: d?.thread ?? { id, title: q, created_at: now, updated_at: now, archived: false }, messages: [...(d?.messages ?? []), optimistic], omitted: d?.omitted ?? 0 }));
+    shown.current = id;
     setThreadId(id);
     setText("");
     setAttachments([]);

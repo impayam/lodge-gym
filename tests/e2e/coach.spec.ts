@@ -228,6 +228,47 @@ test("archive and unarchive; Delete permanently removes only that archived chat,
   expect(counts()).toEqual(before);
 });
 
+test.describe("moving to another chat while an answer finishes", () => {
+  // The reload after the answer is held with page.route, so the service worker is blocked here (it would answer first).
+  test.use({ serviceWorkers: "block" });
+
+  test("New chat stays empty when the first chat's reload comes back late; each chat keeps its own answer", async ({ page }) => {
+    await openCoach(page);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let held = 0;
+    const threadGet = /\/api\/coach\/threads\/[0-9A-Z]{26}$/;
+    await page.route(threadGet, async (route) => {
+      if (route.request().method() === "GET" && held++ === 0) await gate;
+      await route.continue();
+    });
+    await ask(page, "How was my week?");
+    await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+    await expect.poll(() => held).toBe(1);
+
+    await page.getByTestId("coach-new").click();
+    await expect(page.getByTestId("coach-empty")).toBeVisible();
+    const late = page.waitForResponse((r) => threadGet.test(r.url()) && r.request().method() === "GET");
+    release();
+    await late;
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 500)));
+    await expect(page.getByTestId("coach-answer")).toHaveCount(0);
+    await expect(page.getByTestId("coach-question")).toHaveCount(0);
+    await expect(page.getByTestId("coach-empty")).toBeVisible();
+
+    await pickPhoto(page, await exifJpeg(page));
+    await ask(page, "Look at this");
+    await expect(page.getByTestId("coach-answer")).toHaveCount(1);
+    await expect(page.getByTestId("coach-answer")).toContainText("visual estimate");
+    await expect(page.getByTestId("coach-question")).toHaveCount(1);
+
+    await page.getByTestId("coach-chats").click();
+    await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).locator("button").first().click();
+    await expect(page.getByTestId("coach-answer")).toHaveCount(1);
+    await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+  });
+});
+
 test("Me → AI reports shows this month's coach messages and cost", async ({ page }) => {
   await openCoach(page);
   await ask(page, "How was my week?");
