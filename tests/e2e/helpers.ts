@@ -1,24 +1,52 @@
-import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { readdirSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { currentSlot } from "./slot";
 
-/** Local D1 of the server the current project talks to (see scripts/e2e-server.mjs). */
-const persist = () => (test.info().project.name.startsWith("webkit") ? ".wrangler/e2e-https" : ".wrangler/e2e");
+const databases = new Map<string, DatabaseSync>();
 
-/** Runs SQL against the e2e Worker's local D1. */
-export function sql(command: string): unknown[] {
-  const out = execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--persist-to", persist(), "--json", "--command", command], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
-  const parsed = JSON.parse(out.slice(out.indexOf("["))) as { results: unknown[] }[];
-  return parsed[0]?.results ?? [];
+/** The SQLite file of a local D1 (wrangler keeps it under <persist>/v3/d1), opened once per test worker. */
+function d1(persist: string): DatabaseSync {
+  let db = databases.get(persist);
+  if (!db) {
+    const dir = `${persist}/v3/d1/miniflare-D1DatabaseObject`;
+    const files = readdirSync(dir).filter((f) => f.endsWith(".sqlite") && f !== "metadata.sqlite");
+    if (files.length !== 1) throw new Error(`expected one D1 database in ${dir}, found ${files.length}`);
+    db = new DatabaseSync(`${dir}/${files[0]}`);
+    // Foreign keys on, as in D1. The Worker uses the same file: wait for its write lock instead of failing.
+    db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 10000");
+    databases.set(persist, db);
+  }
+  return db;
 }
 
-const PROXY = `http://localhost:${process.env.E2E_PROXY_PORT ?? "8790"}`;
+/**
+ * Runs SQL against the local D1 of the Worker this test talks to (its worker's own, see scripts/e2e-slots.mjs), in the
+ * database's SQLite file like `wrangler d1 execute --local` does, without starting wrangler for every call. All
+ * statements run in one transaction, like a D1 batch; returns the first statement's rows.
+ */
+export function sql(command: string): unknown[] {
+  const db = d1(currentSlot().persist);
+  const results: Record<string, unknown>[][] = [];
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (let rest = command.trim(); rest; ) {
+      const statement = db.prepare(rest);
+      results.push(statement.all() as Record<string, unknown>[]);
+      rest = rest.slice(statement.sourceSQL.length).trim();
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  return (results[0] ?? []).map((row) => ({ ...row }));
+}
+
 const isWebKit = () => test.info().project.name.startsWith("webkit");
 const network = async (offline: boolean) => {
-  const res = await fetch(`${PROXY}/__network?offline=${offline ? 1 : 0}`, { headers: { Connection: "close" } });
+  const res = await fetch(`${currentSlot().proxy}/__network?offline=${offline ? 1 : 0}`, { headers: { Connection: "close" } });
   if (((await res.json()) as { offline: boolean }).offline !== offline) throw new Error("e2e proxy did not switch");
 };
 
@@ -79,14 +107,12 @@ export async function waitForSynced(page: Page) {
   await chip.filter({ hasText: "Synced" }).waitFor();
 }
 
-const AI_MOCK = `http://127.0.0.1:${process.env.E2E_AI_PORT ?? "8791"}`;
-
 type AiAnswer = "ok" | "fail" | "auth";
 
 /** Switches the mock model's answers (scripts/e2e-ai-mock.mjs): ok, fail (API error) or auth (expired key). */
 export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer }) {
   const q = new URLSearchParams(mode as Record<string, string>);
-  const res = await fetch(`${AI_MOCK}/__mode?${q}`, { headers: { Connection: "close" } });
+  const res = await fetch(`${currentSlot().ai}/__mode?${q}`, { headers: { Connection: "close" } });
   if (!res.ok) throw new Error("AI mock did not switch");
 }
 
@@ -100,7 +126,7 @@ interface AiCall {
 
 /** Calls the mock model received, the last one, and the last one of each kind. */
 export async function aiCalls(): Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }> {
-  return (await fetch(`${AI_MOCK}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
+  return (await fetch(`${currentSlot().ai}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
 }
 
 /** Where goTo can go: a tab, or a screen inside Me (SPEC-v8 §5). */

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { goTo, signIn, sql } from "./helpers";
+import { goTo, resetWorkouts, signIn, sql } from "./helpers";
 
 // SPEC-v8 §5 (Pulse step 2): five icon tabs with a sliding indicator, Me holding the old tabs, the Coach button and
 // screen, pushed screens with edge-swipe back, full-screen session, reduced motion.
@@ -148,7 +148,8 @@ test("Coach: full screen from the Coach button, the shell until M12, back with t
 });
 
 test("the active session is full screen: no tab bar, no Coach button", async ({ page }) => {
-  sql("DELETE FROM set_entries; DELETE FROM workout_sessions");
+  // Every workout row, reports and plans included (they reference the sessions): another spec may have left some.
+  resetWorkouts();
   await page.goto("/");
   await page.getByTestId("start").click();
   await expect(page.getByTestId("finish")).toBeVisible();
@@ -156,7 +157,7 @@ test("the active session is full screen: no tab bar, no Coach button", async ({ 
   await expect(page.getByTestId("coach-button")).toHaveCount(0);
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(tabs(page)).toBeVisible();
-  sql("DELETE FROM set_entries; DELETE FROM workout_sessions");
+  resetWorkouts();
 });
 
 test("reduced motion: no slide on the tab indicator or the pushed screen; the edge swipe goes back at once", async ({ page }) => {
