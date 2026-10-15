@@ -124,19 +124,22 @@ test("edge swipe back: past 35% goes back, a short slow drag springs back, a dra
   await expect(page.getByTestId("open-watch")).toBeVisible();
 });
 
-test("Coach: full screen from the Coach button, the shell until M12, back with the button or an edge swipe", async ({ page }) => {
+test("Coach: full screen from the Coach button, an empty chat with the suggested questions, back with the button or an edge swipe", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("coach-button").click();
   const coach = page.getByTestId("coach");
   await expect(coach.getByRole("heading", { name: "Coach" })).toBeVisible();
   await expect(coach.getByText(/^Knows your \d+ sessions?( since [A-Z][a-z]{2} \d{1,2})?$/)).toBeVisible();
-  await expect(coach.getByTestId("coach-empty")).toHaveText("The coach comes with M12.");
+  await expect(coach.getByTestId("coach-empty")).toBeVisible();
   await expect(tabs(page)).toHaveCount(0);
-  await expect(coach.getByRole("textbox", { name: "Message the coach" })).toBeDisabled();
+  // Online: the composer works; Send waits for a question (SPEC-v9 M12).
+  await expect(coach.getByRole("textbox", { name: "Message the coach" })).toBeEnabled();
   await expect(coach.getByRole("button", { name: "Send" })).toBeDisabled();
-  for (const chip of await coach.getByLabel("Suggested questions").getByRole("button").all()) {
+  const chips = coach.getByLabel("Suggested questions").getByRole("button");
+  await expect(chips).toHaveText(["این هفته چطور بودم؟", "برنامه‌ی سینه‌ام را بهتر کن", "چرا پرس سینه‌ام ثابت مانده؟", "این عکس را تحلیل کن"]);
+  for (const chip of await chips.all()) {
     await expect(chip).toHaveAttribute("dir", "rtl");
-    await expect(chip).toBeDisabled();
+    await expect(chip).toBeEnabled();
   }
   await coach.getByRole("button", { name: "Back" }).click();
   await expect(tabs(page).getByRole("link", { name: "Train" })).toHaveAttribute("aria-current", "page");

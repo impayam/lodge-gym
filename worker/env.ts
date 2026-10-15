@@ -18,6 +18,11 @@ export interface Env {
   /** Training overview (SPEC-v7 M9d): effort and the reply's max_tokens. */
   OVERVIEW_EFFORT?: string;
   OVERVIEW_MAX_TOKENS?: string;
+  /** Coach chat (SPEC-v9 M12): model, effort, max_tokens per call and the history budget in tokens. */
+  COACH_MODEL?: string;
+  COACH_EFFORT?: string;
+  COACH_MAX_TOKENS?: string;
+  COACH_CONTEXT_TOKENS?: string;
 }
 
 export type SessionScope = "full" | "recovery";

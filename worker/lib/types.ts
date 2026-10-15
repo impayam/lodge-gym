@@ -105,8 +105,9 @@ export interface ProgramInfo {
   days_per_week: number | null;
   /** Generator inputs and seed (generated programs). */
   params: GeneratorInput | null;
-  /** "session": a new version made by "Apply to program" from a session plan (SPEC-v3 M9c). */
-  generated_by: "seed" | "generator" | "session" | null;
+  /** "session": a new version made by "Apply to program" from a session plan (SPEC-v3 M9c); "coach": a coach draft
+   *  added with Add to Planner (SPEC-v9 M12). */
+  generated_by: "seed" | "generator" | "session" | "coach" | null;
   created_at: string;
   approved_at: string | null;
   archived_at: string | null;

@@ -15,6 +15,7 @@ import { programRoutes } from "./programs";
 import { planRoutes } from "./plans";
 import { aiRoutes, aiSessionRoutes } from "./aiReports";
 import { overviewRoutes } from "./aiOverview";
+import { coachRoutes } from "./coach";
 
 export { RestPush } from "./push";
 export { AiJobs } from "./aiReports";
@@ -69,6 +70,7 @@ api.route("/push", pushRoutes);
 api.route("/exercises", exerciseRoutes);
 api.route("/library/media", mediaRoutes);
 api.route("/programs", programRoutes);
+api.route("/coach", coachRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "Route not found."), 404));

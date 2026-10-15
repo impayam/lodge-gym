@@ -244,6 +244,27 @@ Every list and chart uses `web/src/components/States.tsx` (no new classes):
 - `<LoadError>`: `.state` with what failed (`t-orange`), the reason ("No internet connection." or the server's message) and Retry.
 - A list that still has a saved copy keeps it on screen with the caption "Offline: showing the last saved copy." (or "Couldn't refresh: …").
 
+### Coach chat (M12)
+
+```html
+<div class="msg-user l-col l-gap-8 fa" dir="rtl" lang="fa"><div class="l-grid-2"><div class="photo-thumb">…</div></div><span>…</span></div>
+<div class="msg-coach">
+  <p class="caption l-m0">…the coach's progress note between tool calls…</p>
+  <p class="l-m0 fa" dir="rtl" lang="fa">…</p><ul class="prose-list l-m0">…</ul>
+  <section class="card">…data card, "Numbers calculated by the app from your logs"…</section>
+  <div class="typing" role="status"><span class="typing__dots"><span></span><span></span><span></span></span><span>Reading your sessions</span></div>
+</div>
+<span class="caption num">~$0.03</span>                                  <!-- the answer's cost -->
+<span class="caption t-orange">Answer failed — …</span> <button class="clay press btn-sm t-pink">Retry</button>
+```
+- `.typing` (added for M12, Payam 2026-10-15; existing tokens only): the three dots of mockup 07 in `--pink`, `--violet`,
+  `--orange`, pulsing gently (still under reduced motion), then the coach's latest progress note or what the tool is reading.
+- Data cards reuse the Reports pieces: `Bars` (sets vs target, same status colours), `Columns` (sessions per week),
+  `TimeChart` (e1RM, body weight), `.data-table`. The program draft card is a `.card` with numbered `.icon-well` days
+  and "Add to Planner" (`t-pink`) / "Change" (`t-muted`).
+- Chat list and Archived list: `.card--list` with `.list-row`; Archive / Unarchive as `btn-sm t-muted`, Delete as
+  `btn-sm t-danger` with a confirm sheet.
+
 ## Contrast
 
 Every run of text is measured as drawn on every screen (`tests/e2e/a11y.spec.ts`, WebKit and Chromium) and must reach 4.5:1. Two cases are kept as designed (Payam, 2026-10-15):

@@ -25,19 +25,8 @@ export function trainingSince(boot: BootData): string | null {
 /** Planned sessions per week of the active program. */
 export const daysPerWeek = (boot: BootData) => activeProgramInfo(boot)?.days_per_week ?? boot.program.days.length;
 
-export function styleLabel(style: string | null): string {
-  if (style === "seed_full_body") return "Full body (original program)";
-  if (style === "seed_upper_lower") return "Upper/lower (original program)";
-  return style && style in STYLE_NAME ? STYLE_NAME[style as ResolvedStyle] : "Program";
-}
+export { programName, styleLabel } from "../../worker/lib/programRules";
 
-/** English display name: the seed programs carry Persian names in data (SPEC §6), the UI stays English (SPEC-v2 M6). */
-export function programName(p: Pick<ProgramInfo, "name" | "style"> | null | undefined, fallback = "Program"): string {
-  if (!p) return fallback;
-  if (p.style === "seed_full_body") return "Full body · 4 days";
-  if (p.style === "seed_upper_lower") return "Upper/lower · 4 days";
-  return p.name || fallback;
-}
 
 /** Full-body and strength weeks (and the seed programs) allow at most two training days in a row (§8.4); split days
  *  are sequenced instead. */

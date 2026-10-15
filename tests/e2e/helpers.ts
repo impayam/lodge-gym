@@ -110,18 +110,29 @@ export async function waitForSynced(page: Page) {
 type AiAnswer = "ok" | "fail" | "auth";
 
 /** Switches the mock model's answers (scripts/e2e-ai-mock.mjs): ok, fail (API error) or auth (expired key). */
-export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer }) {
+export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer; coach?: AiAnswer }) {
   const q = new URLSearchParams(mode as Record<string, string>);
   const res = await fetch(`${currentSlot().ai}/__mode?${q}`, { headers: { Connection: "close" } });
   if (!res.ok) throw new Error("AI mock did not switch");
 }
 
 interface AiCall {
-  kind: "report" | "advice" | "overview";
+  kind: "report" | "advice" | "overview" | "coach";
   model: string;
   effort: string;
   max_tokens: number;
   key_set: boolean;
+  /** Coach calls only: the request's shape (scripts/e2e-ai-mock.mjs). */
+  tool_choice?: unknown;
+  thinking?: { type: string; display?: string; block_binding?: { prefix_mismatch_behavior: string } } | null;
+  betas?: string;
+  tools?: string[];
+  system_cached?: boolean;
+  last_block_cached?: boolean;
+  messages?: number;
+  images?: number;
+  thinking_replayed?: number;
+  question?: string;
 }
 
 /** Calls the mock model received, the last one, and the last one of each kind. */

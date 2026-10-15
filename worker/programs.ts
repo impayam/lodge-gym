@@ -181,8 +181,11 @@ programRoutes.post("/:id/approve", async (c) => {
   const p = (await readProgramVersions(c.env, [c.req.param("id")]))[0];
   if (!p) return fail(c, 404, "not_found", "Program not found.");
   if (p.status !== "draft") return fail(c, 409, "not_draft", "Only a draft can be approved.");
-  const check = await checkStored(c.env, p);
-  if (check.violations.length) return c.json({ error: { code: "rules_broken", message_fa: check.violations[0].message }, check }, 422);
+  // A coach draft has no generator inputs; its exercises, groups and main lifts were checked when it was proposed.
+  if (p.generated_by !== "coach") {
+    const check = await checkStored(c.env, p);
+    if (check.violations.length) return c.json({ error: { code: "rules_broken", message_fa: check.violations[0].message }, check }, 422);
+  }
   await switchTo(c.env, p.id, nowISO(), true);
   return c.json({ ok: true, programs: await readProgramInfos(c.env) });
 });

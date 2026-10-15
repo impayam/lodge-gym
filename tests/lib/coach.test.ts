@@ -1,0 +1,225 @@
+import { describe, expect, it } from "vitest";
+import { reportData } from "../fixtures/report-data";
+import { balanceStatus, bestSet, muscleTargets, setsPerMuscle, weeklyReport } from "../../worker/lib/reports";
+import { buildOverviewInput } from "../../worker/lib/ai/overview";
+import { lastHeavyCompound } from "../../worker/lib/ai/advice";
+import { callCostUsd } from "../../worker/lib/ai/cost";
+import { COACH_TOOLS, getAdherence, getE1rmHistory, getPrs, getRecovery, getVolume, runTool, type CoachData } from "../../worker/lib/coach/tools";
+import { draftDayRows, proposeProgram } from "../../worker/lib/coach/draft";
+import { contextWindow, estimateTokens, nextStamp, validHistory, type StoredMessage } from "../../worker/lib/coach/context";
+import { COACH_SYSTEM, CONTEXT_HEADER, contextBlock } from "../../worker/lib/coach/prompt";
+
+const data = (today = "2026-09-27", now = "2026-09-28T03:00:00.000Z"): CoachData => ({ ...reportData(), today, now });
+
+describe("coach tools use the Reports numbers", () => {
+  it("get_volume: the fixture week's rows equal the Reports screen's rows, with the same status function", () => {
+    const d = data();
+    const reports = weeklyReport(d, "2026-09-23").muscles;
+    const [week] = getVolume(d, "2026-09-21", "2026-09-27").weeks;
+    expect(week).toMatchObject({ start: "2026-09-21", end: "2026-09-27", partial: true });
+    expect(week.groups.map((g) => ({ muscle: g.group, sets: g.direct_sets, fractional: g.fractional_sets, target: g.target, status: g.status }))).toEqual(reports);
+    for (const g of week.groups.filter((x) => x.target != null)) expect(g.status).toBe(balanceStatus(g.fractional_sets, g.target!));
+  });
+
+  it("status bands are the Reports ones: under below 80 %, on from 80 % to 120 %, over above 120 %, none at 0 sets", () => {
+    expect(balanceStatus(0, 10)).toBe("none");
+    expect(balanceStatus(7.9, 10)).toBe("under");
+    expect(balanceStatus(8, 10)).toBe("on");
+    expect(balanceStatus(12, 10)).toBe("on");
+    expect(balanceStatus(12.1, 10)).toBe("over");
+  });
+
+  it("get_volume: a past week is not partial and counts only its own sessions", () => {
+    const d = data();
+    const [week] = getVolume(d, "2026-09-14", "2026-09-20").weeks;
+    expect(week.partial).toBe(false);
+    const ex = new Map(d.exercises.map((e) => [e.id, e]));
+    const sets = setsPerMuscle(d.sessions.filter((s) => s.status === "done" && s.local_date >= "2026-09-14" && s.local_date <= "2026-09-20"), ex);
+    const chest = week.groups.find((g) => g.group === "chest")!;
+    expect(chest.fractional_sets).toBe(sets.chest.fractional);
+    expect(chest.target).toBe(muscleTargets(d).chest);
+  });
+
+  it("get_e1rm_history: the best set of each session day (Epley), first to latest change", () => {
+    const d = data();
+    const r = getE1rmHistory(d, "bench", 12);
+    expect(r.ok).toBe(true);
+    const res = (r as { result: { points: { date: string; e1rm: number }[]; change_pct: number; first_e1rm: number; latest_e1rm: number } }).result;
+    const p1 = bestSet(d.sessions.find((s) => s.id === "P1")!, "bench", "lb")!;
+    const s1 = bestSet(d.sessions.find((s) => s.id === "S1")!, "bench", "lb")!;
+    expect(res.points).toEqual([
+      { date: "2026-09-15", ...p1 },
+      { date: "2026-09-21", ...s1 },
+    ]);
+    expect(res.first_e1rm).toBe(p1.e1rm);
+    expect(res.latest_e1rm).toBe(s1.e1rm);
+    expect(res.change_pct).toBe(Math.round(((s1.e1rm - p1.e1rm) / p1.e1rm) * 1000) / 10);
+    expect(getE1rmHistory(d, "nope", 12)).toMatchObject({ ok: false });
+  });
+
+  it("get_adherence: the training overview's planned and done counts for the same weeks", () => {
+    const d = data("2026-09-27");
+    const overview = buildOverviewInput(d, [], "2026-09-27", null);
+    const a = getAdherence(d, overview.window.start, "2026-09-27");
+    expect({ since: a.since, done: a.sessions_done, planned: a.sessions_planned }).toEqual({ since: overview.totals.since, done: overview.totals.sessions_done, planned: overview.totals.sessions_planned });
+    expect(a.weeks.map((w) => [w.start, w.done, w.planned])).toEqual(overview.weeks.map((w) => [w.start, w.sessions_done, w.sessions_planned]));
+  });
+
+  it("get_prs: a record must beat every earlier session's best; the first session of a lift is not one", () => {
+    const r = getPrs(data(), "bench");
+    expect(r).toMatchObject({ ok: true });
+    const res = (r as { result: { records: { date: string; previous_e1rm: number }[]; best: { date: string }[] } }).result;
+    expect(res.records.map((x) => x.date)).toEqual(["2026-09-21"]);
+    expect(res.best[0].date).toBe("2026-09-21");
+  });
+
+  it("get_recovery: the planner advice's list, from the same function", () => {
+    const d = data();
+    const ex = new Map(d.exercises.map((e) => [e.id, e]));
+    const r = getRecovery(d);
+    expect(r.groups).toEqual(lastHeavyCompound(d.sessions.filter((s) => s.status === "done"), ex, d.now));
+    expect(r.groups.length).toBeGreaterThan(0);
+    // The active session (A1) never counts.
+    expect(r.groups.every((g) => g.date !== "2026-09-27")).toBe(true);
+  });
+});
+
+describe("coach tool inputs", () => {
+  it("bad inputs come back as errors the model can correct", () => {
+    const d = data();
+    expect(runTool(d, "get_sessions", { from: "2026-09-27", to: "2026-09-01" })).toMatchObject({ ok: false });
+    expect(runTool(d, "get_sessions", { from: "2026-01-01", to: "2026-09-01" })).toMatchObject({ ok: false, error: expect.stringContaining("92 days") });
+    expect(runTool(d, "get_library", {})).toMatchObject({ ok: false, error: expect.stringContaining("at least one filter") });
+    expect(runTool(d, "get_volume", { from: "2026-09-21", to: "2026-09-27", extra: 1 })).toMatchObject({ ok: false });
+    expect(runTool(d, "nope", {})).toMatchObject({ ok: false });
+  });
+
+  it("get_sessions includes the open session and converts kg sets to his unit", () => {
+    const r = runTool(data(), "get_sessions", { from: "2026-09-21", to: "2026-09-27" });
+    const sessions = (r as { result: { sessions: { id: string; status: string; exercises: { exercise_id: string; sets: { weight: number | null }[] }[] }[] } }).result.sessions;
+    expect(sessions.map((s) => s.id)).toEqual(["A1", "S3", "S2", "S1"]);
+    expect(sessions[0].status).toBe("active");
+    expect(sessions[1].exercises.find((x) => x.exercise_id === "cs_row")!.sets[0].weight).toBe(55.1);
+  });
+
+  it("every tool has a strict object schema; there are 10 read tools and propose_program", () => {
+    expect(COACH_TOOLS.map((t) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "propose_program"]);
+    for (const t of COACH_TOOLS) expect(t.input_schema).toMatchObject({ type: "object", additionalProperties: false });
+  });
+});
+
+describe("propose_program", () => {
+  const day = (exercises: object[], name = "Day 1 · Chest") => ({ name, exercises });
+  const ex = (id: string, more: object = {}) => ({ exercise_id: id, sets: 3, reps_min: 8, reps_max: 10, rest_sec: 90, ...more });
+
+  it("drops ids that are not in the library, says which, and a group left with one exercise is no longer a group", () => {
+    const d = data();
+    const r = proposeProgram(d, { name: "Chest", days: [day([ex("bench", { is_main: true }), ex("hack_squat_machine", { group: "A" }), ex("fly", { group: "A" })])] }, "01DRAFT00000000000000000000");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.result.dropped).toEqual([{ day: "Day 1 · Chest", exercise_id: "hack_squat_machine", reason: "not in the library" }]);
+    expect(r.draft.days[0].exercises.map((x) => [x.exercise_id, x.group ?? null])).toEqual([["bench", null], ["fly", null]]);
+    expect(r.result.weekly_sets.find((g) => g.group === "chest")!.planned).toBe(6);
+  });
+
+  it("archived exercises are dropped too; a draft with nothing left is an error", () => {
+    const d = data();
+    d.exercises = d.exercises.map((e) => (e.id === "fly" ? { ...e, archived_at: "2026-09-01T00:00:00.000Z" } : e));
+    const r = proposeProgram(d, { name: "X", days: [day([ex("fly")])] }, "x");
+    expect(r).toMatchObject({ ok: false, error: expect.stringContaining("fly") });
+  });
+
+  it("checks reps, target RIR, one main lift per day and groups of 2-3 consecutive exercises", () => {
+    const d = data();
+    const bad = (exercises: object[]) => proposeProgram(d, { name: "X", days: [day(exercises)] }, "x");
+    expect(bad([ex("bench", { reps_min: 12, reps_max: 8 })])).toMatchObject({ ok: false, error: expect.stringContaining("reps_min") });
+    expect(bad([ex("bench", { target_rir_min: 3, target_rir_max: 1 })])).toMatchObject({ ok: false });
+    expect(bad([ex("bench", { target_rir_min: 1 })])).toMatchObject({ ok: false });
+    expect(bad([ex("bench", { is_main: true }), ex("fly", { is_main: true })])).toMatchObject({ ok: false, error: expect.stringContaining("is_main") });
+    expect(bad([ex("bench", { group: "A" }), ex("fly"), ex("lateral", { group: "A" })])).toMatchObject({ ok: false, error: expect.stringContaining("group A") });
+    expect(bad([ex("bench", { group: "A" }), ex("fly", { group: "A" }), ex("lateral", { group: "A" }), ex("incline_db", { group: "A" })])).toMatchObject({ ok: false });
+    expect(bad([ex("bench", { group: "A" }), ex("fly", { group: "A" }), ex("lateral", { group: "A" })])).toMatchObject({ ok: true });
+  });
+
+  it("saved day rows number each group's exercises A1, A2, A3 and count minutes like the generator", () => {
+    const d = data();
+    const r = proposeProgram(d, { name: "X", days: [day([ex("bench", { is_main: true, rest_sec: 180, sets: 4 }), ex("fly", { group: "B" }), ex("lateral", { group: "B" }), ex("facepull", { group: "B" })])] }, "x");
+    if (!r.ok) throw new Error(r.error);
+    const [row] = draftDayRows(r.draft);
+    expect(row.exercises.map((x) => x.superset_tag)).toEqual([null, "B1", "B2", "B3"]);
+    expect(row.exercises[0]).toMatchObject({ is_main: true, position: 1, per_leg: false, is_time: false, target_rir_min: null });
+    expect(row.est_minutes).toBeGreaterThan(0);
+  });
+});
+
+describe("coach cost", () => {
+  it("is computed from the API's token counts with Opus 5.5 prices (input, output, cache write, cache read)", () => {
+    expect(callCostUsd("claude-opus-5-5", { input_tokens: 1_000_000, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 })).toBe(4);
+    expect(callCostUsd("claude-opus-5-5", { input_tokens: 0, output_tokens: 1_000_000, cache_read_tokens: 0, cache_write_tokens: 0 })).toBe(20);
+    expect(callCostUsd("claude-opus-5-5", { input_tokens: 0, output_tokens: 0, cache_read_tokens: 1_000_000, cache_write_tokens: 0 })).toBeCloseTo(0.2, 10);
+    expect(callCostUsd("claude-opus-5-5", { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 1_000_000 })).toBe(5);
+    expect(callCostUsd("claude-opus-5-5", { input_tokens: 1200, output_tokens: 800, cache_read_tokens: 6000, cache_write_tokens: 500 })).toBeCloseTo((1200 * 4 + 800 * 20 + 6000 * 0.2 + 500 * 5) / 1e6, 12);
+    expect(callCostUsd("unknown-model", { input_tokens: 1, output_tokens: 1, cache_read_tokens: 0, cache_write_tokens: 0 })).toBeNull();
+  });
+});
+
+describe("context budget", () => {
+  let n = 0;
+  const msg = (role: "user" | "assistant", content: StoredMessage["content"], error: string | null = null): StoredMessage => ({ id: `m${String(n++).padStart(3, "0")}`, role, content, created_at: `2026-10-15T10:${String(n).padStart(2, "0")}:00.000Z`, error });
+  const q = (text: string) => msg("user", [{ type: "text", text }]);
+  const a = (text: string) => msg("assistant", [{ type: "thinking", thinking: "", signature: "sig" }, { type: "text", text }]);
+
+  it("sends the newest messages that fit, starting at a question; the latest question is always sent", () => {
+    const rows = [q("x".repeat(3000)), a("y".repeat(3000)), q("second"), a("ok"), q("third")];
+    const all = contextWindow(rows, 100_000);
+    expect(all).toMatchObject({ omitted: 0 });
+    expect(all.messages).toHaveLength(5);
+    const small = contextWindow(rows, 100);
+    expect(small.messages.map((m) => m.id)).toEqual(rows.slice(2).map((m) => m.id));
+    expect(small.omitted).toBe(2);
+    expect(contextWindow(rows, 1).messages.map((m) => m.id)).toEqual([rows[4].id]);
+  });
+
+  it("never resends a failed call, and leaves out a tool call whose results were not saved", () => {
+    const call = msg("assistant", [{ type: "tool_use", id: "t1", name: "get_program", input: {} }]);
+    const rows = [q("first"), msg("assistant", [], "api: overloaded"), call, q("again")];
+    expect(validHistory(rows).map((m) => m.id)).toEqual([rows[0].id, rows[3].id]);
+    const answered = [q("first"), call, msg("user", [{ type: "tool_result", tool_use_id: "t1", content: "{}" }]), a("done")];
+    expect(validHistory(answered)).toHaveLength(4);
+  });
+
+  it("saves each row after the one before it, also when the clock has not moved", () => {
+    const at = Date.parse("2026-10-15T10:00:00.000Z");
+    expect(nextStamp(undefined, at)).toBe("2026-10-15T10:00:00.000Z");
+    expect(nextStamp(null, at)).toBe("2026-10-15T10:00:00.000Z");
+    expect(nextStamp("2026-10-15T09:59:59.000Z", at)).toBe("2026-10-15T10:00:00.000Z");
+    // Same millisecond, or a previous row stamped ahead of the clock: 1 ms after it.
+    expect(nextStamp("2026-10-15T10:00:00.000Z", at)).toBe("2026-10-15T10:00:00.001Z");
+    expect(nextStamp("2026-10-15T10:00:00.004Z", at)).toBe("2026-10-15T10:00:00.005Z");
+    let last: string | undefined;
+    const stamps = Array.from({ length: 5 }, () => (last = nextStamp(last, at)));
+    expect(stamps).toEqual([...stamps].sort());
+    expect(new Set(stamps).size).toBe(5);
+  });
+
+  it("estimates images by their size, as the API counts them", () => {
+    expect(estimateTokens(msg("user", [{ type: "image", attachment_id: "x", width: 1200, height: 1600 }]))).toBe(4 + 2560);
+  });
+});
+
+describe("coach prompt", () => {
+  it("carries Payam's 2026-10-15 rules", () => {
+    expect(COACH_SYSTEM).toContain("under when its sets are below 80 % of the target, on from 80 % to 120 %, over above 120 %");
+    expect(COACH_SYSTEM).toContain("every planned set had RIR 3 or more, the step is doubled");
+    expect(COACH_SYSTEM).toContain("no heavy compound lift for a muscle group within 48 hours");
+    expect(COACH_SYSTEM).toContain("pulling volume at least equal to pushing volume");
+    expect(COACH_SYSTEM).toContain("Me → Program → Drafts");
+    expect(COACH_SYSTEM).not.toMatch(/Settings → Program/);
+  });
+
+  it("the CONTEXT block names the weekday, zone, unit, week start and active program", () => {
+    expect(contextBlock({ today: "2026-10-14", timezone: "America/Denver", unit: "lb", week_start: "mon", program: { name: "Full body · 4 days", since: "2026-09-27" } })).toBe(
+      [CONTEXT_HEADER, "Today: Wednesday 2026-10-14. Time zone: America/Denver.", "Weight unit: lb. Weeks start on Monday.", "Active program: Full body · 4 days, active since 2026-09-27."].join("\n")
+    );
+  });
+});

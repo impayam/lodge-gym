@@ -492,8 +492,18 @@ fieldset.form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .week-strip > span { height: 40px; display: grid; place-items: center; border-radius: 10px; font-size: 11px; color: var(--ink-3); }
 .week-strip > [data-on="true"] { background: var(--well); box-shadow: var(--sh-well); color: var(--pink); font-weight: 600; }
 
+/* ---------- Coach typing indicator (mockup 07; added for M12, Payam 2026-10-15): three dots, then what it is doing ---------- */
+.typing { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
+.typing__dots { display: flex; flex-shrink: 0; gap: 4px; }
+.typing__dots > span { width: 6px; height: 6px; border-radius: 50%; animation: typing-pulse 1.2s ease-in-out infinite; }
+.typing__dots > span:nth-child(1) { background: var(--pink); }
+.typing__dots > span:nth-child(2) { background: var(--violet); animation-delay: .15s; }
+.typing__dots > span:nth-child(3) { background: var(--orange); animation-delay: .3s; }
+@keyframes typing-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
   .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed, .swipe, .rest__arc { transition: none; }
   .set-check[aria-pressed="true"] svg { animation: none; }
   .glow-once { animation: none; }
+  .typing__dots > span { animation: none; opacity: 1; }
 }

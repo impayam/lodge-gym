@@ -31,7 +31,7 @@ import {
   type TargetGroup,
 } from "../../../worker/lib/generator";
 import { TARGET_GROUPS } from "../../../worker/lib/muscles";
-import type { Exercise } from "../../../worker/lib/types";
+import type { Exercise, ProgramVersion } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
 import { fmtNum, instantShort, plural } from "../format";
@@ -43,6 +43,7 @@ import { LoadError, Loading } from "../components/States";
 import { allExercises, flash, generateProposal, loadLibrary, loadProgramVersions, navigate, saveProgramDraft, switchProgram, useStore } from "../store";
 import { EquipmentIcon, equipmentLabel } from "./Library";
 import { rirText, targetText } from "./Program";
+import { CoachDraftView } from "./CoachDraft";
 
 const SLOT_LABEL: Readonly<Record<Slot, string>> = { main: "Main", secondary: "Secondary", accessory: "Accessory", isolation: "Isolation", core: "Core" };
 const WEEKDAY_SLOTS = 7;
@@ -91,6 +92,8 @@ export function NewProgram() {
   const [draftLoading, setDraftLoading] = useState(Boolean(programId));
   const [draftFailure, setDraftFailure] = useState<unknown>(null);
   const [round, setRound] = useState(0);
+  // A draft from the coach (SPEC-v9 M12) has no generator inputs: it opens read-only, with Approve.
+  const [coachDraft, setCoachDraft] = useState<ProgramVersion | null>(null);
 
   useEffect(() => {
     void loadLibrary();
@@ -101,6 +104,7 @@ export function NewProgram() {
     loadProgramVersions()
       .then((list) => {
         const p = list.find((x) => x.id === programId);
+        if (p && p.status === "draft" && p.generated_by === "coach") return setCoachDraft(p);
         if (!p || p.status !== "draft" || !p.params) return setMsg("This draft is no longer available.");
         setInput(p.params);
         setParams(p.params);
@@ -187,6 +191,7 @@ export function NewProgram() {
     }
   };
 
+  if (coachDraft) return <CoachDraftView program={coachDraft} />;
   if (!plan || !params || !days || !check || !targets)
     return (
       <main class="page" data-testid="new-program-screen">

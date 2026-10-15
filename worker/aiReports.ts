@@ -20,8 +20,11 @@ import { DAILY_LIMIT, errorCode, keyStatus, monthUsage, usedToday, type AiUsage 
 import { aiRows, errorText, overLimit } from "./aiLimits";
 import { generateOverview } from "./aiOverview";
 import { buildReportInput, normalizeReport, REPORT_SYSTEM, ReportOutput, type ReportView, type SessionReport } from "./lib/ai/report";
-import { localDate } from "./lib/time";
+import { addDays, localDate, zonedToUtcISO } from "./lib/time";
+import { monthRange } from "./lib/reports";
 import { ID_RE, ulid } from "./lib/ulid";
+import { coachMonth } from "./coach";
+import { runCoachTurn, type CoachEvent } from "./coachTurn";
 
 /* ---------------- rows ---------------- */
 
@@ -100,6 +103,39 @@ const JOB_ATTEMPTS = 3;
  * platform). A finished session queues its report, then the overview, so the overview comes right after the report.
  */
 export class AiJobs extends DurableObject<Env> {
+  /** Chats with an answer being written (one at a time per chat). */
+  private coachRunning = new Set<string>();
+
+  /**
+   * One coach answer (SPEC-v9 M12, worker/coachTurn.ts), streamed as server-sent events. It runs here for the Durable
+   * Object's CPU budget; it keeps running if the chat closes, and its rows are saved as they come. Null while the chat
+   * already has an answer being written. A comment line every 15 s keeps the connection open while the model thinks.
+   */
+  async coachTurn(threadId: string): Promise<ReadableStream<Uint8Array> | null> {
+    if (this.coachRunning.has(threadId)) return null;
+    this.coachRunning.add(threadId);
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = writable.getWriter();
+    const enc = new TextEncoder();
+    let open = true;
+    const write = (chunk: string) => {
+      if (open) writer.write(enc.encode(chunk)).catch(() => (open = false));
+    };
+    const ping = setInterval(() => write(": ping\n\n"), 15_000);
+    const run = runCoachTurn(this.env, threadId, (e: CoachEvent) => write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`))
+      .catch((e) => {
+        console.error(`coach ${threadId} failed: ${e instanceof Error ? e.message : String(e)}`);
+        write(`event: error\ndata: ${JSON.stringify({ type: "error", code: "internal", message: "The answer failed on the server." })}\n\n`);
+      })
+      .finally(() => {
+        clearInterval(ping);
+        this.coachRunning.delete(threadId);
+        if (open) writer.close().catch(() => undefined);
+      });
+    this.ctx.waitUntil(run);
+    return readable;
+  }
+
   private async jobs(): Promise<Job[]> {
     return (await this.ctx.storage.get<Job[]>("jobs")) ?? [];
   }
@@ -239,6 +275,8 @@ aiRoutes.get("/usage", async (c) => {
   const { timezone } = await readSettings(c.env);
   const today = localDate(timezone);
   const rows = await aiRows(c.env, new Date(Date.now() - 40 * 86_400_000).toISOString());
+  const month = monthRange(today.slice(0, 7));
+  const coach = await coachMonth(c.env, zonedToUtcISO(month.start, "00:00", timezone), zonedToUtcISO(addDays(month.end, 1), "00:00", timezone));
   return c.json<AiUsage>({
     model: modelOf(c.env),
     key: c.env.ANTHROPIC_API_KEY?.trim() ? "set" : "missing",
@@ -250,5 +288,6 @@ aiRoutes.get("/usage", async (c) => {
       overviews: usedToday(rows, "overview", timezone, today),
     },
     limits: DAILY_LIMIT,
+    coach,
   });
 });
