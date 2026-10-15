@@ -50,7 +50,7 @@ wrangler.toml  bindings: DB (D1), PHOTOS (R2), ASSETS; secret SETUP_TOKEN via `w
 - Progression, Epley 1RM, week boundaries and Shortcuts payload parsing live in pure, unit-tested modules under `/worker/lib`.
 - Photos: resize and strip EXIF on the client before upload; never expose R2 publicly.
 - Security headers and CSP per SPEC §13 on every response.
-- No third-party analytics, fonts from CDNs, or external scripts. Use the system font stack; bundle no web font.
+- No third-party analytics, fonts from CDNs, or external scripts. Fonts (SPEC-v8 §4): Instrument Sans (UI, 400/600/700) and Barlow Condensed (numbers and titles, 600/700), self-hosted Latin subsets bundled with the app and precached; Persian text uses the system font.
 
 ## Known platform limits (do not try to work around them)
 
