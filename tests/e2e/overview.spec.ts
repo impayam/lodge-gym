@@ -40,6 +40,8 @@ async function finishDay1(page: Page) {
 }
 
 test("the overview updates after a finished session, keeps the old one on failure with Retry, and Regenerate writes a new one", async ({ page, context }) => {
+  // Four overview writes through the server job: 44–61 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
   await toReports(page);
   await expect(card(page)).toHaveAttribute("data-state", "none");
@@ -138,6 +140,8 @@ test("Session reports lists each finished session's report, newest first, and a 
 });
 
 test("History → Reports timeline: a session date lists its report and the overview written after it; a Regenerate on a day without a session gets ◆; weekly reviews on their week's last day; everything opens read-only", async ({ page }) => {
+  // Reports, overviews and reviews opened one by one: 37–46 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   sql("DELETE FROM weekly_reviews");
   const tz = (sql("SELECT value FROM settings WHERE key = 'timezone'")[0] as { value?: string } | undefined)?.value ?? "America/Denver";
   const localDay = (daysAgo: number) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(Date.now() - daysAgo * 86_400_000));

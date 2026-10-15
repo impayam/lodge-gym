@@ -173,6 +173,8 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
 });
 
 test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only after A3; ungroup restores normal rest", async ({ page }) => {
+  // A tri-set planned, started and logged round by round: 46–52 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
   await page.getByTestId("start").click();
   // The day's own superset (A1/A2) already rests after the round only.
@@ -251,6 +253,8 @@ test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only
 });
 
 test("discard plan returns the day to the program; Apply to program makes a new active version after a confirm", async ({ page }) => {
+  // Two plans and a program version: 39–47 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
   await page.getByTestId("plan-session").click();
   await openItem(page, "rdl");

@@ -28,6 +28,8 @@ async function startDay1(page: Page) {
 const report = (page: Page) => page.getByTestId("session-report");
 
 test("finish a session with an extra exercise: the report shows it, the volume table and the app's next-time weights; failures show Retry; an expired key shows in Settings", async ({ page }) => {
+  // A whole session, three report runs and Settings: 38–52 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await startDay1(page);
   // Bench: all 4 planned sets of 5 at 140 lb.
   for (let i = 0; i < 4; i++) {
