@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { Client, ORIGIN, resetAuth, setupOwner, SoftAuthenticator } from "./helpers";
+import { Client, ORIGIN, resetAuth, RP_ID, setupOwner, SoftAuthenticator } from "./helpers";
 
 beforeEach(resetAuth);
 
@@ -73,6 +73,30 @@ describe("first-run setup", () => {
     const res = await c.post("/api/auth/register/verify", { setup_token: env.SETUP_TOKEN, response });
     expect(res.status).toBe(400);
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM credentials").first<{ n: number }>())!.n).toBe(0);
+  });
+});
+
+describe("passkey display name (Payam, 2026-10-15)", () => {
+  const b64url = (text: string) => btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  type Options = { challenge: string; rp: { name: string; id: string }; user: { id: string; name: string; displayName: string } };
+
+  it("new passkeys are named GYM time; the RP ID and the user handle are unchanged", async () => {
+    const opts = (await (await new Client().post("/api/auth/register/options", { setup_token: env.SETUP_TOKEN })).json()) as Options;
+    expect(opts.rp).toEqual({ name: "GYM time", id: RP_ID });
+    expect(opts.user).toEqual({ id: b64url("lodge-gym-owner"), name: "GYM time", displayName: "GYM time" });
+  });
+
+  it("a passkey saved under the old name still signs in", async () => {
+    // Saved before the rename: the phone kept "Lodge Gym" as its labels. Sign-in checks the RP ID, the credential and
+    // the signature only, never the labels.
+    const c = new Client("203.0.113.11");
+    const auth = await new SoftAuthenticator().init();
+    const opts = (await (await c.post("/api/auth/register/options", { setup_token: env.SETUP_TOKEN })).json()) as Options;
+    const saved = { ...opts, rp: { ...opts.rp, name: "Lodge Gym" }, user: { ...opts.user, name: "Lodge Gym", displayName: "Lodge Gym" } };
+    expect((await c.post("/api/auth/register/verify", { setup_token: env.SETUP_TOKEN, response: await auth.register(saved) })).status).toBe(200);
+    const phone = new Client("203.0.113.12");
+    expect((await login(phone, auth)).status).toBe(200);
+    expect((await phone.fetch("/api/bootstrap")).status).toBe(200);
   });
 });
 
