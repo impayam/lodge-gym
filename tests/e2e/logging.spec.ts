@@ -10,6 +10,8 @@ test.beforeEach(async ({ context, baseURL }) => {
 });
 
 test("logs a full session in airplane mode; after reconnecting it is in D1 exactly once", async ({ page, context }) => {
+  // 19 sets through the set sheet, two reloads and a sync: 52–66 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
   await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await expect(page.getByText("Your first session: start with Day 1.")).toBeVisible();
