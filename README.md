@@ -336,6 +336,9 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   under / on / over status are `muscleRows` / `balanceStatus` from `worker/lib/reports.ts`, exactly as on the Reports
   screen (under below 80 % of the target, on from 80 % to 120 %, over above 120 %, none at 0 sets). Each tool result
   is drawn as a data card captioned "Numbers calculated by the app from your logs".
+- The 48-hour recovery rule is advice, never a ban: the coach names the group, the lift and the hours, offers options
+  (isolation or a lighter variation today, or the heavy lift another day) and leaves the choice to Payam. It never
+  refuses a request or removes an exercise because of it, and a draft keeps every exercise he asked for.
 - `propose_program` shows a draft card (ids not in the library are dropped and named). **Add to Planner** saves it as
   an inactive program (`generated_by = 'coach'`) under Me → Program → Drafts; approving it there is a separate tap.
   The active program is never changed by the coach.

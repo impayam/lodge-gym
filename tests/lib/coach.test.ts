@@ -211,7 +211,12 @@ describe("coach prompt", () => {
   it("carries Payam's 2026-10-15 rules", () => {
     expect(COACH_SYSTEM).toContain("under when its sets are below 80 % of the target, on from 80 % to 120 %, over above 120 %");
     expect(COACH_SYSTEM).toContain("every planned set had RIR 3 or more, the step is doubled");
-    expect(COACH_SYSTEM).toContain("no heavy compound lift for a muscle group within 48 hours");
+    // The 48-hour rule is advice: the coach explains with options and leaves the choice to him.
+    expect(COACH_SYSTEM).toContain("Recovery is advice, not a ban: a muscle group should get 48 hours between heavy compound lifts");
+    expect(COACH_SYSTEM).toContain("Chest had heavy bench 24 h ago: today prefer isolation or a lighter incline, or move heavy incline to tomorrow");
+    expect(COACH_SYSTEM).toContain("Then leave the choice to him. Never refuse a request and never remove an exercise because of this rule.");
+    expect(COACH_SYSTEM).toContain("Keep every exercise he asks for.");
+    expect(COACH_SYSTEM).not.toMatch(/no heavy compound/i);
     expect(COACH_SYSTEM).toContain("pulling volume at least equal to pushing volume");
     expect(COACH_SYSTEM).toContain("Me → Program → Drafts");
     expect(COACH_SYSTEM).not.toMatch(/Settings → Program/);

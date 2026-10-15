@@ -146,7 +146,7 @@ export const COACH_TOOLS = [
   },
   {
     name: "get_recovery",
-    description: "Recovery for the 48-hour rule, as the planner advice uses it: for each muscle group, his last heavy compound lift (a compound exercise done with load), its date and how many hours ago that session ended. Most recent first.",
+    description: "Recovery for the 48-hour rule (advice for him, never a reason to refuse or remove an exercise), as the planner advice uses it: for each muscle group, his last heavy compound lift (a compound exercise done with load), its date and how many hours ago that session ended. Most recent first.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   PROPOSE_PROGRAM_TOOL,
