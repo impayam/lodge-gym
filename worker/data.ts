@@ -116,7 +116,7 @@ export async function readProgramInfos(env: Env): Promise<ProgramInfo[]> {
     style: p.style,
     days_per_week: p.days_per_week,
     params: parseParams(p.params),
-    generated_by: p.generated_by === "seed" || p.generated_by === "generator" || p.generated_by === "session" ? p.generated_by : null,
+    generated_by: p.generated_by === "seed" || p.generated_by === "generator" || p.generated_by === "session" || p.generated_by === "coach" ? p.generated_by : null,
     created_at: p.created_at,
     approved_at: p.approved_at,
     archived_at: p.archived_at,

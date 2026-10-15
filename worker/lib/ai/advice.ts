@@ -53,6 +53,35 @@ export interface AdviceInput {
 
 const done = (d: ReportData) => d.sessions.filter((s) => s.status === "done");
 
+/** One row of the recovery list: the last heavy compound lift of a muscle group and how long ago it ended. */
+export interface HeavyCompound {
+  group: string;
+  date: string;
+  hours_ago: number;
+  exercise: string;
+}
+
+/**
+ * Recovery for the 48-hour rule, shared by the planner advice and the coach (get_recovery): per report group, the last
+ * heavy compound (a done compound set with load) over all of `sessions`, the most recent first. `now` is an instant.
+ */
+export function lastHeavyCompound(sessions: WorkoutSession[], ex: Map<string, Exercise>, now: string): HeavyCompound[] {
+  const heavy = new Map<string, { s: WorkoutSession; id: string }>();
+  for (const s of sessions) {
+    for (const x of s.sets) {
+      const e = ex.get(x.exercise_id);
+      if (!x.done || !e || e.mechanic !== "compound" || !x.weight || x.weight <= 0) continue;
+      const g = groupOf(e.muscle_primary);
+      if (!g) continue;
+      const prev = heavy.get(g);
+      if (!prev || prev.s.started_at < s.started_at) heavy.set(g, { s, id: e.id });
+    }
+  }
+  return [...heavy]
+    .map(([g, v]) => ({ group: GROUP_NAME[g] ?? g, date: v.s.local_date, hours_ago: Math.max(0, Math.round((Date.parse(now) - Date.parse(v.s.ended_at ?? v.s.started_at)) / 3_600_000)), exercise: ex.get(v.id)?.name_en ?? v.id }))
+    .sort((a, b) => a.hours_ago - b.hours_ago);
+}
+
 /**
  * The model's input for a planned session: the plan in order, the program day it came from, the last 14 days of done
  * sets, group volume (this week so far and the last 7 days) against the weekly targets, the last heavy compound per
@@ -103,21 +132,7 @@ export function buildAdviceInput(d: ReportData, plan: SessionPlan, library: Exer
     this_plan_adds: round1(adds[g] ?? 0),
   }));
 
-  // Recovery: the last heavy compound (a compound lift with load) per group, from all history.
-  const heavy = new Map<string, { s: WorkoutSession; id: string }>();
-  for (const s of sessions) {
-    for (const x of s.sets) {
-      const e = ex.get(x.exercise_id);
-      if (!x.done || !e || e.mechanic !== "compound" || !x.weight || x.weight <= 0) continue;
-      const g = groupOf(e.muscle_primary);
-      if (!g) continue;
-      const prev = heavy.get(g);
-      if (!prev || prev.s.started_at < s.started_at) heavy.set(g, { s, id: e.id });
-    }
-  }
-  const last_heavy_compound = [...heavy]
-    .map(([g, v]) => ({ group: GROUP_NAME[g] ?? g, date: v.s.local_date, hours_ago: Math.max(0, Math.round((Date.parse(now) - Date.parse(v.s.ended_at ?? v.s.started_at)) / 3_600_000)), exercise: name(v.id) }))
-    .sort((a, b) => a.hours_ago - b.hours_ago);
+  const last_heavy_compound = lastHeavyCompound(sessions, ex, now);
 
   const under = TARGET_GROUPS.filter((_, i) => volume[i].status_week_so_far === "under" || volume[i].status_week_so_far === "none");
   const candidates = candidateList(d, plan, [...ex.values()], under);
@@ -274,7 +289,7 @@ Rules:
 - Be honest and concise: 2–4 sentences of assessment, one sentence per suggestion.
 - Evaluate the plan against his recent training, using only the numbers in the input:
   - weekly volume per group against its weekly target (volume, with what this plan adds);
-  - recovery: no heavy compound for a muscle group within 48 hours of the last one (last_heavy_compound.hours_ago);
+  - recovery, as advice and never a ban: a muscle group should get 48 hours between heavy compound lifts (last_heavy_compound.hours_ago). When the plan puts a heavy compound for a group within 48 hours of the last one, say so with the hours and give options, e.g. "Chest had heavy bench 24 h ago: today prefer isolation or a lighter incline, or move heavy incline to tomorrow"; he chooses. Never suggest removing an exercise because of recovery;
   - order: heavy compounds first, isolation last;
   - balance: pulling volume at least equal to pushing volume.
 - Suggest complementary work only when it is needed, e.g. "chest today and triceps is under target this week, so add X after the presses".

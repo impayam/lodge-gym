@@ -1,6 +1,7 @@
+import { ProgramDrafts } from "../components/ProgramDrafts";
 import { useEffect, useState } from "preact/hooks";
 import { isValidTimeZone } from "../../../worker/lib/time";
-import type { ProgramInfo, Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
+import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
 import { dateLong, fmtNum, instantShort, plural } from "../format";
 import { fetchUsage, type AiUsage } from "../ai";
@@ -12,7 +13,7 @@ import { IconChevron, IconWatch } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
 import { LoadError, Loading } from "../components/States";
-import { loadProgramVersions, logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
+import { logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
 
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
 
@@ -181,15 +182,6 @@ function ProgramSettings() {
   const boot = useStore((s) => s.boot)!;
   const info = activeProgramInfo(boot);
   const since = info?.activations[info.activations.length - 1]?.started_at;
-  const [drafts, setDrafts] = useState<ProgramInfo[] | null>(null);
-  const [failure, setFailure] = useState<unknown>(null);
-  const [round, setRound] = useState(0);
-  useEffect(() => {
-    setFailure(null);
-    loadProgramVersions()
-      .then((list) => setDrafts(list.filter((p) => p.status === "draft")))
-      .catch((e) => setFailure(e));
-  }, [round]);
   return (
     <section class="card l-col l-gap-10" data-testid="program-settings" aria-label="Program">
       <div class="l-col">
@@ -199,28 +191,7 @@ function ProgramSettings() {
       <button type="button" class="clay press btn t-pink" data-testid="new-program" onClick={() => openProgramEditor()}>
         New program
       </button>
-      {/* Saved drafts, when there are any. */}
-      {drafts === null && failure !== null ? (
-        <LoadError what="Couldn't load your saved drafts." error={failure} onRetry={() => setRound((n) => n + 1)} />
-      ) : drafts === null ? (
-        <Loading label="Loading your saved drafts" heights={[56]} />
-      ) : null}
-      {drafts?.length ? (
-        <div class="l-col">
-          <h3 class="form-field__label l-m0">Drafts</h3>
-          {drafts.map((d) => (
-            <button type="button" class="list-row press" data-testid="open-draft" onClick={() => openProgramEditor(d.id)}>
-              <span class="list-row__text">
-                <span class="t-title">{d.name}</span>
-                <span class="caption num">Saved {instantShort(d.created_at, boot.settings.timezone)}</span>
-              </span>
-              <span class="list-row__chevron">
-                <IconChevron size={16} />
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <ProgramDrafts />
       <p class="caption l-m0">Past programs are in History, where you can switch back to one.</p>
     </section>
   );
@@ -256,6 +227,7 @@ export function AiSettings() {
             testid="ai-cost"
             value={`${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`}
           />
+          <Fact label="Coach this month" testid="ai-coach-cost" value={`${plural(u.coach.messages, "message")}, ~$${u.coach.cost_usd.toFixed(2)}`} />
           <Fact
             label="Today"
             value={`${fmtNum(u.today.reports)}/${fmtNum(u.limits.report)} reports · ${fmtNum(u.today.overviews)}/${fmtNum(u.limits.overview)} overviews · ${fmtNum(u.today.advice)}/${fmtNum(u.limits.advice)} advice`}

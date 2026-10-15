@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AdviceOutput, applySuggestion, buildAdviceInput, candidateList, CANDIDATES_PER_GROUP, undoSuggestion, validateAdvice, type AdviceSuggestion } from "../../worker/lib/ai/advice";
+import { ADVICE_SYSTEM, AdviceOutput, applySuggestion, buildAdviceInput, candidateList, CANDIDATES_PER_GROUP, undoSuggestion, validateAdvice, type AdviceSuggestion } from "../../worker/lib/ai/advice";
 import { groupItems, liveItems, planFromDay, seqIds, type SessionPlan } from "../../worker/lib/plan";
 import type { Exercise } from "../../worker/lib/types";
 import { program, reportData } from "../fixtures/report-data";
@@ -184,5 +184,14 @@ describe("applySuggestion / undoSuggestion", () => {
   it("does nothing when the suggestion no longer fits the plan", () => {
     expect(applySuggestion(plan(), s({ type: "remove", exercise_id: "tri_pushdown" }), T, "x")).toBeNull();
     expect(applySuggestion(plan(), s({ type: "add", exercise_id: "bench", position: 1, sets: 3 }), T, "x")).toBeNull();
+  });
+});
+
+describe("ADVICE_SYSTEM", () => {
+  it("the 48-hour rule is advice with options, never a ban and never a reason to remove an exercise (Payam, 2026-10-15)", () => {
+    expect(ADVICE_SYSTEM).toContain("recovery, as advice and never a ban: a muscle group should get 48 hours between heavy compound lifts");
+    expect(ADVICE_SYSTEM).toContain("Chest had heavy bench 24 h ago: today prefer isolation or a lighter incline, or move heavy incline to tomorrow");
+    expect(ADVICE_SYSTEM).toContain("he chooses. Never suggest removing an exercise because of recovery");
+    expect(ADVICE_SYSTEM).not.toMatch(/no heavy compound/i);
   });
 });

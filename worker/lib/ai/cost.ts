@@ -3,14 +3,32 @@
 
 import { localDate } from "../time";
 
-/** USD per million tokens (price check 2026-10-12: Opus 5.5 $4 input, $20 output). */
-export const PRICES: Readonly<Record<string, { input: number; output: number }>> = {
-  "claude-opus-5-5": { input: 4, output: 20 },
-  "claude-opus-5": { input: 5, output: 25 },
-  "claude-opus-4-8": { input: 5, output: 25 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
-  "claude-fable-5-1": { input: 10, output: 50 },
+/**
+ * USD per million tokens. Price checks: 2026-10-12 (input, output) and 2026-10-14 for the coach's cache prices
+ * (5-minute cache write 1.25 × input; cache read 0.1 × input, except Opus 5.5 at 0.05 × input = $0.20).
+ */
+export const PRICES: Readonly<Record<string, { input: number; output: number; cache_write: number; cache_read: number }>> = {
+  "claude-opus-5-5": { input: 4, output: 20, cache_write: 5, cache_read: 0.2 },
+  "claude-opus-5": { input: 5, output: 25, cache_write: 6.25, cache_read: 0.5 },
+  "claude-opus-4-8": { input: 5, output: 25, cache_write: 6.25, cache_read: 0.5 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cache_write: 2.5, cache_read: 0.2 },
+  "claude-fable-5-1": { input: 10, output: 50, cache_write: 12.5, cache_read: 0.25 },
 };
+
+/** Token counts of one call as the API returns them (input_tokens excludes cache reads and writes). */
+export interface CallTokens {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+}
+
+/** Cost of one call with prompt caching (the coach), or null for a model without a known price. */
+export function callCostUsd(model: string, t: CallTokens): number | null {
+  const p = PRICES[model];
+  if (!p) return null;
+  return (t.input_tokens * p.input + t.output_tokens * p.output + t.cache_write_tokens * p.cache_write + t.cache_read_tokens * p.cache_read) / 1_000_000;
+}
 
 /** SPEC-v3: 10 session reports and 20 plan advice per day; SPEC-v7: 10 training overviews per day. */
 export const DAILY_LIMIT = { report: 10, advice: 20, overview: 10 } as const;
@@ -35,6 +53,8 @@ export interface AiUsage {
   month: MonthUsage;
   today: { reports: number; advice: number; overviews: number };
   limits: typeof DAILY_LIMIT;
+  /** This month's coach questions and the cost of every coach call (SPEC-v9 M12 §7; no limit). */
+  coach: { messages: number; cost_usd: number };
 }
 
 /** Cost of one call, or null for a model without a known price. */
