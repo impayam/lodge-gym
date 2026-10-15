@@ -77,6 +77,21 @@ export function resetWorkouts() {
   sql("DELETE FROM training_overviews; DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
 }
 
+/**
+ * Waits until no training overview is queued (SPEC-v7 M9d). A session finished by an earlier spec queues its report and
+ * then the overview in the AI jobs Durable Object, which a database reset does not touch: on a busy machine that
+ * overview is still waiting, or is written after the reset, when the next spec starts.
+ */
+export async function aiJobsIdle(context: BrowserContext, baseURL: string, timeout = 90_000) {
+  const until = Date.now() + timeout;
+  for (;;) {
+    const r = await context.request.get(`${baseURL}/api/overview`);
+    if (r.ok() && !((await r.json()) as { pending: boolean }).pending) return;
+    if (Date.now() > until) throw new Error(`AI jobs still queued after ${timeout} ms`);
+    await new Promise((done) => setTimeout(done, 500));
+  }
+}
+
 /** The seed program active again; versions made by the generator (M8) or by Apply to program (M9c) go. */
 export function resetPrograms() {
   const made = "SELECT id FROM programs WHERE generated_by IN ('generator', 'session')";
