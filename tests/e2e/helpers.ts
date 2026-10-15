@@ -1,13 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { currentSlot } from "./slot";
 
-/** Local D1 of the server the current project talks to (see scripts/e2e-server.mjs). */
-const persist = () => (test.info().project.name.startsWith("webkit") ? ".wrangler/e2e-https" : ".wrangler/e2e");
-
-/** Runs SQL against the e2e Worker's local D1. */
+/** Runs SQL against the local D1 of the Worker this test talks to (its worker's own, see scripts/e2e-slots.mjs). */
 export function sql(command: string): unknown[] {
-  const out = execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--persist-to", persist(), "--json", "--command", command], {
+  const out = execFileSync("npx", ["wrangler", "d1", "execute", "DB", "--local", "--persist-to", currentSlot().persist, "--json", "--command", command], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   });
@@ -15,10 +13,9 @@ export function sql(command: string): unknown[] {
   return parsed[0]?.results ?? [];
 }
 
-const PROXY = `http://localhost:${process.env.E2E_PROXY_PORT ?? "8790"}`;
 const isWebKit = () => test.info().project.name.startsWith("webkit");
 const network = async (offline: boolean) => {
-  const res = await fetch(`${PROXY}/__network?offline=${offline ? 1 : 0}`, { headers: { Connection: "close" } });
+  const res = await fetch(`${currentSlot().proxy}/__network?offline=${offline ? 1 : 0}`, { headers: { Connection: "close" } });
   if (((await res.json()) as { offline: boolean }).offline !== offline) throw new Error("e2e proxy did not switch");
 };
 
@@ -79,14 +76,12 @@ export async function waitForSynced(page: Page) {
   await chip.filter({ hasText: "Synced" }).waitFor();
 }
 
-const AI_MOCK = `http://127.0.0.1:${process.env.E2E_AI_PORT ?? "8791"}`;
-
 type AiAnswer = "ok" | "fail" | "auth";
 
 /** Switches the mock model's answers (scripts/e2e-ai-mock.mjs): ok, fail (API error) or auth (expired key). */
 export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer }) {
   const q = new URLSearchParams(mode as Record<string, string>);
-  const res = await fetch(`${AI_MOCK}/__mode?${q}`, { headers: { Connection: "close" } });
+  const res = await fetch(`${currentSlot().ai}/__mode?${q}`, { headers: { Connection: "close" } });
   if (!res.ok) throw new Error("AI mock did not switch");
 }
 
@@ -100,7 +95,7 @@ interface AiCall {
 
 /** Calls the mock model received, the last one, and the last one of each kind. */
 export async function aiCalls(): Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }> {
-  return (await fetch(`${AI_MOCK}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
+  return (await fetch(`${currentSlot().ai}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
 }
 
 /** Where goTo can go: a tab, or a screen inside Me (SPEC-v8 §5). */

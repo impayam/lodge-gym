@@ -23,7 +23,7 @@ tests/         lib/ + worker/ (Vitest in workerd), e2e/ (Playwright)
 | `npm run dev` | Rebuilds the PWA on change and runs `wrangler dev` with local D1/R2 on http://localhost:8787 (first: `npm run db:migrate:local && npm run seed:local`, and copy `.dev.vars.example` to `.dev.vars`) |
 | `npm run build` | Checks `seed/seed.sql` is current, builds the PWA into `dist/` |
 | `npm test` | Vitest: pure logic + Worker API in workerd |
-| `npm run e2e` | Playwright, iPhone 15 profile: WebKit against a local HTTPS server (:8789, self-signed, through the airplane-mode proxy on :8790 and a persistent context) and Chromium against HTTP (:8788); see `scripts/e2e-server.mjs`, `scripts/e2e-proxy.mjs`, `tests/e2e/fixtures.ts` |
+| `npm run e2e` | Playwright, iPhone 15 profile: WebKit against a local HTTPS server (self-signed, through the airplane-mode proxy and a persistent context) and Chromium against HTTP. Runs in parallel: `E2E_WORKERS` workers (default 4), each with its own servers and local D1/R2, so no two workers share data (`E2E_WORKERS=1` runs one test at a time; `npm run e2e -- tests/e2e/library.spec.ts` runs one file). See `scripts/e2e-slots.mjs` (ports from `E2E_PORT_BASE`, default 8788), `scripts/e2e-server.mjs`, `scripts/e2e-proxy.mjs`, `tests/e2e/fixtures.ts` |
 | `npm run db:migrate:local` / `:remote` | Apply D1 migrations |
 | `npm run seed:local` / `:remote` | Insert the seed rows a database is missing (insert-only: never changes the active program, approvals, archives or activations) |
 | `npm run deploy` | Build, migrate + seed remote D1, `wrangler deploy` |
