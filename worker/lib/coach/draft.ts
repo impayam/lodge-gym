@@ -123,7 +123,16 @@ export type ProposeResult =
   | {
       ok: true;
       draft: CleanDraft;
-      result: { shown: true; draft_id: string; days: number; exercises: number; dropped: Dropped[]; weekly_sets: { group: string; name: string; planned: number; current_target: number }[] };
+      result: {
+        shown: true;
+        draft_id: string;
+        days: number;
+        exercises: number;
+        /** The English name of every kept exercise; the card shows names, and the phone may not have the library. */
+        names: Record<string, string>;
+        dropped: Dropped[];
+        weekly_sets: { group: string; name: string; planned: number; current_target: number }[];
+      };
     }
   | { ok: false; error: string };
 
@@ -168,6 +177,7 @@ export function proposeProgram(d: Pick<ReportData, "exercises" | "program" | "pr
       draft_id: draftId,
       days: days.length,
       exercises: days.reduce((a, x) => a + x.exercises.length, 0),
+      names: Object.fromEntries(days.flatMap((day) => day.exercises.map((x) => [x.exercise_id, ex.get(x.exercise_id)!.name_en]))),
       dropped,
       weekly_sets: TARGET_GROUPS.map((g) => ({ group: g, name: GROUP_NAME[g], planned: round1(planned[g]), current_target: round1(targets[g] ?? 0) })),
     },

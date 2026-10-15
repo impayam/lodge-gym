@@ -20,7 +20,7 @@ import { readProgramVersions, readSettings } from "./data";
 import { contextBlock } from "./lib/coach/prompt";
 import { contextWindow, nextStamp, type StoredBlock } from "./lib/coach/context";
 import { draftDayRows, proposeProgram, type CleanDraft } from "./lib/coach/draft";
-import { coachContextOf, readThreadRows } from "./coachTurn";
+import { coachContextOf, loadCoachData, readThreadRows } from "./coachTurn";
 import { isJpeg, stripJpegMetadata } from "./lib/jpeg";
 import { activeSince, programOn } from "./lib/reports";
 import { programName } from "./lib/programRules";
@@ -230,7 +230,7 @@ coachRoutes.post("/drafts", async (c) => {
   if (!draftId || !ID_RE.test(draftId)) return fail(c, 409, "invalid_draft", "This draft was not valid.");
   const known = (await readProgramVersions(c.env, [draftId]))[0];
   if (known) return c.json({ ok: true, program_id: draftId, existed: true });
-  const d = await loadReportData(c.env);
+  const d = await loadCoachData(c.env);
   const out = proposeProgram(d, call.input, draftId);
   if (!out.ok) return fail(c, 409, "invalid_draft", "This draft is no longer valid.");
   await saveDraft(c.env, draftId, out.draft);

@@ -16,6 +16,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "./env";
 import { aiTransport, effortOf, type Effort } from "./ai";
 import { loadReportData } from "./reports";
+import { mapExercise } from "./data";
+import type { ReportData } from "./lib/reports";
 import { callCostUsd, type CallTokens } from "./lib/ai/cost";
 import { COACH_SYSTEM } from "./lib/coach/prompt";
 import { COACH_TOOLS, runTool, type CoachData } from "./lib/coach/tools";
@@ -110,6 +112,16 @@ function base64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
+/**
+ * The coach's data: the report data with the whole exercise library, as the Library tab and the planner advice have
+ * it. The bootstrap set (program, logged, seed and custom exercises) would hide the rest of the library from
+ * get_library and make propose_program drop it. Report numbers are the same: they only look up exercises in use.
+ */
+export async function loadCoachData(env: Env): Promise<ReportData> {
+  const [d, library] = await Promise.all([loadReportData(env), env.DB.prepare("SELECT * FROM exercises").all<Record<string, unknown>>()]);
+  return { ...d, exercises: library.results.map(mapExercise) };
+}
+
 /** The system prompt and the tools, with one cache breakpoint after them (tools come first in the cached prefix). */
 const SYSTEM: Anthropic.Beta.BetaTextBlockParam[] = [{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }];
 const TOOLS = COACH_TOOLS as unknown as Anthropic.Beta.BetaToolUnion[];
@@ -159,7 +171,7 @@ export async function runCoachTurn(env: Env, threadId: string, emit: (e: CoachEv
     .slice(rows.findIndex((r) => r.id === history[lastQuestion].id))
     .reduce<number | null>((a, r) => (r.role === "assistant" && r.cost_usd != null ? (a ?? 0) + r.cost_usd : a), null);
 
-  const report = await loadReportData(env);
+  const report = await loadCoachData(env);
   const data: CoachData = { ...report, today: localDate(report.settings.timezone), now: new Date().toISOString() };
   const client = new Anthropic({
     apiKey: key,

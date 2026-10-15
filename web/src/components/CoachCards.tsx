@@ -6,7 +6,7 @@ import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { errorText } from "../api";
 import { dayMonth, fmtNum } from "../format";
-import { navigate } from "../store";
+import { allExercises, navigate, refresh } from "../store";
 import { Bars } from "./Bars";
 import { Columns } from "./Columns";
 import { TimeChart } from "./TimeChart";
@@ -56,7 +56,7 @@ type Body = { unit: string; days: { date: string; value: number }[]; latest: { v
 type Photos = { total: number; photos: { id: string; date: string; pose: string; after_session: string | null }[] };
 type Recovery = { groups: { group: string; date: string; hours_ago: number; exercise: string }[] };
 type Draft = { name: string; summary_fa?: string; days: ProgramDay[] };
-type DraftResult = { draft_id: string; dropped: { exercise_id: string }[]; weekly_sets: { group: string; name: string; planned: number; current_target: number }[] };
+type DraftResult = { draft_id: string; names?: Record<string, string>; dropped: { exercise_id: string }[]; weekly_sets: { group: string; name: string; planned: number; current_target: number }[] };
 
 const setText = (s: SetRow) => (s.seconds != null && s.reps == null ? `${fmtNum(s.seconds)} s` : `${s.weight == null ? "" : `${fmtNum(s.weight)}×`}${fmtNum(s.reps ?? 0)}${s.weight == null ? " reps" : ""}`) + (s.rir == null ? "" : ` RIR ${s.rir >= 3 ? "3+" : s.rir}`);
 const reps = (x: { reps_min: number; reps_max: number; is_time?: boolean }) => `${x.reps_min === x.reps_max ? fmtNum(x.reps_max) : `${fmtNum(x.reps_min)}–${fmtNum(x.reps_max)}`}${x.is_time ? " s" : ""}`;
@@ -82,7 +82,11 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
   const [state, setState] = useState<"idle" | "busy" | "added">("idle");
   const [problem, setProblem] = useState<string | null>(null);
   const dropped = new Set(result.dropped.map((x) => x.exercise_id));
-  const days = input.days.map((d) => ({ ...d, exercises: d.exercises.filter((x) => !dropped.has(x.exercise_id)) })).filter((d) => d.exercises.length);
+  const known = allExercises();
+  const nameOf = (id: string) => result.names?.[id] ?? known.get(id)?.name_en ?? id;
+  const days = input.days
+    .map((d) => ({ ...d, exercises: d.exercises.filter((x) => !dropped.has(x.exercise_id)).map((x) => ({ ...x, name: nameOf(x.exercise_id) })) }))
+    .filter((d) => d.exercises.length);
   const chest = result.weekly_sets.find((g) => g.group === "chest");
   const add = async () => {
     setState("busy");
@@ -90,6 +94,8 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
     try {
       await onAdd(messageId, toolUseId);
       setState("added");
+      // The draft's exercises are now in a program, so the bootstrap carries them for the Drafts screen, offline too.
+      void refresh().catch(() => undefined);
     } catch (e) {
       setProblem(errorText(e));
       setState("idle");

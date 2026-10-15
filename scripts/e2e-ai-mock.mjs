@@ -171,7 +171,7 @@ export function startAiMock(port) {
             name: "Chest focus · 2 days",
             summary_fa: "سینه دو بار در هفته با یک حرکت اصلی سنگین در روز اول.",
             days: [
-              { name: "Day 1 · Chest", exercises: [{ exercise_id: "bench", sets: 4, reps_min: 5, reps_max: 5, rest_sec: 180, is_main: true }, { exercise_id: "fly", sets: 3, reps_min: 10, reps_max: 12, rest_sec: 60, group: "A" }, { exercise_id: "lateral", sets: 3, reps_min: 12, reps_max: 15, rest_sec: 60, group: "A" }] },
+              { name: "Day 1 · Chest", exercises: [{ exercise_id: "bench", sets: 4, reps_min: 5, reps_max: 5, rest_sec: 180, is_main: true }, { exercise_id: "fly", sets: 3, reps_min: 10, reps_max: 12, rest_sec: 60, group: "A" }, { exercise_id: "lateral", sets: 3, reps_min: 12, reps_max: 15, rest_sec: 60, group: "A" }, { exercise_id: "fedb-Dumbbell_Flyes", sets: 3, reps_min: 10, reps_max: 12, rest_sec: 60 }] },
               { name: "Day 2 · Legs", exercises: [{ exercise_id: "squat", sets: 4, reps_min: 5, reps_max: 5, rest_sec: 180, is_main: true }, { exercise_id: "hack_squat_machine", sets: 3, reps_min: 8, reps_max: 10, rest_sec: 120 }] },
             ],
           }),

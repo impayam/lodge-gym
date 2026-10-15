@@ -117,6 +117,10 @@ test("a program draft card: Change prefills the question; Add to Planner saves a
   const draft = page.getByTestId("coach-draft");
   await expect(draft).toContainText("Chest focus · 2 days");
   await expect(draft).toContainText("Left out (not in the library): hack_squat_machine");
+  // Exercises by their English names, never by id.
+  // Dumbbell Flyes is only in the library (not on the phone): its name comes with the draft.
+  await expect(draft).toContainText("Barbell Bench Press 4 × 5, A Cable Chest Fly 3 × 10–12, A Dumbbell Lateral Raise 3 × 12–15, Dumbbell Flyes 3 × 10–12");
+  await expect(draft).toContainText("Barbell Back Squat 4 × 5");
   await expect(draft.locator('[dir="rtl"]')).toContainText("سینه دو بار در هفته");
 
   await draft.getByTestId("coach-change-draft").click();
@@ -135,7 +139,9 @@ test("a program draft card: Change prefills the question; Add to Planner saves a
   await drafts.getByTestId("open-draft").filter({ hasText: "Chest focus · 2 days" }).click();
   const screen = page.getByTestId("coach-draft-screen");
   await expect(screen).toContainText("Day 1 · Chest");
-  await expect(screen.getByTestId("coach-draft-exercise")).toHaveCount(4);
+  await expect(screen.getByTestId("coach-draft-exercise")).toHaveCount(5);
+  await expect(screen.getByTestId("coach-draft-exercise").first()).toContainText("Barbell Bench Press");
+  await expect(screen.getByTestId("coach-draft-exercise").nth(3)).toContainText("Dumbbell Flyes");
   await expect(screen.getByTestId("coach-draft-approve")).toBeVisible();
 });
 

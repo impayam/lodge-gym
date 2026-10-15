@@ -119,6 +119,8 @@ describe("propose_program", () => {
     if (!r.ok) return;
     expect(r.result.dropped).toEqual([{ day: "Day 1 · Chest", exercise_id: "hack_squat_machine", reason: "not in the library" }]);
     expect(r.draft.days[0].exercises.map((x) => [x.exercise_id, x.group ?? null])).toEqual([["bench", null], ["fly", null]]);
+    // The English names of the kept exercises, for the card (the phone may not have the library).
+    expect(r.result.names).toEqual({ bench: d.exercises.find((e) => e.id === "bench")!.name_en, fly: d.exercises.find((e) => e.id === "fly")!.name_en });
     expect(r.result.weekly_sets.find((g) => g.group === "chest")!.planned).toBe(6);
   });
 

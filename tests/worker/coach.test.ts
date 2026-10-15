@@ -187,6 +187,13 @@ describe("coach answers (SPEC-v9 M12)", () => {
 });
 
 describe("program drafts", () => {
+  /** A library exercise that is in no program and has no logged sets, so the bootstrap does not carry it. */
+  async function libraryOnly(id: string, name: string) {
+    const cols = (await env.DB.prepare("SELECT name FROM pragma_table_info('exercises')").all<{ name: string }>()).results.map((r) => r.name);
+    const value: Record<string, string> = { id: `'${id}'`, name_en: `'${name}'`, source: "'fedb'", source_id: `'${id}'`, archived_at: "NULL" };
+    await env.DB.prepare(`INSERT INTO exercises (${cols.join(", ")}) SELECT ${cols.map((c) => value[c] ?? c).join(", ")} FROM exercises WHERE id = 'fly'`).run();
+  }
+
   const draft = {
     name: "Chest focus · 2 days",
     summary_fa: "سینه دو بار در هفته.",
@@ -195,6 +202,33 @@ describe("program drafts", () => {
       { name: "Day 2 · Legs", exercises: [{ exercise_id: "squat", sets: 4, reps_min: 5, reps_max: 5, rest_sec: 180, is_main: true }, { exercise_id: "hack_squat_machine", sets: 3, reps_min: 8, reps_max: 10, rest_sec: 120 }] },
     ],
   };
+
+  it("the coach sees the whole library: get_library finds an exercise the phone does not carry, and a draft keeps it with its name", async () => {
+    await libraryOnly("fedb-Dumbbell_Flyes", "Dumbbell Flyes");
+    const boot = (await (await client.fetch("/api/bootstrap")).json()) as { exercises: { id: string }[] };
+    expect(boot.exercises.some((e) => e.id === "fedb-Dumbbell_Flyes")).toBe(false);
+    const withFlyes = { name: "Chest", days: [{ name: "Day 1 · Chest", exercises: [{ exercise_id: "bench", sets: 4, reps_min: 5, reps_max: 5, rest_sec: 180, is_main: true }, { exercise_id: "fedb-Dumbbell_Flyes", sets: 3, reps_min: 10, reps_max: 12, rest_sec: 60 }] }] };
+    mock = mockAnthropicStream([
+      { blocks: [{ type: "tool_use", id: "toolu_l", name: "get_library", input: { query: "dumbbell flyes" } }] },
+      { blocks: [{ type: "tool_use", id: "toolu_p", name: "propose_program", input: withFlyes }] },
+      { blocks: [{ type: "text", text: "Here is the draft." }] },
+    ]);
+    const ev = await ask(ulid(), "Add dumbbell flyes to a chest day");
+    const cards = ev.filter((e): e is Extract<CoachEvent, { type: "card" }> => e.type === "card");
+    expect((cards[0].result as { exercises: { id: string; name: string }[] }).exercises).toContainEqual(expect.objectContaining({ id: "fedb-Dumbbell_Flyes", name: "Dumbbell Flyes" }));
+    const result = cards[1].result as { draft_id: string; dropped: unknown[]; names: Record<string, string> };
+    expect(result.dropped).toEqual([]);
+    expect(result.names).toEqual({ bench: "Barbell Bench Press", "fedb-Dumbbell_Flyes": "Dumbbell Flyes" });
+
+    // Add to Planner checks the draft against the same library and saves both exercises.
+    const res = await client.post("/api/coach/drafts", { message_id: cards[1].message_id, tool_use_id: cards[1].tool_use_id });
+    expect(res.status).toBe(200);
+    const saved = await env.DB.prepare("SELECT de.exercise_id FROM day_exercises de JOIN program_days d ON d.id = de.day_id WHERE d.program_id = ? ORDER BY de.position").bind(result.draft_id).all();
+    expect(saved.results).toEqual([{ exercise_id: "bench" }, { exercise_id: "fedb-Dumbbell_Flyes" }]);
+    // Now in a program, the bootstrap carries it for the Drafts screen.
+    const after = (await (await client.fetch("/api/bootstrap")).json()) as { exercises: { id: string }[] };
+    expect(after.exercises.some((e) => e.id === "fedb-Dumbbell_Flyes")).toBe(true);
+  });
 
   it("drops ids not in the library; Add to Planner saves an inactive coach draft, never touches the active program, and twice is the same draft", async () => {
     mock = mockAnthropicStream([{ blocks: [{ type: "tool_use", id: "toolu_d", name: "propose_program", input: draft }] }, { blocks: [{ type: "text", text: "Here is the draft." }] }]);
