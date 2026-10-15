@@ -61,7 +61,8 @@ describe("property: every style × days × session length × 50 seeds (§8.8)", 
     for (const [style, dayList] of Object.entries(ALLOWED_DAYS) as [ResolvedStyle, readonly number[]][])
       for (const days of dayList) {
         if (style === "strength" && equipment !== "full_gym") continue;
-        it(`${equipment} ${style} ${days} days`, () => {
+        // 150 generated programs per case, 1–4 s each run; a busy machine can pass the default 5 s.
+        it(`${equipment} ${style} ${days} days`, { timeout: 30_000 }, () => {
           for (const session_minutes of SESSION_MINUTES)
             for (const seed of SEEDS) {
               const p = generateProgram({ days_per_week: days, style, session_minutes, priority_muscles: ["chest"], avoid: [], equipment, seed }, ctx);
