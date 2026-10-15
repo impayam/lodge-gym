@@ -105,7 +105,7 @@ test("a question streams: the coach's progress note in the typing line, the app'
   await page.reload();
   await page.getByRole("button", { name: "Ask the coach" }).click();
   await page.getByTestId("coach-chats").click();
-  await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).locator("button").first().click();
+  await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).getByTestId("coach-thread-open").click();
   await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
   await expect(page.locator('[data-card="get_volume"]')).toBeVisible();
 });
@@ -190,7 +190,7 @@ test("offline: the composer needs a connection and a saved chat is still readabl
   await expect(page.getByTestId("coach-input")).toBeDisabled();
   await expect(page.getByTestId("coach-input")).toHaveAttribute("placeholder", "Needs connection");
   await page.getByTestId("coach-chats").click();
-  await page.getByTestId("coach-thread").locator("button").first().click();
+  await page.getByTestId("coach-thread").getByTestId("coach-thread-open").click();
   await expect(page.getByTestId("coach-offline")).toBeVisible();
   await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
   await setOffline(context, page, false);
@@ -269,7 +269,7 @@ test.describe("moving to another chat while an answer finishes", () => {
     await expect(page.getByTestId("coach-question")).toHaveCount(1);
 
     await page.getByTestId("coach-chats").click();
-    await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).locator("button").first().click();
+    await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).getByTestId("coach-thread-open").click();
     await expect(page.getByTestId("coach-answer")).toHaveCount(1);
     await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
   });

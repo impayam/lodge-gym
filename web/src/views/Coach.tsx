@@ -615,11 +615,13 @@ function ThreadList({ archived, onOpen, onArchived, current, onDeletedCurrent }:
         <div class="card card--list">
           {threads.map((t) => (
             <div class="list-row" data-testid="coach-thread">
-              <button type="button" class="list-row__text press" onClick={() => onOpen(t.id)}>
-                <span {...textProps(t.title, "t-title")}>
-                  {t.title}
+              <button type="button" class="ex-row__main press" data-testid="coach-thread-open" onClick={() => onOpen(t.id)}>
+                <span class="list-row__text">
+                  <span {...textProps(t.title, "t-title")}>
+                    {t.title}
+                  </span>
+                  <span class="caption num">{instantShort(t.updated_at, tz)}</span>
                 </span>
-                <span class="caption num">{instantShort(t.updated_at, tz)}</span>
               </button>
               {archived ? (
                 <span class="l-row l-gap-8">
