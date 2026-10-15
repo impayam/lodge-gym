@@ -7,8 +7,12 @@
 //   B+6i+4, B+6i+5            the two Workers' devtools ports (wrangler's default, 9229, would race between them)
 // E2E_WORKERS is both the number of Playwright workers and the number of slots the e2e server starts.
 
-/** Playwright workers and server slots (default 4; E2E_WORKERS=1 runs the suite one test at a time). */
-export const WORKERS = Number(process.env.E2E_WORKERS ?? 4);
+/**
+ * Playwright workers and server slots. Default 2: measured on the 4-core dev machine (2026-10-15), 2 workers run the
+ * suite in 20 min with every test passing; 4 make WebKit tests run out of time (one WebKit page uses up to ~2.7
+ * cores). E2E_WORKERS=1 runs the suite one test at a time.
+ */
+export const WORKERS = Number(process.env.E2E_WORKERS ?? 2);
 const PORT_BASE = Number(process.env.E2E_PORT_BASE ?? 8788);
 
 /** Ports and local storage of slot i. */

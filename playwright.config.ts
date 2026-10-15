@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import { WORKERS } from "./scripts/e2e-slots.mjs";
 
-// The suite runs in parallel: E2E_WORKERS workers (default 4), each with its own servers and local D1/R2
+// The suite runs in parallel: E2E_WORKERS workers (default 2), each with its own servers and local D1/R2
 // (scripts/e2e-slots.mjs, started by scripts/e2e-server.mjs), so no two workers share data. A spec file runs whole, in
 // order, on one worker. Every worker has two Workers: Chromium uses the HTTP one, WebKit the HTTPS one with wrangler's
 // self-signed certificate. WebKit does not send Secure / __Host- cookies over http://localhost, and Chromium does not
