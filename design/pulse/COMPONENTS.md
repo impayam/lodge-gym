@@ -191,7 +191,7 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 ```html
 <label class="search-field well"><svg>…</svg><input class="search-field__input" type="search" placeholder="Search exercises"></label>
 <div class="chip-wrap"><button class="clay press chip" aria-pressed="true">Chest</button>…</div>          <!-- chip--lg: the picker's body parts -->
-<button class="card press ex-row"><span class="well icon-well icon-well--52 t-pink">…</span><span class="list-row__text">…</span>
+<button class="card press ex-row"><span class="well icon-well icon-well--52 t-violet">…</span><span class="list-row__text">…</span>
   <span class="ex-row__side"><span class="big-num big-num--22">166</span><span class="caption">est. 1RM</span></span></button>
 <span class="well icon-well icon-well--off">…</span>                                                  <!-- not logged yet -->
 <div class="stage stage--picker">…</div>
@@ -200,6 +200,8 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 <fieldset class="form-field"><legend class="form-field__label">Secondary muscles</legend><div class="chip-wrap"><label class="check-chip"><input type="checkbox">Lats</label>…</div></fieldset>
 <label class="clay press btn btn--fit t-muted file-pick"><input type="file" accept="image/*">Choose photo</label>
 ```
+- An exercise row's icon is violet (`t-violet`, data) once the exercise has been logged and grey (`icon-well--off`)
+  until then; no other accent (Payam, 2026-10-15).
 - `.ex-row__main` is the tappable part of a row that also holds another button (the form video in the body picker).
 - `.file-pick` hides the native file control inside a clay button; the chosen file name is shown beside it.
 

@@ -26,6 +26,11 @@ test("library: search, filters, detail with media, muscles, instructions, form v
   await expect(list.getByTestId("library-count")).toHaveText("All exercises");
   await list.getByTestId("group-chest").click();
   await expect(list.getByTestId("library-count")).toHaveText(/^Chest, \d+ exercises$/);
+  // A logged exercise's icon is violet (data); one never logged is grey; no other accent (Payam, 2026-10-15).
+  const icon = (id: string) => list.locator(`[data-testid="library-row"][data-id="${id}"] .icon-well`);
+  await expect(icon("bench")).toHaveClass(/(^| )t-violet( |$)/);
+  await expect(icon("incline_bb")).toHaveClass(/(^| )icon-well--off( |$)/);
+  await expect(list.locator('[data-testid="library-row"] .icon-well:is(.t-pink, .t-orange)')).toHaveCount(0);
   await list.getByTestId("group-all").click();
   await list.getByRole("searchbox", { name: "Search exercises" }).fill("trap bar");
   await expect(list.getByTestId("library-row")).toHaveCount(1);

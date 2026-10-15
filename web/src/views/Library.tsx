@@ -92,17 +92,17 @@ export function EquipmentIcon({ equipment, size = 26 }: { equipment: Exercise["e
   return <Icon size={size} />;
 }
 
-/** Logged rows take the accents in turn (mockup 05); a row not logged yet stays grey. */
-const ROW_TINT = ["t-pink", "t-violet", "t-orange"];
-
 /** "Chest, front delts, triceps": the main muscle, then the others. */
 const musclesLine = (ex: Exercise) => [muscleLabel(ex.muscle_primary), ...ex.muscles_secondary.map((m) => muscleLabel(m).toLowerCase())].join(", ");
 
-/** An exercise as a row card (mockup 05): equipment icon, name, muscles, and its number on the right. */
-function ExerciseRow({ ex, fact, i, onOpen, testId = "library-row" }: { ex: Exercise; fact: RowFact | undefined; i: number; onOpen: () => void; testId?: string }) {
+/**
+ * An exercise as a row card (mockup 05): equipment icon, name, muscles, and its number on the right. The icon is violet
+ * (data) when the exercise has been logged and grey when it has not (Payam, 2026-10-15).
+ */
+function ExerciseRow({ ex, fact, onOpen, testId = "library-row" }: { ex: Exercise; fact: RowFact | undefined; onOpen: () => void; testId?: string }) {
   return (
     <button type="button" class="card press ex-row" data-testid={testId} data-id={ex.id} onClick={onOpen}>
-      <span class={`well icon-well icon-well--52 ${fact ? ROW_TINT[i % ROW_TINT.length] : "icon-well--off"}`}>
+      <span class={`well icon-well icon-well--52 ${fact ? "t-violet" : "icon-well--off"}`}>
         <EquipmentIcon equipment={ex.equipment} />
       </span>
       <span class="list-row__text">
@@ -244,8 +244,8 @@ export function ExerciseList({
         <Loading label="Loading the library" />
       ) : (
         <>
-          {list.slice(0, limit).map((ex, i) => (
-            <ExerciseRow ex={ex} fact={facts.get(ex.id)} i={i} onOpen={() => onOpen(ex)} />
+          {list.slice(0, limit).map((ex) => (
+            <ExerciseRow ex={ex} fact={facts.get(ex.id)} onOpen={() => onOpen(ex)} />
           ))}
           {list.length > limit ? (
             <button type="button" class="clay press btn t-muted" onClick={() => setLimit(limit + PAGE)}>
