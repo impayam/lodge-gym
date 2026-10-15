@@ -4,9 +4,32 @@ import { goTo, openMore, resetWorkouts, signIn } from "./helpers";
 
 // SPEC-v8 §10: an axe contrast check on all screens. Axe cannot judge text drawn over the library's gradients (card,
 // clay and page fills) and reports it as "incomplete", so every screen is also measured as drawn: each run of text
-// against the pixels behind it (text hidden), scrolled through the whole page. WCAG AA: 4.5:1, or 3:1 for large text
-// (24 px, or 18.66 px bold). Disabled controls and text passing under the fixed tab bar or Coach button are left out.
+// against the pixels behind it (text hidden), scrolled through the whole page. Every run must reach 4.5:1, apart from
+// the two cases Payam accepted below. Disabled controls and text passing under the fixed tab bar or Coach button are
+// left out (they are measured where nothing covers them).
 test.describe.configure({ mode: "default" });
+
+const NEED = 4.5;
+
+/**
+ * Known cases kept as designed (Payam, 2026-10-15), each with the lowest contrast allowed and what was measured.
+ * Anything else below 4.5:1 fails.
+ */
+const KNOWN: { name: string; floor: number; measured: string; match: (r: Run) => boolean }[] = [
+  {
+    name: "--ink-3 (#8F8F99) text drawn straight on the page background",
+    // The page gradient is lightest at its top (--bg-top #2B2C31); 4.35:1 is #8F8F99 on #2B2C31 itself.
+    floor: 4.35,
+    measured: "4.47–4.48:1 (Apple Watch section labels, the Library count line; WebKit and Chromium)",
+    match: (r) => r.color === "rgb(143, 143, 153)" && r.onPage,
+  },
+  {
+    name: "pink .badge on the page background (the Planner's Not saved / Unsaved changes)",
+    floor: 4.0,
+    measured: "4.02–4.06:1 (on cards the same badge measures 4.8–5.25:1)",
+    match: (r) => r.color === "rgb(255, 79, 160)" && r.badgeOnPage,
+  },
+];
 
 const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
 
@@ -42,6 +65,10 @@ interface Run {
   w: number;
   h: number;
   path: string;
+  /** Drawn straight on the page: no card, clay or other fill between the text and the page background. */
+  onPage: boolean;
+  /** Inside a .badge that sits straight on the page background. */
+  badgeOnPage: boolean;
 }
 
 /** The runs of text fully on screen and not under a fixed layer: colour, size and box. */
@@ -52,6 +79,14 @@ const runs = (page: Page) =>
       const p = getComputedStyle(e).position;
       return (p === "fixed" || p === "sticky") && e.getBoundingClientRect().height > 0;
     });
+    // The nearest element that paints a background (a fill or an image), from `e` up; null when only the page does.
+    const filled = (e: Element | null): Element | null => {
+      for (; e && !e.matches("main.page, body, html"); e = e.parentElement) {
+        const cs = getComputedStyle(e);
+        if (cs.backgroundImage !== "none" || !/^rgba\(.*, 0\)$|^transparent$/.test(cs.backgroundColor)) return e;
+      }
+      return null;
+    };
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const t = n.textContent!.trim();
@@ -75,7 +110,20 @@ const runs = (page: Page) =>
         return r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom;
       });
       if (under) continue;
-      out.push({ text: t.slice(0, 40), color: cs.color, size: parseFloat(cs.fontSize), weight: Number(cs.fontWeight), x: r.left, y: r.top, w: r.width, h: r.height, path: [el.tagName.toLowerCase(), ...el.classList].join(".") });
+      const badge = el.closest(".badge");
+      out.push({
+        text: t.slice(0, 40),
+        color: cs.color,
+        size: parseFloat(cs.fontSize),
+        weight: Number(cs.fontWeight),
+        x: r.left,
+        y: r.top,
+        w: r.width,
+        h: r.height,
+        path: [el.tagName.toLowerCase(), ...el.classList].join("."),
+        onPage: filled(el) === null,
+        badgeOnPage: badge !== null && filled(badge.parentElement) === null,
+      });
     }
     return out;
   });
@@ -142,8 +190,7 @@ async function measure(page: Page) {
               bg = `rgb(${data[o]}, ${data[o + 1]}, ${data[o + 2]})`;
             }
           }
-        const large = r.size >= 24 || (r.size >= 18.66 && r.weight >= 700);
-        return { ...r, contrast: Math.round(min * 100) / 100, bg, need: large ? 3 : 4.5 };
+        return { ...r, contrast: Math.round(min * 100) / 100, bg };
       });
     },
     { png, list }
@@ -167,7 +214,8 @@ async function contrast(page: Page, screen: string): Promise<string[]> {
     await page.waitForTimeout(120);
     for (const r of await measure(page)) {
       measured++;
-      if (r.contrast < r.need) low.set(`${r.path} "${r.text}"`, `${screen}: ${r.contrast} < ${r.need}: ${r.color} on ${r.bg}, ${r.size}px/${r.weight}, ${r.path} "${r.text}"`);
+      const floor = KNOWN.find((k) => k.match(r))?.floor ?? NEED;
+      if (r.contrast < floor) low.set(`${r.path} "${r.text}"`, `${screen}: ${r.contrast} < ${floor}: ${r.color} on ${r.bg}, ${r.size}px/${r.weight}, ${r.path} "${r.text}"`);
     }
     if (y >= max) break;
   }

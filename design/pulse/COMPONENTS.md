@@ -242,6 +242,12 @@ Every list and chart uses `web/src/components/States.tsx` (no new classes):
 - `<LoadError>`: `.state` with what failed (`t-orange`), the reason ("No internet connection." or the server's message) and Retry.
 - A list that still has a saved copy keeps it on screen with the caption "Offline: showing the last saved copy." (or "Couldn't refresh: …").
 
+## Contrast
+
+Every run of text is measured as drawn on every screen (`tests/e2e/a11y.spec.ts`, WebKit and Chromium) and must reach 4.5:1. Two cases are kept as designed (Payam, 2026-10-15):
+- `--ink-3` (#8F8F99) text straight on the page background: the gradient's light top lowers it to 4.47–4.48:1 as measured (4.35:1 on `--bg-top` itself).
+- The pink `.badge` straight on the page background (the planner's save state): 4.02–4.06:1. On cards it measures 4.8–5.25:1.
+
 ## Don't
 
 - No new colors, no gradients other than the page background, clay and card fills.
