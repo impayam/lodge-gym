@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "./fixtures";
-import { resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { checkSet, enterSet, goTo, openMore, resetPrograms, resetWorkouts, sessionOrder, setOffline, showExercise, signIn, sql, waitForSynced } from "./helpers";
 
 // SPEC-v3 M9c: the session planner (no AI). Plan Day 1 offline, save, reopen and start it; reorder and delete during
 // the session (blocked once a set is done); supersets and tri-sets with the rest timer after the round only; discard
@@ -22,11 +22,9 @@ const planOrder = (page: Page) =>
     .getByTestId("plan-list")
     .locator("[data-testid^='pitem-']")
     .evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.slice("pitem-".length)));
-/** Exercise ids of the session's cards, in order. */
-const cardOrder = (page: Page) => page.locator("article.ex").evaluateAll((els) => els.map((e) => e.getAttribute("data-ex")!));
 const item = (page: Page, id: string) => page.getByTestId(`pitem-${id}`);
 /** Opens an item's actions (tap on its name). */
-const openItem = (page: Page, id: string) => item(page, id).locator(".pname").click();
+const openItem = (page: Page, id: string) => item(page, id).locator(".plan-name").click();
 
 /** Drags a handle past the middle of another element, in small steps like a finger. */
 async function dragTo(page: Page, handle: Locator, target: Locator) {
@@ -53,13 +51,15 @@ async function pickBySearch(page: Page, query: string, name: RegExp) {
 }
 
 test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in the session; a done exercise can't be deleted", async ({ page, context }) => {
+  // A long walk through the planner, the session and the sync: about a minute in WebKit under a full run.
+  test.setTimeout(120_000);
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);
   // The phone has opened the exercise library online before, so it is cached for offline search.
-  await page.getByRole("navigation").getByRole("button", { name: "Library" }).click();
+  await goTo(page, "Library");
   await expect(page.getByTestId("library-count")).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("navigation").getByRole("button", { name: "Train" }).click();
+  await goTo(page, "Train");
   await setOffline(context, page, true);
 
   await page.getByTestId("plan-session").click();
@@ -98,7 +98,8 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await expect(page.getByTestId("plan-estimate")).toHaveText("5 exercises · about 53 min");
   await page.getByTestId("plan-save").click();
   await expect(page.getByTestId("planned-label")).toHaveText("Planned: Day 1 · Chest (edited)");
-  await expect(page.getByTestId("next-card")).toContainText("5 exercises · about 53 min");
+  await expect(page.getByTestId("next-card")).toContainText("5 exercises");
+  await expect(page.getByTestId("next-card")).toContainText("53 min");
   await expect(page.getByTestId("sync-chip")).toContainText("Offline");
 
   await setOffline(context, page, false);
@@ -124,18 +125,20 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   expect(await planOrder(page)).toEqual(["bench", "cable_row", "lateral", "facepull", "incline_bb"]);
   await page.getByTestId("plan-start").click();
   await expect(page.getByTestId("elapsed")).toBeVisible();
-  expect(await cardOrder(page)).toEqual(["bench", "cable_row", "lateral", "facepull", "incline_bb"]);
-  await expect(page.locator('[data-ex="cable_row"] .setrow')).toHaveCount(4);
+  expect(await sessionOrder(page)).toEqual(["bench", "cable_row", "lateral", "facepull", "incline_bb"]);
+  await showExercise(page, "cable_row");
+  await expect(page.locator('[data-ex="cable_row"] .set-row')).toHaveCount(4);
+  await showExercise(page, "lateral");
   await expect(page.getByTestId("sgroup-A")).toContainText("Superset A");
 
   // Log a set.
-  await page.getByTestId("w-bench-0").locator("input").fill("135");
+  await enterSet(page, "bench", 0, "w", "135");
   await page.getByTestId("check-bench-0").click();
   await expect(page.getByTestId("rest-timer")).toContainText("Rest after Barbell Bench Press");
-  await page.getByTestId("rest-timer").getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
 
-  // Reorder during the session.
-  await page.getByTestId("arrange").click();
+  // Reorder during the session (More sheet).
+  await (await openMore(page)).getByTestId("arrange").click();
   await item(page, "incline_bb").getByRole("button", { name: "Move Incline Barbell Bench Press up" }).click();
   expect(await planOrder(page)).toEqual(["bench", "cable_row", "incline_bb", "lateral", "facepull"]);
   await expect(item(page, "bench")).toContainText("1 of 4 sets done");
@@ -149,12 +152,13 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await item(page, "cable_row").getByRole("button", { name: "Remove" }).click();
   await expect(item(page, "cable_row")).toHaveCount(0);
   await page.getByTestId("arrange-panel").getByRole("button", { name: "Done", exact: true }).click();
-  expect(await cardOrder(page)).toEqual(["bench", "incline_bb", "lateral", "facepull"]);
+  expect(await sessionOrder(page)).toEqual(["bench", "incline_bb", "lateral", "facepull"]);
 
   // "− Remove set" removes only undone sets.
+  await showExercise(page, "bench");
   const bench = page.locator('[data-ex="bench"]');
   for (let i = 0; i < 3; i++) await bench.getByRole("button", { name: "− Remove set" }).click();
-  await expect(bench.locator(".setrow")).toHaveCount(1);
+  await expect(bench.locator(".set-row")).toHaveCount(1);
   await expect(bench.getByRole("button", { name: "− Remove set" })).toHaveCount(0);
 
   await waitForSynced(page);
@@ -169,20 +173,24 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
 });
 
 test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only after A3; ungroup restores normal rest", async ({ page }) => {
+  // A tri-set planned, started and logged round by round: 46–52 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   // The day's own superset (A1/A2) already rests after the round only.
-  await page.getByTestId("check-lateral-0").click();
-  await expect(page.getByTestId("rest-timer")).toHaveCount(0);
+  await checkSet(page, "lateral", 0);
+  await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "false");
+  // Inside the round the card moves on to the next member.
+  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "facepull");
   await page.getByTestId("check-facepull-0").click();
   await expect(page.getByTestId("rest-timer")).toContainText("Rest after Superset A");
-  await page.getByTestId("rest-timer").getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
 
   // A third chest exercise, added during the session.
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   await pickBySearch(page, "cable chest fly", /^Cable Chest Fly/);
 
-  await page.getByTestId("arrange").click();
+  await (await openMore(page)).getByTestId("arrange").click();
   for (const id of ["bench", "incline_db", "fly"]) await item(page, id).getByRole("checkbox").check();
   await expect(page.getByTestId("groupbar")).toContainText("3 selected");
   await page.getByTestId("groupbar").getByRole("button", { name: "Group as tri-set" }).click();
@@ -195,27 +203,35 @@ test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only
   await page.getByTestId("arrange-panel").getByRole("button", { name: "Done", exact: true }).click();
 
   const tri = page.getByTestId("sgroup-A");
-  await expect(tri).toContainText("Tri-set A");
-  await expect(tri.locator(".tag")).toHaveText(["A1", "A2", "A3"]);
-  await expect(tri).toContainText("rest 180 s after each round");
+  for (const [id, label] of [
+    ["bench", "A1"],
+    ["incline_db", "A2"],
+    ["fly", "A3"],
+  ]) {
+    await showExercise(page, id);
+    await expect(tri).toContainText(`${label} · Tri-set A`);
+    await expect(tri).toContainText("rest 180 s after each round");
+  }
 
-  // Round 1: A1, A2, A3; the timer starts only after A3.
-  await page.getByTestId("check-bench-0").click();
-  await expect(page.getByTestId("rest-timer")).toHaveCount(0);
-  await expect(page.locator('[data-set="incline_db-0"]')).toBeInViewport();
+  // Round 1: A1, A2, A3; the card follows the round and the timer starts only after A3.
+  await checkSet(page, "bench", 0);
+  await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "false");
+  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "incline_db");
   await page.getByTestId("check-incline_db-0").click();
-  await expect(page.getByTestId("rest-timer")).toHaveCount(0);
+  await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "false");
+  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "fly");
   await page.getByTestId("check-fly-0").click();
   await expect(page.getByTestId("rest-timer")).toContainText("Rest after Tri-set A");
-  await page.getByTestId("rest-timer").getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
 
   // Ungroup: the order stays and each set rests on its own again.
-  await page.getByTestId("arrange").click();
+  await (await openMore(page)).getByTestId("arrange").click();
   await page.getByTestId("pgroup-A").getByRole("button", { name: "Ungroup" }).click();
   await page.getByTestId("arrange-panel").getByRole("button", { name: "Done", exact: true }).click();
+  await showExercise(page, "lateral");
   await expect(page.getByTestId("sgroup-A")).toContainText("Superset A");
-  expect(await cardOrder(page)).toEqual(["bench", "incline_db", "fly", "rdl", "cable_row", "lateral", "facepull"]);
-  await page.getByTestId("check-bench-1").click();
+  expect(await sessionOrder(page)).toEqual(["bench", "incline_db", "fly", "rdl", "cable_row", "lateral", "facepull"]);
+  await checkSet(page, "bench", 1);
   await expect(page.getByTestId("rest-timer")).toContainText("Rest after Barbell Bench Press");
 
   // The session got a started plan with its own id (approved default 7); the sets are unchanged.
@@ -237,6 +253,8 @@ test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only
 });
 
 test("discard plan returns the day to the program; Apply to program makes a new active version after a confirm", async ({ page }) => {
+  // Two plans and a program version: 39–47 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
   await page.getByTestId("plan-session").click();
   await openItem(page, "rdl");
@@ -248,7 +266,7 @@ test("discard plan returns the day to the program; Apply to program makes a new 
   await page.getByTestId("open-plan").click();
   await page.getByTestId("plan-discard").click();
   await page.getByTestId("discard-confirm").getByRole("button", { name: "Yes, discard" }).click();
-  await expect(page.getByTestId("next-card")).toContainText("Next session: Day 1 · Chest");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
   await waitForSynced(page);
   await expect.poll(() => sql("SELECT status FROM planned_sessions"), { timeout: 20_000 }).toEqual([{ status: "discarded" }]);
 

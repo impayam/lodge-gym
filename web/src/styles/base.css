@@ -1,0 +1,17 @@
+/* GYM time base (SPEC-v8): resets and the page background only. Colors and fonts come from tokens.css; every
+   component style lives in components.css. No hex values, shadows, radii or font names here. */
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  background: var(--bg-solid);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg-solid);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { touch-action: manipulation; }
+[hidden] { display: none !important; }

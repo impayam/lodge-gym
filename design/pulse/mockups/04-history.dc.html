@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>History — Pulse Pro</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Instrument+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.press{transition:transform 140ms cubic-bezier(.2,.8,.2,1);cursor:pointer}
+.press:active{transform:scale(.96)}
+.press:focus-visible{outline:2px solid #FF5A1F;outline-offset:3px}
+.clay{border:0;background:linear-gradient(180deg,#2C2C32 0%,#1F1F23 100%);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.11),inset 0 -3px 6px rgba(0,0,0,.35),0 7px 15px rgba(0,0,0,.42),0 1.5px 3px rgba(0,0,0,.32)}
+.card{background:linear-gradient(180deg,#1B1C20 0%,#131417 100%);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -2px 6px rgba(0,0,0,.22),0 6px 14px rgba(0,0,0,.28),0 1px 2px rgba(0,0,0,.25)}
+@media (prefers-reduced-motion: reduce){.press{transition:none}}
+</style>
+</helmet>
+<div style="width: 390px; height: 1240px; box-sizing: border-box; background: linear-gradient(180deg, #2B2C31 0%, #1C1D21 35%, #121316 100%); color: #F2F2F4; font-family: 'Instrument Sans', system-ui, sans-serif; position: relative; overflow: hidden;">
+  <div style="padding: 58px 16px 130px; display: flex; flex-direction: column; gap: 14px;">
+
+    <header style="padding: 0 4px; display: flex; justify-content: space-between; align-items: flex-end;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 13px; color: #8A8A93;">Full body, since Sep 27</span>
+        <h1 style="margin: 0; font-size: 28px; font-weight: 600;">History</h1>
+      </div>
+      <button class="press clay" aria-label="Search history" style="width: 44px; height: 44px; border-radius: 15px; color: #C9C9CF; display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></button>
+    </header>
+
+    <section class="card" style="padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <span style="font-size: 14px; font-weight: 600;">Reports timeline</span>
+        <span style="font-size: 12px; color: #8A8A93;">Tap a date</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 74px repeat(6, minmax(0, 1fr)); row-gap: 10px; align-items: center;">
+        <span style="font-size: 12px; color: #C9C9CF;">Sessions</span>
+        <sc-for list="{{cols}}" as="c" hint-placeholder-count="6"><span style="display: flex; justify-content: center;"><span style="{{c.s}}"></span></span></sc-for>
+        <span style="font-size: 12px; color: #C9C9CF;">Weekly</span>
+        <sc-for list="{{cols}}" as="c" hint-placeholder-count="6"><span style="display: flex; justify-content: center;"><span style="{{c.w}}"></span></span></sc-for>
+        <span></span>
+        <sc-for list="{{cols}}" as="c" hint-placeholder-count="6">
+          <button class="press" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="{{c.btn}}"><span class="num" style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 600; line-height: 1;">{{c.d}}</span><span style="font-size: 10px;">{{c.m}}</span></button>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 4px; border-top: 1px solid #1F2024;">
+        <span style="font-size: 12px; color: #8A8A93; padding-top: 8px;">{{selTitle}}</span>
+        <sc-for list="{{selItems}}" as="it" hint-placeholder-count="2">
+          <a href="#" class="press clay" style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; text-decoration: none; color: #F2F2F4;">
+            <span style="{{it.dot}}"></span>
+            <span style="flex: 1; display: flex; flex-direction: column;"><span style="font-size: 14px; font-weight: 600;">{{it.title}}</span><span style="font-size: 12px; color: #8A8A93;">{{it.sub}}</span></span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6F6F78" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+
+    <span style="font-size: 13px; font-weight: 600; color: #8A8A93; padding: 6px 4px 0;">October 2026</span>
+    <sc-for list="{{sessions}}" as="x" hint-placeholder-count="5">
+      <a href="#" class="card" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; text-decoration: none; color: #F2F2F4;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="num" style="width: 44px; height: 44px; border-radius: 14px; background: #121214; box-shadow: inset 0 2px 5px rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600; color: #FF5A1F;">{{x.day}}</span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 16px; font-weight: 600;">{{x.name}}</span><span style="font-size: 12px; color: #8A8A93;">{{x.date}}</span></span>
+          <sc-if value="{{x.pr}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; font-weight: 700; color: #FF4FA0; padding: 5px 9px; border-radius: 999px; background: rgba(255,79,160,0.12);">PR</span></sc-if>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+          <span style="display: flex; flex-direction: column;"><span class="num" style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600;">{{x.min}}</span><span style="font-size: 11px; color: #6F6F78;">minutes</span></span>
+          <span style="display: flex; flex-direction: column;"><span class="num" style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600;">{{x.sets}}</span><span style="font-size: 11px; color: #6F6F78;">sets</span></span>
+          <span style="display: flex; flex-direction: column;"><span class="num" style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600;">{{x.top}}</span><span style="font-size: 11px; color: #6F6F78;">{{x.topLabel}}</span></span>
+        </div>
+      </a>
+    </sc-for>
+  </div>
+
+  <nav class="clay" style="position: absolute; left: 16px; right: 16px; bottom: 26px; height: 68px; border-radius: 26px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center;">
+    <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+      <button class="press" aria-label="{{t.name}}" aria-current="{{t.current}}" style="{{t.style}}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{t.icon}}"/></svg></button>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sel: 3 }; }
+  renderVals() {
+    const s = this.state;
+    const dates = [
+      { d: '2', m: 'Fri', full: 'Fri, Oct 2', session: 'Day 2, Legs', weekly: false },
+      { d: '4', m: 'Sun', full: 'Sun, Oct 4', session: null, weekly: 'Week of Sep 28 to Oct 4' },
+      { d: '5', m: 'Mon', full: 'Mon, Oct 5', session: 'Day 3, Back', weekly: false },
+      { d: '7', m: 'Wed', full: 'Wed, Oct 7', session: 'Day 4, Deadlift', weekly: false },
+      { d: '11', m: 'Sun', full: 'Sun, Oct 11', session: null, weekly: 'Week of Oct 5 to Oct 11' },
+      { d: '13', m: 'Tue', full: 'Tue, Oct 13', session: 'Day 1, Chest', weekly: false }
+    ];
+    const cols = dates.map((x, i) => ({
+      d: x.d, m: x.m, aria: x.full + (i === s.sel ? ', selected' : ''),
+      pick: () => this.setState({ sel: i }),
+      s: x.session ? 'width: 12px; height: 12px; border-radius: 50%; background: #FF4FA0;' : 'width: 12px; height: 12px;',
+      w: x.weekly ? 'width: 12px; height: 12px; border-radius: 3px; box-sizing: border-box; border: 2px solid #9A7BF2;' : 'width: 12px; height: 12px;',
+      btn: 'height: 46px; margin: 0 2px; border: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-family: Instrument Sans, sans-serif; ' + (i === s.sel ? 'background: #121214; box-shadow: inset 0 2px 6px rgba(0,0,0,.56), inset 0 -1px 0 rgba(255,255,255,.06); color: #FF4FA0;' : 'background: transparent; color: #8A8A93;')
+    }));
+    const x = dates[s.sel];
+    const selItems = x.session
+      ? [{ title: 'Session report', sub: x.session, dot: 'width: 10px; height: 10px; border-radius: 50%; background: #FF4FA0;' },
+         { title: 'Training overview', sub: 'Written after ' + x.session, dot: 'width: 10px; height: 10px; transform: rotate(45deg); background: #FF5A1F;' }]
+      : [{ title: 'Weekly review', sub: x.weekly, dot: 'width: 10px; height: 10px; border-radius: 3px; box-sizing: border-box; border: 2px solid #9A7BF2;' }];
+    const icons = {
+      Train: 'M3 12h2M19 12h2M6 8v8M18 8v8M9 10v4M15 10v4M9 12h6',
+      History: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+      Library: 'M5 4h4v16H5zM10 4h4v16h-4zM15 5l4 1-3 14-4-1',
+      Reports: 'M5 20V12M10 20V6M15 20v-9M20 20V9M3 20h18',
+      Me: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1-4 4-6 8-6s7 2 8 6'
+    };
+    const tabs = Object.keys(icons).map((k, n) => ({
+      name: k, icon: icons[k], current: n === 1 ? 'page' : 'false',
+      style: 'height: 52px; margin: 0 6px; border: 0; border-radius: 19px; display: flex; align-items: center; justify-content: center; ' + (n === 1 ? 'background: #121214; box-shadow: inset 0 2px 6px rgba(0,0,0,.56), inset 0 -1px 0 rgba(255,255,255,.06); color: #FF4FA0;' : 'background: transparent; color: #8A8A93;')
+    }));
+    return {
+      cols, tabs, selItems,
+      selTitle: x.full + ', ' + selItems.length + (selItems.length === 1 ? ' report' : ' reports'),
+      sessions: [
+        { day: '1', name: 'Chest', date: 'Tue, Oct 13', min: '58', sets: '19', top: '185', topLabel: 'bench top set', pr: false },
+        { day: '4', name: 'Deadlift', date: 'Wed, Oct 7', min: '60', sets: '15', top: '235', topLabel: 'deadlift × 5', pr: true },
+        { day: '3', name: 'Back', date: 'Mon, Oct 5', min: '52', sets: '17', top: '140', topLabel: 'row top set', pr: false },
+        { day: '2', name: 'Legs', date: 'Fri, Oct 2', min: '55', sets: '16', top: '80', topLabel: 'squat × 5', pr: true }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

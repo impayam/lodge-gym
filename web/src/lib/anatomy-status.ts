@@ -1,18 +1,19 @@
 // Colours of the 3D muscle map in Reports (SPEC-v6 §8): each mapped app muscle takes the weekly status of its report
-// group (the same fractional numbers and thresholds as the list below the map). The 3D stage is dark in both themes,
-// so the colours are the dark theme's status tokens (web/src/styles.css): under --warn, on --good, over --plate,
-// no target --accent; a muscle not trained this week is muted. Unmapped muscles are drawn dark by the 3D view itself.
+// group (the same fractional numbers and thresholds as the list below the map). The colours are the --model-* status
+// tokens (web/src/styles/tokens.css, the pre-Pulse values unchanged): under, on, over, no target (untracked); a muscle
+// not trained this week is muted (none). Unmapped muscles are drawn dark by the 3D view itself.
 // Status is never colour alone: the card, the legend and the list carry the icon and the label.
 
 import { CANONICAL_MUSCLES, groupOf, type Muscle } from "../../../worker/lib/muscles";
 import type { BalanceStatus, MuscleRow } from "../../../worker/lib/reports";
 
-export const STAGE_STATUS_COLOR: Record<BalanceStatus, string> = {
-  under: "#e3a93a",
-  on: "#56c98a",
-  over: "#f08a4b",
-  untracked: "#3fbfa6",
-  none: "#5a4b49",
+/** The token holding each status colour of the 3D map (read at runtime by the view: web/src/lib/tokens.ts). */
+export const STAGE_STATUS_TOKEN: Record<BalanceStatus, `--model-${BalanceStatus}`> = {
+  under: "--model-under",
+  on: "--model-on",
+  over: "--model-over",
+  untracked: "--model-untracked",
+  none: "--model-none",
 };
 
 export interface MuscleState {
@@ -30,7 +31,7 @@ export function muscleState(rows: MuscleRow[], muscle: Muscle): MuscleState {
   return { muscle, group, row, status: row?.status ?? "none" };
 }
 
-/** The colour of every app muscle for the 3D view. */
-export function stageTints(rows: MuscleRow[]): Map<Muscle, string> {
-  return new Map(CANONICAL_MUSCLES.map((m) => [m, STAGE_STATUS_COLOR[muscleState(rows, m).status]]));
+/** The colour of every app muscle for the 3D view; `colorOf` gives a status its colour. */
+export function stageTints(rows: MuscleRow[], colorOf: (status: BalanceStatus) => string): Map<Muscle, string> {
+  return new Map(CANONICAL_MUSCLES.map((m) => [m, colorOf(muscleState(rows, m).status)]));
 }

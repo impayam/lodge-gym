@@ -47,7 +47,7 @@ self.addEventListener("push", (event) => {
     data = { body: event.data?.text() };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "Lodge Gym", {
+    self.registration.showNotification(data.title ?? "GYM time", {
       body: data.body ?? "",
       tag: data.tag ?? "lodge-gym",
       icon: "/icons/icon-192.png",

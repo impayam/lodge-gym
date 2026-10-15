@@ -10,49 +10,36 @@ import { dayMonth } from "../format";
 export function WeeklyReviewCard({ review }: { review: WeeklyReview }) {
   const [open, setOpen] = useState(false);
   const long = review.summary_fa.length > 220 || review.highlights.length + review.suggestions.length > 4;
-  return (
-    <section class="card review stack" data-testid="weekly-review" data-review={review.id}>
-      <div class="kv">
-        <span class="eyebrow">Weekly review</span>
-        <span class="muted" style={{ fontSize: "12px" }}>
-          Week of {dayMonth(review.week_start)} – {dayMonth(addDays(review.week_start, 6))}
-        </span>
+  const list = (title: string, items: string[], mark: string) =>
+    items.length ? (
+      <div class="l-col l-gap-4">
+        <h3 class="card__title l-m0">{title}</h3>
+        <ul class="fa prose-fa" dir="rtl" lang="fa">
+          {items.map((h) => (
+            <li>
+              <span aria-hidden="true">{mark}</span> {h}
+            </li>
+          ))}
+        </ul>
       </div>
-      <p class={`summary${long && !open ? " clamp" : ""}`} dir="rtl" lang="fa">
+    ) : null;
+  return (
+    <section class="card l-col l-gap-12" data-testid="weekly-review" data-review={review.id} aria-label={`Weekly review, week of ${dayMonth(review.week_start)} – ${dayMonth(addDays(review.week_start, 6))}`}>
+      <p class={`fa prose-fa${long && !open ? " prose-fa--clamp" : ""}`} dir="rtl" lang="fa">
         {review.summary_fa}
       </p>
       {!long || open ? (
         <>
-          {review.highlights.length ? (
-            <div>
-              <b class="rv-title">What went well</b>
-              <ul class="rv-list" dir="rtl" lang="fa">
-                {review.highlights.map((h) => (
-                  <li>
-                    <span aria-hidden="true">✓</span> {h}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {review.suggestions.length ? (
-            <div>
-              <b class="rv-title">Suggestions for next week</b>
-              <ul class="rv-list" dir="rtl" lang="fa">
-                {review.suggestions.map((h) => (
-                  <li>
-                    <span aria-hidden="true">←</span> {h}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {list("What went well", review.highlights, "✓")}
+          {list("Suggestions for next week", review.suggestions, "←")}
         </>
       ) : null}
       {long ? (
-        <button type="button" class="linkbtn" onClick={() => setOpen(!open)}>
-          {open ? "Show less" : "Show more"}
-        </button>
+        <div class="l-row">
+          <button type="button" class="clay press btn-sm btn--fit t-muted" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? "Show less" : "Show more"}
+          </button>
+        </div>
       ) : null}
     </section>
   );

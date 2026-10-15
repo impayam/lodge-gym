@@ -420,7 +420,7 @@ export function normalizeReport(out: ReportOutput, input: ReportInput): SessionR
   };
 }
 
-export const REPORT_SYSTEM = `You write a short training report for one finished gym session of Payam, for the Lodge Gym app.
+export const REPORT_SYSTEM = `You write a short training report for one finished gym session of Payam, for the GYM time app.
 
 Rules:
 - Write every text field in Persian (Farsi). Exercise names may stay in English.

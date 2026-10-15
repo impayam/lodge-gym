@@ -79,28 +79,28 @@ interface Pick {
 function Figure({ regions, lines, rows, title, pick, onPick }: { regions: HalfRegion[]; lines: string[]; rows: Map<string, MuscleRow>; title: string; pick: Pick | null; onPick: (p: Pick) => void }) {
   const groupOfRegion = (k: RegionKey) => groupOf(k) ?? k;
   return (
-    <figure class="figure">
+    <figure class="body-figure">
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label={title}>
-        <path d={SILHOUETTE} class="body" />
+        <path d={SILHOUETTE} class="body-figure__body" />
         {regions.map((r) => {
           const g = groupOfRegion(r.key);
           const row = rows.get(g);
           const st = row?.status ?? "none";
           // Each side is its own shape and tap target; the region is coloured by its report group.
           return (
-            <path d={r.d} class={`muscle m-${st}`} onClick={() => onPick({ key: r.key, group: g })} data-muscle={r.key} data-group={g} data-status={st}>
+            <path d={r.d} class="body-region" onClick={() => onPick({ key: r.key, group: g })} data-muscle={r.key} data-group={g} data-status={st}>
               <title>{row ? `${regionLabel(r.key, g)}: ${setsText(row)}` : regionLabel(r.key, g)}</title>
             </path>
           );
         })}
         {lines.map((d) => (
-          <path d={d} class="detail" />
+          <path d={d} class="body-figure__detail" />
         ))}
         {/* The selected group on top: a filled highlight and a thick outline, so it reads at a glance. */}
         {pick
           ? regions
               .filter((r) => groupOfRegion(r.key) === pick.group)
-              .map((r) => <path d={r.d} class="sel" data-selected={r.key} />)
+              .map((r) => <path d={r.d} class="body-figure__sel" data-selected={r.key} />)
           : null}
       </svg>
       <figcaption>{title}</figcaption>
@@ -121,26 +121,26 @@ function Figures({ muscles }: { muscles: MuscleRow[] }) {
         <defs>
           {/* Stripe directions match the legend swatches (CSS 45deg under, 135deg over). */}
           <pattern id="tex-under" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(135)">
-            <rect width="6" height="6" class="tex-under-bg" />
-            <line x1="0" y1="0" x2="0" y2="6" class="tex-line" />
+            <rect width="6" height="6" class="body-tex--under" />
+            <line x1="0" y1="0" x2="0" y2="6" class="body-tex__line" />
           </pattern>
           <pattern id="tex-over" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="6" height="6" class="tex-over-bg" />
-            <line x1="0" y1="0" x2="0" y2="6" class="tex-line" />
+            <rect width="6" height="6" class="body-tex--over" />
+            <line x1="0" y1="0" x2="0" y2="6" class="body-tex__line" />
           </pattern>
         </defs>
       </svg>
-      <div class="readout" aria-live="polite">
+      <div class="chart-readout" aria-live="polite">
         {pick ? `${regionLabel(pick.key, pick.group)}: ${a ? setsText(a) : STATUS_NAME.none}` : "Tap a muscle."}
       </div>
-      <div class="figures">
+      <div class="body-figures">
         <Figure regions={FRONT_REGIONS} lines={FRONT_LINES} rows={rows} title="Front" pick={pick} onPick={setPick} />
         <Figure regions={BACK_REGIONS} lines={BACK_LINES} rows={rows} title="Back" pick={pick} onPick={setPick} />
       </div>
-      <div class="legend">
+      <div class="chart-legend">
         {(["under", "on", "over", "none", "untracked"] as Status[]).map((s) => (
           <span>
-            <i class={`sw m-${s}`} /> {STATUS_ICON[s]} {STATUS_NAME[s]}
+            <span class="chart-legend__swatch" data-status={s} /> {STATUS_ICON[s]} {STATUS_NAME[s]}
           </span>
         ))}
       </div>
@@ -150,21 +150,21 @@ function Figures({ muscles }: { muscles: MuscleRow[] }) {
 
 export function MuscleMap({ muscles }: { muscles: MuscleRow[] }) {
   return (
-    <div class="musclemap" data-testid="muscle-map">
+    <div class="l-col l-gap-12" data-testid="muscle-map">
       <BalanceStage muscles={muscles} text={{ name: STATUS_NAME, icon: STATUS_ICON, group: (g) => MUSCLE_NAME[g] ?? g }} fallback={<Figures muscles={muscles} />} />
-      <ul class="musclelist">
-        <li class="head" aria-hidden="true">
+      <ul class="balance-list">
+        <li aria-hidden="true">
           <span>Muscle</span>
           <span>direct · fractional / target</span>
           <span>Status</span>
         </li>
         {muscles.map((m) => (
-          <li data-testid={`muscle-${m.muscle}`}>
+          <li data-testid={`muscle-${m.muscle}`} data-status={m.status}>
             <span>{MUSCLE_NAME[m.muscle]}</span>
             <span class="num" title="direct · fractional / target">
               {fmtNum(m.sets)} · {fmtNum(m.fractional, 1)} / {m.target === null ? "–" : fmtNum(m.target)}
             </span>
-            <span class={`st st-${m.status}`}>
+            <span class="balance-list__status">
               {STATUS_ICON[m.status]} {STATUS_NAME[m.status]}
             </span>
           </li>

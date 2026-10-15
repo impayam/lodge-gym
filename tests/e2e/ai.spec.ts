@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo, enterSet, openMore } from "./helpers";
 
 // SPEC-v3 M9a (AI session report) and M9c (Get advice) with a mocked model (scripts/e2e-ai-mock.mjs): the real
 // Anthropic API is never called. The mock writes its answer from the request's own input.
@@ -20,28 +20,32 @@ test.afterAll(async () => {
 /** Starts Day 1 and logs the first bench set. */
 async function startDay1(page: Page) {
   await page.goto("/");
-  await expect(page.getByTestId("next-card")).toContainText("Day 1 · Chest");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
+  await page.getByTestId("start").click();
   await page.getByTestId("check-bench-0").click();
 }
 
 const report = (page: Page) => page.getByTestId("session-report");
 
 test("finish a session with an extra exercise: the report shows it, the volume table and the app's next-time weights; failures show Retry; an expired key shows in Settings", async ({ page }) => {
+  // A whole session, three report runs and Settings: 38–52 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await startDay1(page);
   // Bench: all 4 planned sets of 5 at 140 lb.
   for (let i = 0; i < 4; i++) {
-    await page.getByTestId(`w-bench-${i}`).locator("input").fill("140");
+    await enterSet(page, "bench", i, "w", "140");
     if (i > 0) await page.getByTestId(`check-bench-${i}`).click();
   }
   // One extra exercise, added during the session.
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   const picker = page.getByTestId("exercise-picker");
   await picker.getByTestId("picker-tab-search").click();
   await picker.getByRole("searchbox").fill("biceps curl");
   await picker.getByTestId("library-row").filter({ has: page.locator("b", { hasText: /^Dumbbell Biceps Curl$/ }) }).first().click();
-  await page.getByTestId("w-curl-0").locator("input").fill("30");
-  await page.getByTestId("r-curl-0").locator("input").fill("10");
+  // The card shows the added exercise once it is in the session.
+  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "curl");
+  await enterSet(page, "curl", 0, "w", "30");
+  await enterSet(page, "curl", 0, "r", "10");
   await page.getByTestId("check-curl-0").click();
 
   await page.getByTestId("finish").click();
@@ -74,18 +78,18 @@ test("finish a session with an extra exercise: the report shows it, the volume t
   await aiMode({ report: "auth" });
   await page.getByTestId("report-retry").click();
   await expect(page.getByTestId("report-unavailable")).toContainText("API key expired or invalid.", { timeout: 30_000 });
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "AI reports");
   await expect(page.getByTestId("ai-key-problem")).toHaveText("Report unavailable — API key expired or invalid");
 
   // Fixed: Retry from History → session → Report writes a new report; Settings is clear again.
   await aiMode({ report: "ok" });
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
-  await page.getByTestId("history-group").locator("button.hist").first().click();
+  await goTo(page, "History");
+  await page.getByTestId("history-group").getByTestId("session-card").first().click();
   await page.getByTestId("open-report").click();
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await page.getByTestId("report-retry").click();
   await expect(page.getByTestId("report-summary")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "AI reports");
   await expect(page.getByTestId("ai-cost")).toContainText("2 reports");
   await expect(page.getByTestId("ai-key-problem")).toHaveCount(0);
   expect(sql("SELECT status, substr(error, 1, instr(error, ':') - 1) AS code FROM session_reports ORDER BY created_at")).toEqual([

@@ -2,7 +2,7 @@
 
 import { nextDay, restAdvised, versionAliases, weekRange } from "../../worker/lib/cycle";
 import { lastPerformance, stepperIncrement, suggest, type Suggestion } from "../../worker/lib/progression";
-import { zonedToUtcISO } from "../../worker/lib/time";
+import { localDate, zonedToUtcISO } from "../../worker/lib/time";
 import type { DayExercise, Exercise, ProgramDay, ProgramInfo, SetEntry, WorkoutSession } from "../../worker/lib/types";
 import { MAX_TWO_IN_A_ROW, STYLE_NAME, type ResolvedStyle } from "../../worker/lib/generator/model";
 import { ulid } from "../../worker/lib/ulid";
@@ -15,6 +15,12 @@ export const exerciseMap = (boot: BootData) => new Map(boot.exercises.map((e) =>
 
 /** The active program's metadata; a bootstrap cached before M8 has none. */
 export const activeProgramInfo = (boot: BootData): ProgramInfo | null => (boot.programs ?? []).find((p) => p.status === "active") ?? null;
+
+/** The local date the first program was activated: when training in the app began (Me and Coach headers). */
+export function trainingSince(boot: BootData): string | null {
+  const starts = (boot.programs ?? []).flatMap((p) => p.activations.map((a) => localDate(boot.settings.timezone, a.started_at)));
+  return starts.length ? starts.sort()[0] : null;
+}
 
 /** Planned sessions per week of the active program. */
 export const daysPerWeek = (boot: BootData) => activeProgramInfo(boot)?.days_per_week ?? boot.program.days.length;

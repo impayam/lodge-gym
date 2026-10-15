@@ -1,6 +1,6 @@
 import { BODY_AREAS } from "../../worker/lib/bodyAreas";
 import { expect, test, type Page } from "./fixtures";
-import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo, openMore } from "./helpers";
 
 // SPEC-v3 M9b with the SPEC-v6 3D model. "+ Add exercise" opens on the 3D body; the area and muscle chips do the same
 // as the model; a pick adds the exercise to the session as an extra. Both projects render WebGL 2 (WebKit and
@@ -39,7 +39,9 @@ async function facing(page: Page, cos: 1 | -1) {
  */
 async function chipsVisible(page: Page, testIds: string[]) {
   const width = page.viewportSize()!.width;
-  const navTop = (await page.getByRole("navigation").boundingBox())!.y;
+  // The active session is full screen (SPEC-v8 §5): no tab bar there, so the chips may reach the bottom.
+  const nav = page.getByRole("navigation", { name: "Sections" });
+  const navTop = (await nav.count()) ? (await nav.boundingBox())!.y : page.viewportSize()!.height;
   const rows = new Set<number>();
   for (const id of testIds) {
     const b = (await page.getByTestId(id).boundingBox())!;
@@ -57,11 +59,11 @@ const allAreasVisible = async (page: Page) => expect(await chipsVisible(page, BO
 
 async function startSession(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
 }
 
 async function openPicker(page: Page, mode: "3d" | "fallback" = "3d") {
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   const step = page.getByTestId("body-step");
   await expect(step).toHaveAttribute("data-mode", mode, { timeout: 30_000 });
   return step;
@@ -105,18 +107,18 @@ test("chips: Arms → Triceps lists triceps-primary exercises first; picking one
   await list.getByTestId("pick-back").click();
   await expect(step).toHaveAttribute("data-area", "arms");
   await step.getByTestId("muscle-triceps").click();
-  await list.locator(`[data-testid="pick-row"][data-id="oh_tri"] .pickmain`).click();
+  await list.locator(`[data-testid="pick-row"][data-id="oh_tri"] .ex-row__main`).click();
   await expect(page.getByTestId("exercise-picker")).toHaveCount(0);
-  const card = page.locator(`article.ex[data-ex="oh_tri"]`);
-  await expect(card).toContainText("Extra");
-  await expect(card.locator(".setrow")).toHaveCount(3);
+  const card = page.locator(`[data-testid="ex-card"][data-ex="oh_tri"]`);
+  await expect(card).toContainText("Added today");
+  await expect(card.locator(".set-row")).toHaveCount(3);
   await waitForSynced(page);
   await expect
     .poll(() => sql("SELECT COUNT(*) AS n, SUM(is_extra) AS extra FROM set_entries WHERE exercise_id = 'oh_tri'"), { timeout: 20_000 })
     .toEqual([{ n: 3, extra: 3 }]);
 
   // Reopening the picker in the same session returns to the triceps list.
-  await page.getByTestId("add-exercise").click();
+  await (await openMore(page)).getByTestId("add-exercise").click();
   await expect(page.getByTestId("muscle-step")).toHaveAttribute("data-muscle", "triceps");
   await page.getByTestId("pick-back").click();
   await expect(page.getByTestId("body-step")).toHaveAttribute("data-mode", "3d", { timeout: 30_000 });
@@ -131,12 +133,12 @@ test("3D: a tap on the body zooms to its area; in the close-up a tap lights the 
 
   // A muscle that is not mapped (the forehead), with nothing mapped within 24 px: the tap does nothing.
   const brow = (await hook(page, (h) => h.view!.pointOn("Frontalis muscle", false)))!;
-  await expect(hint).not.toHaveClass(/gone/);
+  await expect(hint).toHaveAttribute("data-gone", "false");
   await page.touchscreen.tap(brow.x, brow.y);
   await expect(step).toHaveAttribute("data-area", "");
   await expect(chip).toHaveCount(0);
-  // The first touch on the model fades the hint out.
-  await expect(hint).toHaveClass(/gone/);
+  // The first touch on the model hides the hint.
+  await expect(hint).toHaveAttribute("data-gone", "true");
 
   // Whole body seen from the back: a tap on the triceps opens the Arms close-up on the same side, nothing chosen yet.
   await step.getByTestId("view-back").click();
@@ -227,6 +229,39 @@ test("close-up: every area's muscle chips are fully visible above the tab bar, i
   await page.getByRole("button", { name: "Cancel" }).click();
 });
 
+/**
+ * Taps Front or Back and samples the view in every frame drawn over the next 700 ms (a turn takes TURN_MS = 380):
+ * whether a turn is running and cos(yaw). Software WebGL draws few frames, so `moving` is the reliable sign of a turn.
+ */
+const turnFrames = (page: Page, testId: "view-front" | "view-back") =>
+  page.evaluate(async (id) => {
+    const h = (window as unknown as { __anatomy: Hook }).__anatomy;
+    (document.querySelector(`[data-testid="${id}"]`) as HTMLElement).click();
+    const seen: { moving: boolean; cos: number }[] = [];
+    const end = performance.now() + 700;
+    while (performance.now() < end) {
+      await new Promise((r) => requestAnimationFrame(r));
+      seen.push({ moving: h.view!.moving(), cos: Math.cos(h.view!.yaw()) });
+    }
+    return seen;
+  }, testId);
+const between = (frames: { moving: boolean; cos: number }[]) => frames.filter((f) => f.moving || Math.abs(f.cos) < 0.99).length;
+
+test("reduced motion: Front / Back turn the body at once, with no animated turn", async ({ page }) => {
+  await startSession(page);
+  const step = await openPicker(page);
+  await expect(step.getByTestId("anatomy-canvas")).toBeVisible();
+  // Control: with motion on, a turn passes through the angles in between.
+  expect(between(await turnFrames(page, "view-back"))).toBeGreaterThan(0);
+  await facing(page, -1);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const frames = await turnFrames(page, "view-front");
+  expect(between(frames)).toBe(0);
+  expect(frames.at(-1)!.cos).toBeCloseTo(1, 3);
+  expect(await hook(page, (h) => h.view!.moving())).toBe(false);
+  await page.getByRole("button", { name: "Cancel" }).click();
+});
+
 test("fallback: without WebGL the chips alone pick the exercise, with a 3D unavailable note", async ({ page }) => {
   await page.addInitScript(() => {
     const get = HTMLCanvasElement.prototype.getContext;
@@ -251,7 +286,7 @@ test("offline: after one online open the 3D picker loads from the service worker
   test.setTimeout(120_000);
   await page.goto("/");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 20_000 });
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await openPicker(page);
   await page.getByRole("button", { name: "Cancel" }).click();
   const cached = await page.evaluate(async () => {
@@ -264,7 +299,7 @@ test("offline: after one online open the 3D picker loads from the service worker
 
   await setOffline(context, page, true);
   await page.reload();
-  await page.getByRole("button", { name: "Continue session" }).click();
+  await page.getByTestId("continue").click();
   const step = await openPicker(page);
   await expect(step.getByTestId("anatomy-canvas")).toBeVisible();
   await setOffline(context, page, false);
@@ -296,7 +331,7 @@ test("memory: opening and closing the picker 20 times leaves no renderer, contex
 
 test("Settings → About credits the 3D model (CC BY-SA 4.0)", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   const about = page.getByTestId("about");
   await expect(about).toHaveText("3D anatomy model: Body Anatomy 3D Viewer by hpfrei, based on Z-Anatomy, CC BY-SA 4.0.");
   await expect(about.getByRole("link", { name: "Body Anatomy 3D Viewer" })).toHaveAttribute("href", "https://github.com/hpfrei/body-anatomy-3d-viewer");

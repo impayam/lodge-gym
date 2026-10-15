@@ -1,50 +1,49 @@
 // PNG summary card (canvas) shared through the Web Share API, and CSV download (SPEC §10).
 
 import { NetworkError } from "./api";
-
-const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+import { token } from "./lib/tokens";
 
 export interface CardLine {
   label: string;
   value: string;
 }
 
-/** Draws a 1080×1350 summary card in the current theme colors. */
+/** Draws a 1080×1350 summary card in the --share-* token colors and the --share-font font stack. */
 export async function reportCard(title: string, subtitle: string, lines: CardLine[]): Promise<Blob> {
-  const css = getComputedStyle(document.documentElement);
-  const color = (v: string, fallback: string) => css.getPropertyValue(v).trim() || fallback;
+  const color = (name: "bg" | "surface" | "accent" | "muted" | "ink-2" | "ink" | "line") => token(`--share-${name}`);
+  const font = token("--share-font");
   const W = 1080;
   const H = 1350;
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
   const ctx = c.getContext("2d")!;
-  ctx.fillStyle = color("--bg", "#eef1ee");
+  ctx.fillStyle = color("bg");
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = color("--surface", "#ffffff");
+  ctx.fillStyle = color("surface");
   roundRect(ctx, 60, 60, W - 120, H - 120, 48);
   ctx.fill();
   ctx.direction = "ltr";
   ctx.textAlign = "left";
   const left = 120;
   const right = W - 120;
-  ctx.fillStyle = color("--accent", "#0f6e5f");
-  ctx.font = `800 64px ${FONT}`;
+  ctx.fillStyle = color("accent");
+  ctx.font = `800 64px ${font}`;
   ctx.fillText(title, left, 190);
-  ctx.fillStyle = color("--muted", "#6f7d77");
-  ctx.font = `500 38px ${FONT}`;
+  ctx.fillStyle = color("muted");
+  ctx.font = `500 38px ${font}`;
   ctx.fillText(subtitle, left, 250);
   let y = 360;
   for (const l of lines.slice(0, 10)) {
-    ctx.fillStyle = color("--ink-2", "#4a5752");
-    ctx.font = `500 38px ${FONT}`;
+    ctx.fillStyle = color("ink-2");
+    ctx.font = `500 38px ${font}`;
     ctx.textAlign = "left";
     ctx.fillText(l.label, left, y);
-    ctx.fillStyle = color("--ink", "#17211d");
-    ctx.font = `700 44px ${FONT}`;
+    ctx.fillStyle = color("ink");
+    ctx.font = `700 44px ${font}`;
     ctx.textAlign = "right";
     ctx.fillText(l.value, right, y);
-    ctx.strokeStyle = color("--line", "#d8ded9");
+    ctx.strokeStyle = color("line");
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(left, y + 30);
@@ -53,9 +52,9 @@ export async function reportCard(title: string, subtitle: string, lines: CardLin
     y += 92;
   }
   ctx.textAlign = "right";
-  ctx.fillStyle = color("--muted", "#6f7d77");
-  ctx.font = `500 32px ${FONT}`;
-  ctx.fillText("Lodge Gym", right, H - 110);
+  ctx.fillStyle = color("muted");
+  ctx.font = `500 32px ${font}`;
+  ctx.fillText("GYM time", right, H - 110);
   return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png"));
 }
 

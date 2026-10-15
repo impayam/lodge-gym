@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql } from "./helpers";
+import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo, enterSet } from "./helpers";
 
 // SPEC-v7 M9d: the training overview in Reports, rewritten after every finished session right after its report, and
 // the Session reports list. The model is mocked (scripts/e2e-ai-mock.mjs): the real Anthropic API is never called.
@@ -24,15 +24,15 @@ function phaseToday() {
   const dow = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date())}T12:00:00Z`).getUTCDay();
   return dow === 1 || dow === 2 ? "start" : dow === 0 || dow === 6 ? "end" : "mid";
 }
-const toReports = (page: Page) => page.getByRole("navigation").getByRole("button", { name: "Reports" }).click();
+const toReports = (page: Page) => goTo(page, "Reports");
 
 /** Logs Day 1's bench (4 × 5 at 140 lb) and finishes; returns once the session's report is on screen. */
 async function finishDay1(page: Page) {
-  await page.getByRole("navigation").getByRole("button", { name: "Train" }).click();
-  await expect(page.getByTestId("next-card")).toContainText("Day 1 · Chest");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await goTo(page, "Train");
+  await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 1 · Chest");
+  await page.getByTestId("start").click();
   for (let i = 0; i < 4; i++) {
-    await page.getByTestId(`w-bench-${i}`).locator("input").fill("140");
+    await enterSet(page, "bench", i, "w", "140");
     await page.getByTestId(`check-bench-${i}`).click();
   }
   await page.getByTestId("finish").click();
@@ -40,6 +40,8 @@ async function finishDay1(page: Page) {
 }
 
 test("the overview updates after a finished session, keeps the old one on failure with Retry, and Regenerate writes a new one", async ({ page, context }) => {
+  // Four overview writes through the server job: 44–61 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   await page.goto("/");
   await toReports(page);
   await expect(card(page)).toHaveAttribute("data-state", "none");
@@ -61,6 +63,10 @@ test("the overview updates after a finished session, keeps the old one on failur
   await expect(page.getByTestId("overview-updated")).toHaveText(/^Updated after: Day 1 · Chest · [A-Z][a-z]{2} \d{1,2}$/, { timeout: 30_000 });
   await expect(card(page)).not.toHaveAttribute("data-overview", manual!);
   await expect(page.getByTestId("overview-summary")).toContainText("در 5 هفتهٔ اخیر 1 جلسه");
+  // The rest opens in the card (Payam, 2026-10-14).
+  await expect(page.getByTestId("overview-lifts")).toHaveCount(0);
+  await page.getByTestId("overview-more").click();
+  await expect(page.getByTestId("overview-more")).toHaveAttribute("aria-expanded", "true");
   // The app's lift table: bench 4 × 5 at 140 lb → Epley 1RM 163.3.
   const bench = page.getByTestId("overview-lifts").locator('tr[data-lift="bench"]');
   await expect(bench.locator("td").nth(0)).toHaveText("Barbell Bench Press");
@@ -104,7 +110,7 @@ test("the overview updates after a finished session, keeps the old one on failur
   await expect(card(page)).toHaveAttribute("data-state", "ready");
 
   // Settings counts the overviews in this month's cost line.
-  await page.getByRole("navigation").getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "AI reports");
   await expect(page.getByTestId("ai-cost")).toHaveText(/^1 report, 4 overviews, ~\$\d+\.\d{2}$/);
 
   // Offline, Reports shows the last saved overview.
@@ -125,8 +131,8 @@ test("Session reports lists each finished session's report, newest first, and a 
   const rows = page.getByTestId("session-report-row");
   await expect(rows).toHaveCount(1, { timeout: 30_000 });
   await expect(rows.first()).toContainText("Day 1 · Chest");
-  await expect(rows.first().locator(".sr-line")).toHaveAttribute("dir", "rtl");
-  await expect(rows.first().locator(".sr-line")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
+  await expect(rows.first().locator(".list-row__note")).toHaveAttribute("dir", "rtl");
+  await expect(rows.first().locator(".list-row__note")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
   await rows.first().click();
   await expect(page.getByTestId("report-screen")).toBeVisible();
   await expect(page.getByTestId("report-summary")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
@@ -134,6 +140,8 @@ test("Session reports lists each finished session's report, newest first, and a 
 });
 
 test("History → Reports timeline: a session date lists its report and the overview written after it; a Regenerate on a day without a session gets ◆; weekly reviews on their week's last day; everything opens read-only", async ({ page }) => {
+  // Reports, overviews and reviews opened one by one: 37–46 s in WebKit on a busy machine.
+  test.setTimeout(120_000);
   sql("DELETE FROM weekly_reviews");
   const tz = (sql("SELECT value FROM settings WHERE key = 'timezone'")[0] as { value?: string } | undefined)?.value ?? "America/Denver";
   const localDay = (daysAgo: number) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(Date.now() - daysAgo * 86_400_000));
@@ -151,20 +159,20 @@ test("History → Reports timeline: a session date lists its report and the over
      INSERT INTO weekly_reviews (id, week_start, created_at, summary_fa, highlights, suggestions) VALUES ('rv', '${localDay(13)}', '${localDay(6)}T13:55:00Z', 'مرور هفته', '[]', '[]')`
   );
 
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   const cols = page.getByTestId("rt-col");
   await expect(cols).toHaveCount(3);
   expect(await cols.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")))).toEqual([localDay(7), threeAgo, today]);
-  // Two labeled rows only.
-  await expect(page.locator(".rt-lanes .rt-lane")).toHaveText(["Session report", "Weekly review"]);
+  // Two labeled rows only (mockup 04: Sessions, Weekly).
+  await expect(page.locator(".timeline__lanes")).toHaveText(/^\s*Sessions\s*Weekly\s*$/);
   const todayCol = cols.nth(2);
-  await expect(todayCol.locator(".mk-session")).toBeVisible();
+  await expect(todayCol.locator(".marker--session")).toBeVisible();
   await expect(todayCol).toHaveAttribute("aria-label", /: session report, training overview$/);
-  // The overview-only date: ◆ on the date, nothing in the session row.
+  // The overview-only date: ◆ in the Sessions lane instead of a session dot.
   const manual = cols.nth(1);
-  await expect(manual.locator(".d .mk-overview")).toBeVisible();
-  await expect(manual.locator(".mk-session")).toHaveCount(0);
-  await expect(cols.nth(0).locator(".mk-review")).toBeVisible();
+  await expect(manual.locator(".marker--overview")).toBeVisible();
+  await expect(manual.locator(".marker--session")).toHaveCount(0);
+  await expect(cols.nth(0).locator(".marker--review")).toBeVisible();
 
   // A date with two reports: the short list to choose from.
   await todayCol.click();
@@ -179,7 +187,7 @@ test("History → Reports timeline: a session date lists its report and the over
   await expect(page.getByTestId("saved-body").getByTestId("overview-summary")).toHaveAttribute("dir", "rtl");
   await expect(page.getByTestId("saved-body").getByTestId("overview-lifts")).toBeVisible();
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   await cols.nth(2).click();
   await page.getByTestId("rt-chooser").getByTestId("rt-item").nth(0).click();
@@ -187,13 +195,13 @@ test("History → Reports timeline: a session date lists its report and the over
   await expect(page.getByTestId("saved-body").getByTestId("report-summary")).toContainText("جلسهٔ Day 1 · Chest انجام شد");
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   // One report on the date: it opens at once.
   await cols.nth(1).click();
   await expect(page.getByTestId("saved-report")).toHaveAttribute("data-kind", "overview");
   await expect(page.getByTestId("saved-report")).toContainText("Regenerated · ");
-  await page.getByRole("main").getByRole("button", { name: "← History" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to History" }).click();
 
   // The List view keeps all three types, newest first; the choice is kept.
   await page.getByTestId("rt-mode-list").click();
@@ -205,7 +213,7 @@ test("History → Reports timeline: a session date lists its report and the over
     ["review", localDay(7)],
   ]);
   await page.reload();
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   await expect(page.getByTestId("reports-timeline")).toHaveAttribute("data-mode", "list");
   await page.getByTestId("rt-list").getByTestId("rt-item").nth(3).click();
   await expect(page.getByTestId("weekly-review")).toContainText("مرور هفته");

@@ -398,7 +398,7 @@ export interface SessionReportItem {
   error_code: string | null;
 }
 
-export const OVERVIEW_SYSTEM = `You write a short overview of Payam's recent gym training for the Lodge Gym app. The window is this week and the previous 4 weeks; this week is marked this_week.
+export const OVERVIEW_SYSTEM = `You write a short overview of Payam's recent gym training for the GYM time app. The window is this week and the previous 4 weeks; this week is marked this_week.
 
 Rules:
 - Write every text field in Persian (Farsi). Exercise names may stay in English.

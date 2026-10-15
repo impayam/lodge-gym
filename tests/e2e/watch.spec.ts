@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { resetWorkouts, signIn, sql } from "./helpers";
+import { resetWorkouts, signIn, sql, goTo } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -27,7 +27,7 @@ test("legacy workout fields: match status, manual attach, session card, revoke",
     );
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await expect(page.getByRole("heading", { name: "Apple Watch" })).toBeVisible();
   await expect(page.getByText("Find Health Samples").first()).toBeVisible();
@@ -92,8 +92,9 @@ test("legacy workout fields: match status, manual attach, session card, revoke",
   await expect(card).toContainText("312 active kcal");
   await expect(card).toContainText("max 170");
 
-  // Revoking the token blocks the shortcut.
-  await page.getByRole("button", { name: "Settings" }).click();
+  // Revoking the token blocks the shortcut (the session screen is full screen: leave it first).
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await page.getByRole("button", { name: "Revoke", exact: true }).click();
   await page.getByRole("button", { name: "Sure? Revoke" }).click();
@@ -116,7 +117,7 @@ test("Heart Rate + Active Energy samples: per-session stats on the Apple Watch p
   );
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await expect(page.getByText("Active Energy").first()).toBeVisible();
   await expect(page.getByText("energy_time").first()).toBeVisible();
@@ -137,7 +138,7 @@ test("Heart Rate + Active Energy samples: per-session stats on the Apple Watch p
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Cookie: "" },
       data: JSON.stringify(payload),
     });
-    expect(await res.json()).toMatchObject({ sessions: 1, hr_samples: 5, energy_samples: 4, message: "Lodge Gym: watch data saved for 1 session." });
+    expect(await res.json()).toMatchObject({ sessions: 1, hr_samples: 5, energy_samples: 4, message: "GYM time: watch data saved for 1 session." });
   }
   expect(sql("SELECT COUNT(*) AS n FROM health_workouts")).toEqual([{ n: 1 }]);
 

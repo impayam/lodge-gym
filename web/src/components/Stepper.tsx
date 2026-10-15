@@ -1,4 +1,4 @@
-// Numeric field with −/+ buttons (press and hold repeats). Accepts Persian/Latin digits and , or . decimals.
+// Numeric field (a number in a well between two clay buttons) with −/+ buttons (press and hold repeats). Accepts Persian/Latin digits and , or . decimals.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { fmtNum, parseNumber } from "../../../worker/lib/digits";
@@ -14,9 +14,11 @@ interface Props {
   decimals?: boolean;
   label: string;
   testId?: string;
+  /** The 44 px size for forms with several steppers (the planner); otherwise the 58 px one of the set sheet. */
+  small?: boolean;
 }
 
-export function Stepper({ value, placeholder, step, onChange, base, min, decimals = true, label, testId }: Props) {
+export function Stepper({ value, placeholder, step, onChange, base, min, decimals = true, label, testId, small = false }: Props) {
   const [text, setText] = useState<string | null>(null);
   const repeat = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean }>({ t: null, fired: false });
   const latest = useRef(value);
@@ -60,12 +62,14 @@ export function Stepper({ value, placeholder, step, onChange, base, min, decimal
   };
 
   const shown = text ?? (value == null ? "" : fmtNum(value));
+  const btn = "clay press";
   return (
-    <div class="stepper" data-testid={testId}>
-      <button type="button" aria-label={`Decrease ${label}`} onPointerDown={press(-1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(-1)}>
+    <div class={small ? "num-stepper num-stepper--sm" : "num-stepper"} data-testid={testId}>
+      <button type="button" class={btn} aria-label={`Decrease ${label}`} onPointerDown={press(-1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(-1)}>
         −
       </button>
       <input
+        class="num-stepper__input well num"
         inputMode={min !== undefined && min >= 0 ? (decimals ? "decimal" : "numeric") : "text"}
         enterKeyHint="done"
         autoComplete="off"
@@ -82,7 +86,7 @@ export function Stepper({ value, placeholder, step, onChange, base, min, decimal
           if (n !== null && (decimals || Number.isInteger(n)) && (min === undefined || n >= min)) onChange(n);
         }}
       />
-      <button type="button" aria-label={`Increase ${label}`} onPointerDown={press(1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(1)}>
+      <button type="button" class={btn} aria-label={`Increase ${label}`} onPointerDown={press(1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} onClick={click(1)}>
         +
       </button>
     </div>

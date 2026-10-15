@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./fixtures";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resetWorkouts, setOffline, signIn, sql, waitForSynced } from "./helpers";
+import { resetWorkouts, setOffline, signIn, sql, waitForSynced, goTo } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -65,7 +65,7 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 15_000 }).catch(() => undefined);
   const files = { front: await makeJpeg(page, "#c00"), side: await makeJpeg(page, "#0a0"), back: await makeJpeg(page, "#00c") };
 
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await setOffline(context, page, true);
   await page.getByTestId("finish").click();
   const prompt = page.getByTestId("photo-prompt");
@@ -98,7 +98,7 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   }
 
   // Gallery, pose filter, compare with day gap and overlay slider.
-  await page.getByRole("button", { name: "Photos" }).click();
+  await goTo(page, "Photos");
   await expect(page.getByTestId("photo")).toHaveCount(3);
   await page.getByRole("group", { name: "Pose filter" }).getByRole("button", { name: "Side" }).click();
   await expect(page.getByTestId("photo")).toHaveCount(1);
@@ -129,7 +129,7 @@ test("library picker adds several photos with the chosen pose", async ({ page, c
   await page.goto("/");
   const a = await makeJpeg(page, "#aa0");
   const b = await makeJpeg(page, "#0aa");
-  await page.getByRole("button", { name: "Photos" }).click();
+  await goTo(page, "Photos");
   await page.getByRole("group", { name: "Photo pose" }).getByRole("button", { name: "Side" }).click();
   await page.getByTestId("library-side").setInputFiles([a, b]);
   await expect(page.getByRole("status")).toContainText("2 photos saved");

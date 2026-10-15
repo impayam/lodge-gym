@@ -14,9 +14,10 @@ import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
 import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
 import type { BootData, OutboxEntry } from "./localdb";
+import { backTarget, tabAfter, type TabName, type ViewName } from "./lib/nav";
 
 export type AuthState = "loading" | "setup" | "login" | "recovery" | "locked" | "first-offline" | "ready";
-export type ViewName = "home" | "history" | "program" | "settings" | "session" | "watch" | "photos" | "reports" | "library" | "newprogram" | "plan" | "report" | "saved";
+export type { TabName, ViewName } from "./lib/nav";
 
 export interface SyncState {
   pending: number;
@@ -26,6 +27,10 @@ export interface SyncState {
   lastSync: string | null;
 }
 
+/** A server load that screens wait on (SPEC-v8 §7 states): running, failed with its error, or done in this run. */
+export type Load = { status: "loading" } | { status: "error"; error: unknown } | { status: "done" };
+export type LoadName = "history" | "photos" | "library";
+
 export interface State {
   auth: AuthState;
   boot: BootData | null;
@@ -34,9 +39,21 @@ export interface State {
    * sessionId: the session view or its AI report (fresh: just finished); programId: a draft opened in the program
    * editor; planId: the session planner.
    */
-  view: { name: ViewName; sessionId?: string; programId?: string; planId?: string; fresh?: boolean; saved?: TimelineItem };
+  view: {
+    name: ViewName;
+    sessionId?: string;
+    programId?: string;
+    planId?: string;
+    fresh?: boolean;
+    saved?: TimelineItem;
+    /** Photos: start in compare mode, or with one photo open. */
+    photos?: { compare?: boolean; open?: string };
+  };
+  /** The selected tab (SPEC-v8 §5); pushed screens keep the tab they were opened from. */
+  tab: TabName;
   sync: SyncState;
-  rest: { id: string; endsAt: number; label: string } | null;
+  /** The rest timer: when it ends, what it follows, and its length in seconds (the ring's full circle). */
+  rest: { id: string; endsAt: number; label: string; total: number } | null;
   flash: string | null;
   /** Synced photo metadata plus photos still waiting in the outbox. */
   photos: Photo[];
@@ -46,6 +63,8 @@ export interface State {
   library: Exercise[] | null;
   /** Session plans (SPEC-v3 M9c) by id: open plans and the plans of recent sessions. */
   plans: Record<string, SessionPlan>;
+  /** The full history, the photo list and the library: absent until first asked for. */
+  loads: Partial<Record<LoadName, Load>>;
 }
 
 let state: State = {
@@ -53,6 +72,7 @@ let state: State = {
   boot: null,
   sessions: {},
   view: { name: "home" },
+  tab: "home",
   sync: { pending: 0, online: typeof navigator === "undefined" ? true : navigator.onLine, syncing: false, error: null, lastSync: null },
   rest: null,
   flash: null,
@@ -60,6 +80,7 @@ let state: State = {
   pendingPhotos: {},
   library: null,
   plans: {},
+  loads: {},
 };
 
 const listeners = new Set<() => void>();
@@ -93,7 +114,19 @@ export const settings = (): Settings => state.boot!.settings;
 export const today = () => localDate(state.boot?.settings.timezone ?? "America/Denver");
 
 export function navigate(name: ViewName, sessionId?: string) {
-  setState({ view: { name, sessionId } });
+  setState((s) => ({ view: { name, sessionId }, tab: tabAfter(name, s.tab) }));
+  window.scrollTo(0, 0);
+}
+
+/** Back from a pushed screen (its Back button or the edge swipe, SPEC-v8 §5). */
+export function goBack() {
+  const to = backTarget(state.view.name, state.tab);
+  if (to) navigate(to);
+}
+
+/** Progress photos, optionally in compare mode or with one photo open (Me → Progress photos). */
+export function openPhotos(opts: { compare?: boolean; open?: string } = {}) {
+  setState({ view: { name: "photos", photos: opts } });
   window.scrollTo(0, 0);
 }
 
@@ -256,14 +289,29 @@ async function mergeServerPlans(server: SessionPlan[]) {
   setState({ plans: next });
 }
 
-/** Loads the full history (all dates) when online. */
-export async function loadAllHistory() {
+/**
+ * Runs a server load and records its state for the screens; a 401 goes to sign-in. Once a load has worked in this run,
+ * later ones refresh quietly: the screens keep what they have.
+ */
+async function tracked(name: LoadName, run: () => Promise<void>) {
+  const refresh = state.loads[name]?.status === "done";
+  if (!refresh) setState((s) => ({ loads: { ...s.loads, [name]: { status: "loading" } } }));
+  let next: Load = { status: "done" };
   try {
-    const r = await api<{ sessions: WorkoutSession[] }>("GET", "/sessions");
-    await mergeServerSessions(r.sessions, null);
+    await run();
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
+    if (!refresh) next = { status: "error", error: e };
   }
+  setState((s) => ({ loads: { ...s.loads, [name]: next } }));
+}
+
+/** Loads the full history (all dates); the last 60 days come with /bootstrap. */
+export function loadAllHistory() {
+  return tracked("history", async () => {
+    const r = await api<{ sessions: WorkoutSession[] }>("GET", "/sessions");
+    await mergeServerSessions(r.sessions, null);
+  });
 }
 
 /* ---------------- writes ---------------- */
@@ -399,8 +447,8 @@ function sortPhotos(list: Photo[]) {
 }
 
 /** Loads the photo list from the server (keeps photos still waiting for upload). */
-export async function loadPhotos() {
-  try {
+export function loadPhotos() {
+  return tracked("photos", async () => {
     const r = await api<{ photos: Photo[] }>("GET", "/photos");
     const deleting = new Set((await ldb.outboxAll()).filter((e) => e.op === "delete_photo").map((e) => (e as { id: string }).id));
     const server = r.photos.filter((p) => !deleting.has(p.id));
@@ -408,9 +456,7 @@ export async function loadPhotos() {
     const ids = new Set(server.map((p) => p.id));
     const pending = state.photos.filter((p) => state.pendingPhotos[p.id] && !ids.has(p.id));
     setState({ photos: sortPhotos([...pending, ...server]) });
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
-  }
+  });
 }
 
 function photoUploaded(id: string) {
@@ -466,14 +512,12 @@ export const photoSrc = (p: Photo, size: "thumb" | "full") => state.pendingPhoto
 /* ---------------- exercise library (SPEC-v2 §7) ---------------- */
 
 /** Loads the library list; the cached copy serves offline. */
-export async function loadLibrary() {
-  try {
+export function loadLibrary() {
+  return tracked("library", async () => {
     const r = await api<{ exercises: Exercise[] }>("GET", "/exercises");
     await ldb.kvSet("library", r.exercises);
     setState({ library: r.exercises });
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 401) setState({ auth: "login" });
-  }
+  });
 }
 
 /** Every exercise the app knows: the cached library plus the bootstrap set (program, history, custom). */
@@ -745,7 +789,7 @@ export async function logout() {
     /* offline logout still clears the local flag */
   }
   await ldb.kvSet("logged_in", false);
-  setState({ auth: "login", view: { name: "home" }, rest: null });
+  setState({ auth: "login", view: { name: "home" }, tab: "home", rest: null });
 }
 
 /* ---------------- watch data ---------------- */
@@ -764,13 +808,15 @@ export async function upsertWatch(list: HealthWorkout[]) {
 
 export function startRest(seconds: number, label: string) {
   if (state.rest) cancelPush(state.rest.id);
-  const rest = { id: ulid(), endsAt: Date.now() + seconds * 1000, label };
+  const rest = { id: ulid(), endsAt: Date.now() + seconds * 1000, label, total: seconds };
   setState({ rest });
   schedulePush(rest.id, rest.endsAt, label);
 }
 export function extendRest(seconds: number) {
   if (!state.rest) return;
-  const rest = { ...state.rest, endsAt: Math.max(Date.now(), state.rest.endsAt) + seconds * 1000 };
+  const endsAt = Math.max(Date.now(), state.rest.endsAt) + seconds * 1000;
+  // The ring grows with the extension: it never shows more than a full circle.
+  const rest = { ...state.rest, endsAt, total: Math.max(state.rest.total, (endsAt - Date.now()) / 1000) };
   setState({ rest });
   schedulePush(rest.id, rest.endsAt, rest.label);
 }

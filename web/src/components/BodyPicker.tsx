@@ -17,7 +17,11 @@ import type { Equipment, Exercise, WorkoutSession } from "../../../worker/lib/ty
 import { dayMonth, fmtNum, ytLink } from "../format";
 import type { AnatomyView } from "../lib/anatomy3d";
 import { loadLibrary, useStore } from "../store";
-import { CATEGORY_LABEL, ExerciseThumb, equipmentLabel, muscleLabel } from "../views/Library";
+import { Empty, LoadError, Loading } from "./States";
+import { CATEGORY_LABEL, EquipmentIcon, equipmentLabel, muscleLabel } from "../views/Library";
+import { IconPlay } from "./PulseIcons";
+import { token } from "../lib/tokens";
+import { Select } from "./Select";
 
 interface Place {
   step: "body" | "list";
@@ -64,7 +68,7 @@ export function BodyPicker({ sessionId, onPick }: { sessionId: string; onPick: (
   return <BodyStep place={place} go={go} />;
 }
 
-const accentColor = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0f6e5f";
+const accentColor = () => token("--model-accent");
 
 function BodyStep({ place, go }: { place: Place; go: Go }) {
   const host = useRef<HTMLDivElement>(null);
@@ -141,32 +145,32 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
 
   const sides =
     mode === "3d" ? (
-      <span class="seg anatomy-sides" role="group" aria-label="Side">
+      <span class="segmented" role="group" aria-label="Side">
         {(["front", "back"] as const).map((v) => (
-          <button type="button" aria-pressed={place.view === v} data-testid={`view-${v}`} onClick={() => turn(v)}>
+          <button type="button" class="press" aria-pressed={place.view === v} data-testid={`view-${v}`} onClick={() => turn(v)}>
             {v === "front" ? "Front" : "Back"}
           </button>
         ))}
       </span>
     ) : null;
   const back = def ? (
-    <button type="button" class={mode === "fallback" ? "btn btn-ghost btn-small" : "btn btn-small anatomy-back"} data-testid="pick-back" onClick={() => chooseArea(null)}>
+    <button type="button" class="clay press btn-sm t-muted" data-testid="pick-back" onClick={() => chooseArea(null)}>
       ← Body
     </button>
   ) : null;
 
   return (
-    <div class="stack bodypick" data-testid="body-step" data-area={place.area ?? ""} data-mode={mode}>
+    <div class="l-col l-gap-12" data-testid="body-step" data-area={place.area ?? ""} data-mode={mode}>
       {mode === "fallback" ? (
         <>
-          <div class="anatomy-off" data-testid="anatomy-fallback">
+          <div class="stage__off" data-testid="anatomy-fallback">
             3D unavailable. Pick an area, then a muscle.
           </div>
-          {back ? <div class="kv navrow">{back}</div> : null}
+          {back ? <div class="l-row">{back}</div> : null}
         </>
       ) : (
         <div
-          class="anatomy"
+          class="stage stage--picker"
           data-testid="anatomy"
           onPointerDown={(e) => {
             // A touch on the model itself (not on Front / Back or ← Body) retires the hint.
@@ -175,23 +179,23 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
             setHint(false);
           }}
         >
-          <div class="anatomy-canvas" ref={host} />
-          {mode === "loading" ? <div class="anatomy-msg">Loading the 3D body…</div> : null}
-          <div class="anatomy-top">
+          <div class="stage__canvas" ref={host} />
+          {mode === "loading" ? <div class="stage__msg">Loading the 3D body…</div> : null}
+          <div class="stage__top">
             {back ?? <span />}
             {sides}
           </div>
           {mode === "3d" && !place.selected ? (
-            <span class={hint ? "anatomy-hint" : "anatomy-hint gone"} data-testid="anatomy-hint" aria-hidden="true">
+            <span class="stage__hint" data-gone={hint ? "false" : "true"} data-testid="anatomy-hint" aria-hidden="true">
               Drag to turn.
               <br />
               {def ? "Tap a muscle." : "Tap to zoom in."}
             </span>
           ) : null}
           {mode === "3d" && place.selected ? (
-            <div class="anatomy-pick" data-testid="anatomy-selection" data-muscle={place.selected}>
-              <b>{muscleLabel(place.selected)}</b>
-              <button type="button" class="btn btn-primary btn-small" data-testid="show-exercises" onClick={() => go({ step: "list", muscle: place.selected })}>
+            <div class="stage__card" data-testid="anatomy-selection" data-muscle={place.selected}>
+              <b class="t-title">{muscleLabel(place.selected)}</b>
+              <button type="button" class="clay press btn-sm t-pink" data-testid="show-exercises" onClick={() => go({ step: "list", muscle: place.selected })}>
                 Show exercises
               </button>
             </div>
@@ -200,17 +204,17 @@ function BodyStep({ place, go }: { place: Place; go: Go }) {
       )}
       {def ? (
         // In a close-up the area's muscle chips take the place of the area chips; "← Body" goes back.
-        <div class="chiprow" role="group" aria-label={`${def.label} muscles`} data-testid="muscle-chips">
+        <div class="chip-wrap" role="group" aria-label={`${def.label} muscles`} data-testid="muscle-chips">
           {def.muscles.map((m) => (
-            <button type="button" class="bigchip" data-testid={`muscle-${m}`} onClick={() => go({ step: "list", muscle: m, selected: m })}>
+            <button type="button" class="clay press chip chip--lg" data-testid={`muscle-${m}`} onClick={() => go({ step: "list", muscle: m, selected: m })}>
               {muscleLabel(m)}
             </button>
           ))}
         </div>
       ) : (
-        <div class="chiprow" role="group" aria-label="Body areas" data-testid="area-chips">
+        <div class="chip-wrap" role="group" aria-label="Body areas" data-testid="area-chips">
           {BODY_AREAS.map((a) => (
-            <button type="button" class="bigchip" data-testid={`area-${a.key}`} onClick={() => chooseArea(a.key)}>
+            <button type="button" class="clay press chip chip--lg" data-testid={`area-${a.key}`} onClick={() => chooseArea(a.key)}>
               {a.label}
             </button>
           ))}
@@ -247,6 +251,7 @@ function lastDone(sessions: Record<string, WorkoutSession>) {
 function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: Exercise) => void }) {
   const boot = useStore((s) => s.boot)!;
   const library = useStore((s) => s.library);
+  const load = useStore((s) => s.loads.library);
   const sessions = useStore((s) => s.sessions);
   const muscle = place.muscle!;
   const last = lastDone(sessions);
@@ -258,43 +263,46 @@ function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: 
     lastDone: new Map([...last].map(([id, v]) => [id, v.when])),
     programIds,
   });
+  const [more, setMore] = useState(false);
   const row = (e: Exercise) => {
     const l = last.get(e.id);
     return (
-      <div class="pickrow" data-testid="pick-row" data-id={e.id}>
-        <button type="button" class="pickmain" onClick={() => onPick(e)}>
-          <ExerciseThumb ex={e} />
-          <span class="meta">
-            <b>{e.name_en}</b>
-            <small>
+      <div class="card ex-row" data-testid="pick-row" data-id={e.id}>
+        <button type="button" class="ex-row__main press" onClick={() => onPick(e)}>
+          <span class="well icon-well icon-well--44 t-violet">
+            <EquipmentIcon equipment={e.equipment} size={22} />
+          </span>
+          <span class="list-row__text">
+            <b class="t-title">{e.name_en}</b>
+            <span class="caption num">
               {equipmentLabel(e.equipment)}
               {countsVolume(e.category) ? "" : " · not counted"}
               {l ? ` · Last: ${l.text}` : programIds.has(e.id) ? " · in your program" : ""}
-            </small>
+            </span>
           </span>
         </button>
-        <a class="formlink" href={ytLink(e.name_en)} target="_blank" rel="noopener noreferrer">
-          Watch form video ↗
+        <a class="btn-icon btn-icon--soft press" href={ytLink(e.name_en)} target="_blank" rel="noopener noreferrer" aria-label={`Form video: ${e.name_en}`}>
+          <IconPlay />
         </a>
       </div>
     );
   };
   return (
-    <div class="stack bodypick" data-testid="muscle-step" data-muscle={muscle}>
-      <div class="kv navrow">
-        <button type="button" class="btn btn-ghost btn-small" data-testid="pick-back" onClick={() => go({ step: "body" })}>
+    <div class="l-col l-gap-12" data-testid="muscle-step" data-muscle={muscle}>
+      <div class="l-row">
+        <button type="button" class="clay press btn-sm t-muted" data-testid="pick-back" onClick={() => go({ step: "body" })}>
           ← {place.area ? areaDef(place.area).label : "Body"}
         </button>
       </div>
-      <h2 style={{ margin: 0 }}>{muscleLabel(muscle)}</h2>
-      <div class="filters two">
-        <select aria-label="Equipment" value={place.equipment} onChange={(e) => go({ equipment: (e.currentTarget as HTMLSelectElement).value as Equipment | "" })}>
+      <h2 class="screen-head__title l-m0">{muscleLabel(muscle)}</h2>
+      <div class="l-grid-2 l-gap-8">
+        <Select aria-label="Equipment" value={place.equipment} onChange={(e) => go({ equipment: (e.currentTarget as HTMLSelectElement).value as Equipment | "" })}>
           <option value="">All equipment</option>
           {EQUIPMENT.map((k) => (
             <option value={k}>{equipmentLabel(k)}</option>
           ))}
-        </select>
-        <select aria-label="Category" value={place.category} onChange={(e) => go({ category: (e.currentTarget as HTMLSelectElement).value as CategoryFilter })}>
+        </Select>
+        <Select aria-label="Category" value={place.category} onChange={(e) => go({ category: (e.currentTarget as HTMLSelectElement).value as CategoryFilter })}>
           <option value="counted">Strength (counted)</option>
           <option value="all">All categories</option>
           {CATEGORIES.map((c) => (
@@ -303,20 +311,30 @@ function MuscleList({ place, go, onPick }: { place: Place; go: Go; onPick: (ex: 
               {countsVolume(c) ? "" : " (not counted)"}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      {library === null ? <div class="empty">Loading the library…</div> : null}
-      <div class="exlist" data-testid="pick-primary">
+      <div class="l-col l-gap-8" data-testid="pick-primary">
         {primary.map(row)}
-        {!primary.length ? <div class="empty">No exercise has {muscleLabel(muscle).toLowerCase()} as its main muscle with these filters.</div> : null}
+        {/* Until the library is here, the rows come from the exercises the app already knows (program and history). */}
+        {library === null && load?.status === "error" ? (
+          <LoadError what="Couldn't load the exercise library." error={load.error} onRetry={() => void loadLibrary()} />
+        ) : library === null ? (
+          <Loading label="Loading the library" heights={[76]} />
+        ) : !primary.length ? (
+          <Empty
+            action={place.equipment || place.category !== "all" ? { label: "Show all equipment and categories", onClick: () => go({ equipment: "", category: "all" }), testId: "pick-clear" } : undefined}
+          >
+            No exercise has {muscleLabel(muscle).toLowerCase()} as its main muscle with these filters.
+          </Empty>
+        ) : null}
       </div>
       {secondary.length ? (
-        <details class="tableview" data-testid="pick-secondary">
-          <summary>Also works this muscle ({fmtNum(secondary.length)})</summary>
-          <div class="exlist" style={{ marginTop: "6px" }}>
-            {secondary.map(row)}
-          </div>
-        </details>
+        <div class="l-col l-gap-8" data-testid="pick-secondary">
+          <button type="button" class="clay press btn t-muted" aria-expanded={more} onClick={() => setMore(!more)}>
+            Also works this muscle ({fmtNum(secondary.length)})
+          </button>
+          {more ? secondary.map(row) : null}
+        </div>
       ) : null}
     </div>
   );

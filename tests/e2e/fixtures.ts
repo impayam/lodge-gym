@@ -19,6 +19,7 @@ const CONTEXT_KEYS = [
   "ignoreHTTPSErrors",
   "proxy",
   "colorScheme",
+  "serviceWorkers",
 ] as const;
 
 /**

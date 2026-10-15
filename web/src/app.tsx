@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "preact/hooks";
-import { IconHistory, IconLibrary, IconPhotos, IconProgram, IconReports, IconSettings, IconTrain } from "./components/Icons";
+import { Pushed } from "./components/Pushed";
+import { IconCoach, TabIcon } from "./components/PulseIcons";
 import { RestTimer } from "./components/RestTimer";
-import { StatusChip } from "./components/StatusChip";
-import { dateLong } from "./format";
-import { getState, navigate, setState, today, useStore, type ViewName } from "./store";
+import { backTarget, showsCoachButton, showsTabBar, tabIndex, TABS, type TabName } from "./lib/nav";
+import { getState, goBack, navigate, setState, useStore } from "./store";
 import { FirstOffline, Locked, Login, Recovery, Setup } from "./views/Auth";
 import { History } from "./views/History";
 import { Library } from "./views/Library";
+import { Me } from "./views/Me";
+import { AiReports, Backup } from "./views/MeScreens";
+import { Coach } from "./views/Coach";
 import { NewProgram } from "./views/NewProgram";
 import { Home } from "./views/Home";
 import { Photos } from "./views/Photos";
@@ -38,88 +41,108 @@ function useRelock() {
   }, []);
 }
 
-const TABS: { name: ViewName; label: string; Icon: () => preact.JSX.Element }[] = [
-  { name: "home", label: "Train", Icon: IconTrain },
-  { name: "history", label: "History", Icon: IconHistory },
-  { name: "library", label: "Library", Icon: IconLibrary },
-  { name: "photos", label: "Photos", Icon: IconPhotos },
-  { name: "reports", label: "Reports", Icon: IconReports },
-  { name: "program", label: "Program", Icon: IconProgram },
-  { name: "settings", label: "Settings", Icon: IconSettings },
-];
+/** The 5 icon tabs with the pressed-in well that slides to the current one (SPEC-v8 §5). */
+function TabBar({ tab }: { tab: TabName }) {
+  return (
+    <nav class="tabbar" aria-label="Sections" style={{ "--i": String(tabIndex(tab)) }}>
+      <span class="tabbar__indicator" aria-hidden="true" />
+      {TABS.map(({ name, label }) => {
+        const Icon = TabIcon[name];
+        return (
+          <a
+            href={name === "home" ? "/" : `/${name}`}
+            class="press"
+            aria-label={label}
+            aria-current={tab === name ? "page" : undefined}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(name);
+            }}
+          >
+            <Icon />
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
 
 export function App() {
   const auth = useStore((s) => s.auth);
   const view = useStore((s) => s.view);
+  const tab = useStore((s) => s.tab);
   const flashMsg = useStore((s) => s.flash);
+  // The rest pill sits where the Coach button is: the button steps aside while resting.
+  const resting = useStore((s) => s.rest !== null);
   const hasBoot = useStore((s) => s.boot !== null);
   useRelock();
 
-  if (auth === "loading") return <div class="gate wrap" aria-busy="true" />;
+  if (auth === "loading") return <main class="page gate" aria-busy="true" />;
   if (auth === "setup") return <Setup />;
   if (auth === "login") return <Login />;
   if (auth === "recovery") return <Recovery />;
   if (auth === "locked") return <Locked />;
   if (auth === "first-offline" || !hasBoot) return <FirstOffline />;
 
-  const t = today();
-  const current = view.name === "session" || view.name === "plan" || view.name === "report" ? "home" : view.name === "watch" || view.name === "newprogram" ? "settings" : view.name === "saved" ? "history" : view.name;
+  const screen =
+    view.name === "session" && view.sessionId ? (
+      <Session key={view.sessionId} id={view.sessionId} />
+    ) : view.name === "report" && view.sessionId ? (
+      <SessionReportScreen key={view.sessionId} id={view.sessionId} fresh={!!view.fresh} />
+    ) : view.name === "plan" && view.planId ? (
+      <Planner key={view.planId} id={view.planId} />
+    ) : view.name === "history" ? (
+      <History />
+    ) : view.name === "saved" && view.saved ? (
+      <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
+    ) : view.name === "reports" ? (
+      <Reports />
+    ) : view.name === "library" ? (
+      <Library />
+    ) : view.name === "me" ? (
+      <Me />
+    ) : view.name === "coach" ? (
+      <Coach />
+    ) : view.name === "photos" ? (
+      <Photos key={JSON.stringify(view.photos ?? {})} compare={view.photos?.compare} open={view.photos?.open} />
+    ) : view.name === "program" ? (
+      <Program />
+    ) : view.name === "settings" ? (
+      <Settings />
+    ) : view.name === "ai" ? (
+      <AiReports />
+    ) : view.name === "backup" ? (
+      <Backup />
+    ) : view.name === "watch" ? (
+      <Watch />
+    ) : view.name === "newprogram" ? (
+      <NewProgram key={view.programId ?? "new"} />
+    ) : (
+      <Home />
+    );
+
+  const pushed = backTarget(view.name, tab) !== null;
   return (
     <>
-      <div class="wrap">
-        <header class="top">
-          <div class="brand">
-            <b>Lodge Gym</b>
-            <small>{dateLong(t)}</small>
-          </div>
-          <StatusChip />
-        </header>
-        {flashMsg ? (
-          <div class="banner good" role="status">
-            {flashMsg}
-          </div>
-        ) : null}
-        <main>
-          {view.name === "session" && view.sessionId ? (
-            <Session key={view.sessionId} id={view.sessionId} />
-          ) : view.name === "report" && view.sessionId ? (
-            <SessionReportScreen key={view.sessionId} id={view.sessionId} fresh={!!view.fresh} />
-          ) : view.name === "plan" && view.planId ? (
-            <Planner key={view.planId} id={view.planId} />
-          ) : view.name === "history" ? (
-            <History />
-          ) : view.name === "saved" && view.saved ? (
-            <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
-          ) : view.name === "reports" ? (
-            <Reports />
-          ) : view.name === "library" ? (
-            <Library />
-          ) : view.name === "photos" ? (
-            <Photos />
-          ) : view.name === "program" ? (
-            <Program />
-          ) : view.name === "settings" ? (
-            <Settings />
-          ) : view.name === "watch" ? (
-            <Watch />
-          ) : view.name === "newprogram" ? (
-            <NewProgram key={view.programId ?? "new"} />
-          ) : (
-            <Home />
-          )}
-        </main>
-      </div>
+      {pushed ? (
+        <Pushed key={`${view.name}:${view.sessionId ?? view.planId ?? view.programId ?? view.saved?.id ?? ""}`} onBack={goBack}>
+          {screen}
+        </Pushed>
+      ) : (
+        screen
+      )}
       <RestTimer />
-      <nav class="tabbar" aria-label="Sections">
-        <div class="in">
-          {TABS.map(({ name, label, Icon }) => (
-            <button type="button" aria-current={current === name ? "page" : "false"} onClick={() => navigate(name)}>
-              <Icon />
-              {label}
-            </button>
-          ))}
+      {showsCoachButton(view.name) && !resting ? (
+        <button type="button" class="clay press fab" aria-label="Ask the coach" data-testid="coach-button" onClick={() => navigate("coach")}>
+          <IconCoach size={22} />
+        </button>
+      ) : null}
+      {showsTabBar(view.name) ? <TabBar tab={tab} /> : null}
+      {flashMsg ? (
+        <div class="toast" role="status" data-testid="toast">
+          {flashMsg}
         </div>
-      </nav>
+      ) : null}
     </>
   );
 }

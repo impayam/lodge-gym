@@ -7,7 +7,10 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { OverviewView, StoredMotivation } from "../../../worker/lib/ai/overview";
 import { cachedOverview, cachedSessionReports, fetchOverview, fetchSessionReports, requestOverview, unavailableReason, type OverviewResponse, type SessionReportItem } from "../ai";
 import { errorText, NetworkError } from "../api";
-import { dateLong, dayMonth, fmtNum, hm, instantShort } from "../format";
+import { IconChevron } from "../components/PulseIcons";
+import { Empty, isOffline, LoadError } from "../components/States";
+import { dateShort, dayMonth, fmtNum, hm, instantShort } from "../format";
+import { dayTitle } from "../lib/lifts";
 import { dayInfo, sortedSessions } from "../model";
 import { getState, loadAllHistory, openReport, useStore } from "../store";
 
@@ -26,10 +29,14 @@ export function TrainingOverviewCard() {
   const tz = useStore((s) => s.boot!.settings.timezone);
   const lastDone = useStore((s) => sortedSessions(s.sessions).find((x) => x.status === "done" && x.ended_at) ?? null);
   const [res, setRes] = useState<OverviewResponse | null>(null);
-  const [offline, setOffline] = useState(false);
+  // The last fetch failed (offline, or the server answered with an error): the error, shown with Retry.
+  const [failure, setFailure] = useState<unknown>(null);
+  const offline = failure !== null;
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [round, setRound] = useState(0);
+  // "Read full overview" expands the rest of the overview in the card (Payam, 2026-10-14).
+  const [open, setOpen] = useState(false);
   const grace = useRef(0);
 
   useEffect(() => {
@@ -43,18 +50,18 @@ export function TrainingOverviewCard() {
         const r = await fetchOverview();
         if (stop) return;
         setRes(r);
-        setOffline(false);
+        setFailure(null);
         if (r.pending) return again();
         // The last finished session is newer than anything written since: its update may not be queued yet.
         const ended = lastDone?.ended_at ?? "";
         const newest = [r.overview?.created_at ?? "", r.failed?.created_at ?? ""].sort().at(-1)!;
         if (ended && ended > newest && Date.now() - Date.parse(ended) < FRESH_MS && syncPending === 0 && grace.current++ < GRACE_POLLS) again();
-      } catch {
+      } catch (e) {
         if (stop) return;
         const cached = await cachedOverview();
         if (stop) return;
         if (cached) setRes((cur) => cur ?? cached);
-        setOffline(true);
+        setFailure(e);
       }
     };
     void run();
@@ -83,52 +90,77 @@ export function TrainingOverviewCard() {
   const failed = res && !res.pending ? res.failed : null;
   const state = !res ? "loading" : res.pending ? "writing" : view ? (failed ? "failed" : "ready") : failed ? "unavailable" : "none";
   return (
-    <section class="card review report overview stack" data-testid="training-overview" data-state={state} data-overview={view?.id ?? ""} aria-busy={state === "loading" || state === "writing"}>
-      <div class="kv">
-        <span class="eyebrow">Training overview</span>
-        {view ? <UpdatedAfter view={view} tz={tz} /> : null}
+    <section class="card l-col l-gap-10" data-testid="training-overview" data-state={state} data-overview={view?.id ?? ""} aria-busy={state === "loading" || state === "writing"} aria-labelledby="overview-title">
+      <div class="l-col l-gap-2">
+        <h2 class="card__title l-m0" id="overview-title">
+          Training overview
+        </h2>
+        {/* SPEC-v7 §M9d: when it was updated, and by which model. */}
+        {view ? (
+          <span class="caption num">
+            <UpdatedAfter view={view} tz={tz} /> · {view.model}
+          </span>
+        ) : null}
       </div>
-      {offline && res ? <div class="why">Offline: showing the last saved copy.</div> : null}
-      {!res ? <div class="why">{offline ? "The training overview needs a connection." : "Loading the training overview…"}</div> : null}
+      {offline && res ? <p class="caption l-m0">{isOffline(failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
+      {!res ? (
+        offline ? (
+          <LoadError what="Couldn't load the training overview." error={failure} onRetry={() => setRound((n) => n + 1)} />
+        ) : (
+          <div class="l-col l-gap-8" aria-label="Loading the training overview">
+            <span class="skeleton skeleton--line" />
+            <span class="skeleton skeleton--line" />
+          </div>
+        )
+      ) : null}
       {res?.pending ? (
-        <div class="rp-wait" data-testid="overview-loading">
-          <span class="spin" aria-hidden="true" /> {view ? "Updating the overview…" : "Writing your training overview…"}
+        <div class="l-col l-gap-8" data-testid="overview-loading">
+          <span class="caption">{view ? "Updating the overview…" : "Writing your training overview…"}</span>
+          {view ? null : <span class="skeleton skeleton--line" />}
         </div>
       ) : null}
       {failed ? (
-        <div class={view ? "ov-failed" : "stack"} data-testid="overview-failed">
-          <span>
-            <b>{view ? "Update failed" : "Overview unavailable"}</b>
-            <span class="why"> — {unavailableReason(failed.error_code, "overview")}</span>
+        <div class="l-col l-gap-8" data-testid="overview-failed">
+          <span class="ex-card__meta">
+            <b class="t-orange">{view ? "Update failed" : "Overview unavailable"}</b> — {unavailableReason(failed.error_code, "overview")}
           </span>
-          <button type="button" class={view ? "linkbtn" : "btn btn-primary btn-block"} data-testid="overview-retry" disabled={busy || offline} onClick={() => void write()}>
+          <button type="button" class="clay press btn-sm btn--fit t-pink" data-testid="overview-retry" disabled={busy || offline} onClick={() => void write()}>
             Retry
           </button>
         </div>
       ) : null}
       {state === "none" ? (
         <>
-          <div class="why">No overview yet. It is written after each finished session, right after the session report.</div>
-          <button type="button" class="btn btn-primary btn-block" data-testid="overview-write" disabled={busy || offline} onClick={() => void write()}>
+          <p class="state l-m0">No overview yet. It is written after each finished session, right after the session report.</p>
+          <button type="button" class="clay press btn t-pink" data-testid="overview-write" disabled={busy || offline} onClick={() => void write()}>
             Write overview
           </button>
         </>
       ) : null}
       {view ? (
         <>
-          <OverviewBody view={view} />
-          <div class="kv rp-foot">
-            <small class="muted">{view.model}</small>
-            <button type="button" class="linkbtn" data-testid="overview-regenerate" disabled={busy || offline || !!res?.pending} onClick={() => void write()}>
+          <p class="fa prose-fa" dir="rtl" lang="fa" data-testid="overview-summary">
+            {view.overview.summary_fa}
+          </p>
+          {open ? (
+            <div id="overview-full" class="l-col l-gap-12">
+              <OverviewBody view={view} summary={false} />
+            </div>
+          ) : null}
+          <div class="l-row l-gap-8">
+            <button type="button" class="clay press btn-sm btn--fit t-pink" aria-expanded={open} aria-controls="overview-full" data-testid="overview-more" onClick={() => setOpen(!open)}>
+              {open ? "Show less" : "Read full overview"}
+            </button>
+            <button type="button" class="clay press btn-sm btn--fit t-muted" data-testid="overview-regenerate" disabled={busy || offline || !!res?.pending} onClick={() => void write()}>
               Regenerate
             </button>
           </div>
         </>
       ) : null}
       {note ? (
-        <div class="banner warn" role="status">
+        <p class="caption t-orange l-m0" role="status">
           {note}
-        </div>
+        </p>
       ) : null}
     </section>
   );
@@ -138,7 +170,7 @@ export function TrainingOverviewCard() {
 function UpdatedAfter({ view, tz }: { view: OverviewView; tz: string }) {
   const boot = useStore((s) => s.boot)!;
   return (
-    <span class="muted num ov-when" data-testid="overview-updated">
+    <span data-testid="overview-updated">
       {view.trigger ? `Updated after: ${dayInfo(boot, view.trigger.program_day_id).name_en} · ${dayMonth(view.trigger.local_date)}` : `Updated ${instantShort(view.created_at, tz)} · ${hm(view.created_at, tz)}`}
     </span>
   );
@@ -151,14 +183,14 @@ export function motivationLabel(m: StoredMotivation): string {
   return m.bad ? `${label} · under half of plan` : label;
 }
 
-export function OverviewBody({ view }: { view: OverviewView }) {
+export function OverviewBody({ view, summary = true }: { view: OverviewView; summary?: boolean }) {
   const o = view.overview;
   const lifts = o.lifts.filter((l) => l.sessions > 0);
-  const list = (title: string, items: string[], mark: string, testid: string, cls = "") =>
+  const list = (title: string, items: string[], mark: string, testid: string, warn = false) =>
     items.length ? (
-      <div data-testid={testid}>
-        <b class="rv-title">{title}</b>
-        <ul class={`rv-list ${cls}`} dir="rtl" lang="fa">
+      <div class="l-col l-gap-4" data-testid={testid}>
+        <h3 class={`card__title l-m0${warn ? " t-orange" : ""}`}>{title}</h3>
+        <ul class="fa prose-fa" dir="rtl" lang="fa">
           {items.map((h) => (
             <li>
               <span aria-hidden="true">{mark}</span> {h}
@@ -169,38 +201,40 @@ export function OverviewBody({ view }: { view: OverviewView }) {
     ) : null;
   const para = (title: string, text: string | null, testid: string) =>
     text ? (
-      <div data-testid={testid}>
-        <b class="rv-title">{title}</b>
-        <p class="rp-note" dir="rtl" lang="fa">
+      <div class="l-col l-gap-4" data-testid={testid}>
+        <h3 class="card__title l-m0">{title}</h3>
+        <p class="fa prose-fa" dir="rtl" lang="fa">
           {text}
         </p>
       </div>
     ) : null;
   return (
     <>
-      <div class="muted ov-window num">
+      <span class="caption num">
         This week and the previous 4 · {dayMonth(view.window_start)} – {dayMonth(view.window_end)}
-      </div>
-      <p class="summary" dir="rtl" lang="fa" data-testid="overview-summary">
-        {o.summary_fa}
-      </p>
+      </span>
+      {summary ? (
+        <p class="fa prose-fa" dir="rtl" lang="fa" data-testid="overview-summary">
+          {o.summary_fa}
+        </p>
+      ) : null}
       {o.motivation ? (
-        <div class={`ov-motivation${o.motivation.bad ? " bad" : ""}`} data-testid="overview-motivation" data-phase={o.motivation.phase} data-bad={String(o.motivation.bad)}>
-          <b class="rv-title">{motivationLabel(o.motivation)}</b>
-          <p dir="rtl" lang="fa">
+        <div class="callout" data-testid="overview-motivation" data-phase={o.motivation.phase} data-bad={String(o.motivation.bad)}>
+          <h3 class="card__title l-m0">{motivationLabel(o.motivation)}</h3>
+          <p class="fa prose-fa" dir="rtl" lang="fa">
             {o.motivation.text_fa}
           </p>
         </div>
       ) : null}
       {lifts.length ? (
-        <div>
-          <b class="rv-title">Main lifts (estimated 1RM)</b>
-          <table class="rp-vol num" data-testid="overview-lifts">
+        <div class="l-col l-gap-4">
+          <h3 class="card__title l-m0">Main lifts (estimated 1RM)</h3>
+          <table class="data-table num" data-testid="overview-lifts">
             <thead>
               <tr>
-                <th>Lift</th>
-                <th>1RM ({o.unit})</th>
-                <th>Change</th>
+                <th scope="col">Lift</th>
+                <th scope="col">1RM ({o.unit})</th>
+                <th scope="col">Change</th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +242,7 @@ export function OverviewBody({ view }: { view: OverviewView }) {
                 <tr data-lift={l.exercise_id}>
                   <td>{l.name}</td>
                   <td>{l.latest_e1rm == null ? "–" : fmtNum(l.latest_e1rm, 1)}</td>
-                  <td class={l.change_pct == null ? "" : l.change_pct > 0 ? "st-on" : l.change_pct < 0 ? "st-under" : ""}>{l.change_pct == null ? "–" : signed(l.change_pct)}</td>
+                  <td class={l.change_pct == null ? "" : l.change_pct > 0 ? "t-violet" : l.change_pct < 0 ? "t-orange" : ""}>{l.change_pct == null ? "–" : signed(l.change_pct)}</td>
                 </tr>
               ))}
             </tbody>
@@ -219,7 +253,7 @@ export function OverviewBody({ view }: { view: OverviewView }) {
       {para("Volume", o.volume_fa, "overview-volume")}
       {para("Consistency", o.consistency_fa, "overview-consistency")}
       {list("Focus next", o.focus_next, "←", "overview-focus")}
-      {list("Watch out", o.warnings, "!", "overview-warnings", "warn")}
+      {list("Watch out", o.warnings, "!", "overview-warnings", true)}
     </>
   );
 }
@@ -230,7 +264,8 @@ export function SessionReportsList() {
   const syncPending = useStore((s) => s.sync.pending);
   const online = useStore((s) => s.sync.online);
   const [list, setList] = useState<SessionReportItem[] | null>(null);
-  const [offline, setOffline] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const [round, setRound] = useState(0);
   const [all, setAll] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
 
@@ -241,18 +276,18 @@ export function SessionReportsList() {
         const r = await fetchSessionReports();
         if (stop) return;
         setList(r);
-        setOffline(false);
-      } catch {
+        setFailure(null);
+      } catch (e) {
         const cached = await cachedSessionReports();
         if (stop) return;
         if (cached) setList((cur) => cur ?? cached);
-        setOffline(true);
+        setFailure(e);
       }
     })();
     return () => {
       stop = true;
     };
-  }, [syncPending, online]);
+  }, [syncPending, online, round]);
 
   const open = async (id: string) => {
     setOpening(id);
@@ -264,39 +299,57 @@ export function SessionReportsList() {
 
   const shown = list ? (all ? list : list.slice(0, LIST_FIRST)) : [];
   return (
-    <section data-testid="session-reports">
-      <h2>Session reports</h2>
-      {offline && list ? <p class="why" style={{ marginTop: 0 }}>Offline: showing the last saved copy.</p> : null}
+    <section class="card card--list" data-testid="session-reports" aria-labelledby="session-reports-title">
+      <h2 class="l-sr" id="session-reports-title">
+        Session reports
+      </h2>
+      {failure !== null && list ? <p class="caption">{isOffline(failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
       {!list ? (
-        <div class="empty">{offline ? "Session reports need a connection." : "Loading…"}</div>
+        failure !== null ? (
+          <LoadError what="Couldn't load the session reports." error={failure} onRetry={() => setRound((n) => n + 1)} />
+        ) : (
+          <div class="l-col l-gap-8" aria-label="Loading the session reports">
+            <span class="skeleton skeleton--line" />
+            <span class="skeleton skeleton--line" />
+          </div>
+        )
       ) : !list.length ? (
-        <div class="empty">No session reports yet. A report is written after each finished session.</div>
+        <Empty>No session reports yet. A report is written after each finished session.</Empty>
       ) : (
-        <div class="stack">
-          {shown.map((r) => (
-            <button type="button" class="hist sr-row" data-testid="session-report-row" data-session={r.session_id} disabled={opening === r.session_id} onClick={() => void open(r.session_id)}>
-              <span class="meta">
-                <b>{dayInfo(boot, r.program_day_id).name_en}</b>
-                <small>{dateLong(r.local_date)}</small>
-                {r.status === "ok" && r.summary_fa ? (
-                  <span class="sr-line" dir="rtl" lang="fa">
-                    {r.summary_fa}
+        <>
+          {shown.map((r) => {
+            const day = dayInfo(boot, r.program_day_id);
+            return (
+              <button type="button" class="list-row press" data-testid="session-report-row" data-session={r.session_id} disabled={opening === r.session_id} onClick={() => void open(r.session_id)}>
+                <span class="well icon-well icon-well--40 big-num big-num--18 t-orange num" aria-hidden="true">
+                  {fmtNum(day.position)}
+                </span>
+                <span class="list-row__text">
+                  <span class="t-title">
+                    <span class="l-sr">Day {fmtNum(day.position)} · </span>
+                    {dayTitle(day.name_en)}
                   </span>
-                ) : (
-                  <span class="sr-line bad">Report unavailable</span>
-                )}
-              </span>
-              <span class="side" aria-hidden="true">
-                ›
-              </span>
-            </button>
-          ))}
+                  <span class="caption">{dateShort(r.local_date)}</span>
+                  {r.status === "ok" && r.summary_fa ? (
+                    <span class="list-row__note fa" dir="rtl" lang="fa">
+                      {r.summary_fa}
+                    </span>
+                  ) : (
+                    <span class="list-row__note t-orange">Report unavailable</span>
+                  )}
+                </span>
+                <span class="list-row__chevron">
+                  <IconChevron size={16} />
+                </span>
+              </button>
+            );
+          })}
           {list.length > LIST_FIRST ? (
-            <button type="button" class="linkbtn" data-testid="session-reports-all" onClick={() => setAll(!all)}>
-              {all ? "Show fewer" : `Show all ${fmtNum(list.length)}`}
+            <button type="button" class="list-row press t-muted" data-testid="session-reports-all" onClick={() => setAll(!all)}>
+              <span class="list-row__text">{all ? "Show fewer" : `Show all ${fmtNum(list.length)}`}</span>
             </button>
           ) : null}
-        </div>
+        </>
       )}
     </section>
   );

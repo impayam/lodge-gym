@@ -21,8 +21,10 @@ const FULL_TTL = 30 * DAY;
 const RECOVERY_TTL = 15 * 60_000;
 const CHALLENGE_TTL = 5 * 60_000;
 const RATE_LIMIT = 10;
-const RP_NAME = "Lodge Gym";
-// Single user: a fixed WebAuthn user handle so every passkey belongs to the same account.
+// Display names shown by the passkey sheet for new passkeys ("GYM time", Payam 2026-10-15). Sign-in matches the RP ID
+// (the domain) and the credential only, so passkeys saved under the old name keep working.
+const RP_NAME = "GYM time";
+// Single user: a fixed WebAuthn user handle so every passkey belongs to the same account. Never change it.
 const USER_ID = new Uint8Array(new TextEncoder().encode("lodge-gym-owner"));
 const RECOVERY_CODE_COUNT = 10;
 
@@ -190,8 +192,8 @@ authRoutes.post("/register/options", async (c) => {
     rpName: RP_NAME,
     rpID,
     userID: USER_ID,
-    userName: "Lodge Gym",
-    userDisplayName: "Lodge Gym",
+    userName: RP_NAME,
+    userDisplayName: RP_NAME,
     attestationType: "none",
     excludeCredentials: existing.results.map((r) => ({
       id: r.id,

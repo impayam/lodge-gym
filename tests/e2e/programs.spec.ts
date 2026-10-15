@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { resetPrograms, resetWorkouts, signIn, sql, waitForSynced } from "./helpers";
+import { openMore, resetPrograms, resetWorkouts, signIn, sql, waitForSynced, goTo, type Place } from "./helpers";
 
 // SPEC-v2 §8.8 E2E: generate a program, swap an exercise, approve it; old sessions still show under the archived
 // program; bench press progression continues from the old weights. Then switch back to the seed program.
@@ -12,7 +12,7 @@ const daysAgo = (n: number) => {
   return d.toLocaleDateString("en-CA", { timeZone: "America/Denver" });
 };
 
-const tab = (page: Page, name: string) => page.getByRole("navigation").getByRole("button", { name }).click();
+const tab = (page: Page, name: Place) => goTo(page, name);
 
 test.beforeAll(() => {
   resetPrograms();
@@ -53,12 +53,12 @@ test("generate, swap an exercise, change sets, approve (SPEC-v2 §8.8 E2E 1)", a
   for (const i of [0, 1, 2]) await expect(page.getByTestId(`np-day-${i}`)).toBeVisible();
   await expect(page.getByTestId("np-violations")).toHaveCount(0);
   await expect(page.getByTestId("np-volume").locator("tr[data-group]")).toHaveCount(10);
-  await expect(page.getByTestId("np-day-1").locator(".np-item").first()).toHaveAttribute("data-ex", "bench");
-  await expect(page.getByTestId("np-day-1").locator(".np-item").first()).toContainText("RIR 1–3");
+  await expect(page.getByTestId("np-day-1").getByTestId("np-item").first()).toHaveAttribute("data-ex", "bench");
+  await expect(page.getByTestId("np-day-1").getByTestId("np-item").first()).toContainText("RIR 1–3");
 
   // Swap: a secondary for another exercise with the same movement and main muscle.
   const day0 = page.getByTestId("np-day-0");
-  const items = day0.locator(".np-item");
+  const items = day0.getByTestId("np-item");
   let swapped: { index: number; from: string; to: string } | null = null;
   for (let k = 1; k < (await items.count()) && !swapped; k++) {
     await page.getByTestId(`np-swap-0-${k}`).click();
@@ -75,11 +75,11 @@ test("generate, swap an exercise, change sets, approve (SPEC-v2 §8.8 E2E 1)", a
 
   // Sets change within the slot's range; the check re-runs.
   const plusId = (await page.locator('[data-testid^="np-plus-"]:not([disabled])').first().getAttribute("data-testid"))!;
-  const row = page.locator(".np-item", { has: page.getByTestId(plusId) });
-  const before = (await row.locator("small").first().textContent())!;
+  const row = page.getByTestId("np-item").filter({ has: page.getByTestId(plusId) });
+  const before = (await row.getByTestId("np-target").textContent())!;
   const sets = Number(before.split(" ")[0]);
   await page.getByTestId(plusId).click();
-  await expect(row.locator("small").first()).toHaveText(before.replace(/^\d+/, String(sets + 1)));
+  await expect(row.getByTestId("np-target")).toHaveText(before.replace(/^\d+/, String(sets + 1)));
 
   await page.getByTestId("np-approve").click();
   await expect(page.getByTestId("np-confirm")).toContainText("“Full body · 4 days” is archived");
@@ -89,7 +89,7 @@ test("generate, swap an exercise, change sets, approve (SPEC-v2 §8.8 E2E 1)", a
   await expect(page.getByTestId("program-name")).toContainText("Full body · 3 days");
   await expect(page.getByTestId("program-rules")).toContainText("3 sessions a week");
   await expect(page.getByTestId("program-rules")).not.toContainText("light week");
-  await expect(page.locator(".prog-item").filter({ has: page.locator("b", { hasText: /^(Main)?Barbell Bench Press$/ }) })).toContainText("RIR 1–3");
+  await expect(page.getByTestId("program-exercise").filter({ has: page.locator(".t-title", { hasText: /^Barbell Bench Press( Main)?$/ }) })).toContainText("RIR 1–3");
   await tab(page, "Train");
   await expect(page.getByTestId("week-strip")).toContainText("of 3");
   await expect(page.getByTestId("next-card")).toContainText("The program changed: start with Day 1 of the new program.");
@@ -103,26 +103,27 @@ test("old sessions still show under the archived program (SPEC-v2 §8.8 E2E 2)",
   const timeline = page.getByTestId("program-timeline");
   await expect(timeline.locator('[data-program="fullbody4"]')).toContainText("Full body (original program)");
   await expect(timeline.locator('[data-program="fullbody4"]')).toContainText("Switch back");
-  await expect(timeline.locator(".tl-item").first()).toContainText("active");
+  await expect(timeline.getByTestId("program-item").first()).toContainText("active");
   const old = page.locator('[data-testid="history-group"][data-program="fullbody4"]');
   await expect(old).toContainText("Full body · 4 days");
-  await expect(old.locator(".hist")).toHaveCount(1);
-  await expect(old.locator(".hist")).toContainText("Day 1 · Chest");
+  await expect(old.getByTestId("session-card")).toHaveCount(1);
+  await expect(old.getByTestId("session-card")).toContainText("Chest");
 });
 
 test("bench press progression continues from the old weights (SPEC-v2 §8.8 E2E 3)", async ({ page }) => {
   await page.goto("/");
   // Bench is the main lift of the new program's chest day.
-  const day = page.locator(".dayopt", { hasText: "Barbell Bench Press" });
+  const day = page.getByTestId("day-option").filter({ hasText: "Barbell Bench Press" });
   await day.click();
-  const bench = page.locator('article.ex[data-ex="bench"]');
+  const bench = page.locator('[data-testid="ex-card"][data-ex="bench"]');
   await expect(bench).toBeVisible();
   await expect(bench.getByTestId("last-perf")).toContainText("135");
-  await expect(bench.locator(".target")).toContainText("RIR 1–3");
+  await expect(bench.getByTestId("target")).toContainText("RIR 1–3");
   // 4 × 5 at 135 lb is below the new 5–8 range's top, so the same weight is suggested: no reset, no 90 % cut.
-  await expect(bench.getByTestId("w-bench-0").locator("input")).toHaveAttribute("placeholder", "135");
-  await page.getByRole("button", { name: "Delete session" }).click();
-  await page.getByRole("button", { name: "Yes, delete" }).click();
+  await expect(bench.getByTestId("w-bench-0")).toHaveText("135");
+  await expect(bench.getByTestId("w-bench-0")).toHaveAttribute("data-suggested", "true");
+  await (await openMore(page)).getByRole("button", { name: "Delete session" }).click();
+  await page.getByTestId("delete-sheet").getByRole("button", { name: "Yes, delete" }).click();
   // The delete goes through the outbox: wait until the server has it, not only for the sync chip (it can still read
   // "Synced" before the delete is queued), so the next test starts with no open session.
   await expect.poll(() => (sql("SELECT COUNT(*) AS n FROM workout_sessions WHERE status = 'active'") as { n: number }[])[0].n, { timeout: 20_000 }).toBe(0);

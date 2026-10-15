@@ -34,7 +34,7 @@ describe("report endpoints", () => {
   it("weekly CSV", async () => {
     const res = await client.fetch("/api/reports/week?start=2026-09-23&format=csv");
     expect(res.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
-    expect(res.headers.get("Content-Disposition")).toBe('attachment; filename="lodge-gym-week-2026-09-21.csv"');
+    expect(res.headers.get("Content-Disposition")).toBe('attachment; filename="gym-time-week-2026-09-21.csv"');
     const text = await res.text();
     expect(text.trim().split("\r\n")).toHaveLength(5);
   });
@@ -44,7 +44,7 @@ describe("report endpoints", () => {
     expect(m.sessions).toBe(2);
     expect(m.body).toEqual([{ date: "2026-09-22", value: 180, ma7: 180 }]);
     const csv = await client.fetch("/api/reports/month?month=2026-09&format=csv");
-    expect(csv.headers.get("Content-Disposition")).toContain("lodge-gym-month-2026-09.csv");
+    expect(csv.headers.get("Content-Disposition")).toContain("gym-time-month-2026-09.csv");
   });
   it("progress page", async () => {
     const p = (await (await client.fetch("/api/reports/progress")).json()) as { since: { sessions: number; lifts: { exercise_id: string; change_pct: number }[] }; balance: { muscles: unknown[] } };

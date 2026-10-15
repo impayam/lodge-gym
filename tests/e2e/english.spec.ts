@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { resetWorkouts, signIn, sql } from "./helpers";
+import { resetWorkouts, signIn, sql, goTo, type Place } from "./helpers";
 
 // SPEC-v2 M6 acceptance: no Persian UI text remains, except stored user notes, the weekly review card and the AI's
 // Persian prose (session report, training overview), which renders in lang="fa" containers.
@@ -25,11 +25,13 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   await page.goto("/");
   await expect(page.getByTestId("next-card")).toBeVisible();
   expect(await page.evaluate(() => getComputedStyle(document.body).direction)).toBe("ltr");
-  // The system font stack: no bundled web font.
-  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/^-apple-system/);
-  expect(await page.evaluate(() => [...document.fonts].length)).toBe(0);
-  // Header date is Gregorian, e.g. "Mon, Oct 12, 2026".
-  await expect(page.locator(".brand small")).toHaveText(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+  // SPEC-v8 §4: Instrument Sans for the UI and Barlow Condensed for big numbers, self-hosted (no font from another
+  // origin); Persian text keeps the system font.
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/^"?Instrument Sans"?,/);
+  expect(await page.evaluate(() => [...new Set([...document.fonts].map((f) => f.family.replace(/"/g, "")))].sort())).toEqual(["Barlow Condensed", "Instrument Sans"]);
+  expect(await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => new URL(e.name).origin !== location.origin).map((e) => e.name))).toEqual([]);
+  // The Home date is Gregorian, e.g. "Wednesday, October 14".
+  await expect(page.getByTestId("today-date")).toHaveText(/^[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}$/);
 
   const check = async (label: string) => {
     const text = await uiText(page);
@@ -37,29 +39,31 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
     expect(bad, `${label} has Persian text`).toEqual([]);
   };
   await check("home");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByTestId("start").click();
   await expect(page.locator('[data-ex="bench"]')).toBeVisible();
-  await expect(page.locator('[data-ex="bench"] .cue')).toBeVisible();
+  await expect(page.locator('[data-ex="bench"]').getByTestId("cue")).toBeVisible();
   await check("session");
-  for (const tab of ["History", "Library", "Photos", "Reports", "Program", "Settings"]) {
-    await page.getByRole("navigation").getByRole("button", { name: tab }).click();
+  // The active session is full screen (SPEC-v8 §5): leave it before using the tab bar.
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  for (const tab of ["History", "Library", "Photos", "Reports", "Me", "Program", "Settings", "AI reports", "Backup"]) {
+    await goTo(page, tab as Place);
     await page.waitForLoadState("networkidle");
     await check(tab);
   }
-  await page.getByRole("navigation").getByRole("button", { name: "History" }).click();
+  await goTo(page, "History");
   await expect(page.getByTestId("rt-col")).toHaveCount(1);
   await page.getByTestId("rt-mode-list").click();
   await check("Reports timeline (list)");
   await page.getByTestId("rt-list").getByTestId("rt-item").first().click();
   await expect(page.getByTestId("weekly-review")).toBeVisible();
   await check("Saved weekly review");
-  await page.getByRole("button", { name: "Reports" }).click();
-  for (const tab of ["Monthly", "Progress"]) {
+  await goTo(page, "Reports");
+  for (const tab of ["Month", "All"]) {
     await page.getByRole("tab", { name: tab }).click();
     await page.waitForLoadState("networkidle");
     await check(tab);
   }
-  await page.getByRole("button", { name: "Settings" }).click();
+  await goTo(page, "Settings");
   await page.getByTestId("open-watch").click();
   await expect(page.getByRole("heading", { name: "Apple Watch" })).toBeVisible();
   await check("Apple Watch");

@@ -267,7 +267,7 @@ export function validateAdvice(out: AdviceOutput, plan: SessionPlan, candidates:
   return { advice: { assessment_fa: out.assessment_fa.trim(), suggestions: kept.slice(0, MAX_SUGGESTIONS) }, dropped: out.suggestions.length - Math.min(kept.length, MAX_SUGGESTIONS) };
 }
 
-export const ADVICE_SYSTEM = `You advise Payam on one planned gym session before he trains, for the Lodge Gym app. He tapped "Get advice"; he decides.
+export const ADVICE_SYSTEM = `You advise Payam on one planned gym session before he trains, for the GYM time app. He tapped "Get advice"; he decides.
 
 Rules:
 - Write assessment_fa and every reason_fa in Persian (Farsi). Exercise names may stay in English.
