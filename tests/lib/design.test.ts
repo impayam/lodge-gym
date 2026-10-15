@@ -18,6 +18,15 @@ describe("Pulse design rules", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("no font name in web/src outside tokens.css and components.css (SPEC-v8 §2.1)", () => {
+    const allowed = new Set(LIBRARY.map((f) => `web/src/styles/${f}`));
+    const FONT_NAME = /\b(sans-serif|serif|monospace|system-ui|BlinkMacSystemFont|Segoe UI|Roboto|Helvetica|Arial|Instrument Sans|Barlow Condensed)\b|-apple-system/g;
+    const offenders = Object.entries(files)
+      .filter(([p]) => p.startsWith("web/src/") && !allowed.has(p))
+      .flatMap(([p, text]) => (text.match(FONT_NAME) ?? []).map((m) => `${p}: ${m}`));
+    expect(offenders).toEqual([]);
+  });
+
   it("web/src/styles holds the library, base and layout only (the pre-Pulse styles are gone)", () => {
     const styles = Object.keys(files).filter((p) => p.startsWith("web/src/styles/"));
     expect(styles.sort()).toEqual(["base.css", "components.css", "layout.css", "tokens.css"].map((f) => `web/src/styles/${f}`));

@@ -76,6 +76,7 @@
   --share-ink-2: #b5c2bc;
   --share-ink: #e7eeea;
   --share-line: #2c3833;
+  --share-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;   /* the PNG card's text, unchanged */
 
   /* ---------- Shadows ---------- */
   --sh-clay: inset 0 1.5px 0 rgba(255,255,255,.11), inset 0 -3px 6px rgba(0,0,0,.35), 0 7px 15px rgba(0,0,0,.42), 0 1.5px 3px rgba(0,0,0,.32);
