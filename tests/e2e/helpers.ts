@@ -74,7 +74,16 @@ export async function signIn(context: BrowserContext, baseURL: string) {
 }
 
 export function resetWorkouts() {
-  sql("DELETE FROM training_overviews; DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
+  sql(
+    "DELETE FROM gym_plans; DELETE FROM training_overviews; DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions"
+  );
+}
+
+/** The training calendar (SPEC-v10 M13) empty again: no shifts, no gym plans, the calendar settings at their defaults. */
+export function resetCalendar() {
+  sql(
+    "DELETE FROM gym_plans; DELETE FROM work_shifts; DELETE FROM settings WHERE key IN ('gym_hours', 'travel_buffer_min', 'after_shift_gap_min', 'preferred_windows', 'reminder_minutes')"
+  );
 }
 
 /**

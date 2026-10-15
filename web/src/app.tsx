@@ -9,6 +9,7 @@ import { History } from "./views/History";
 import { Library } from "./views/Library";
 import { Me } from "./views/Me";
 import { AiReports, Backup } from "./views/MeScreens";
+import { Calendar } from "./views/Calendar";
 import { Coach } from "./views/Coach";
 import { NewProgram } from "./views/NewProgram";
 import { Home } from "./views/Home";
@@ -103,6 +104,8 @@ export function App() {
       <Me />
     ) : view.name === "coach" ? (
       <Coach />
+    ) : view.name === "calendar" ? (
+      <Calendar />
     ) : view.name === "photos" ? (
       <Photos key={JSON.stringify(view.photos ?? {})} compare={view.photos?.compare} open={view.photos?.open} />
     ) : view.name === "program" ? (

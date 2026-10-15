@@ -5,6 +5,7 @@ import type { Category } from "../../worker/lib/category";
 import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
+import { DEFAULT_CALENDAR_SETTINGS, type CalendarSettings, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
 import { liveItems, removeItem, type SessionPlan } from "../../worker/lib/plan";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
@@ -29,7 +30,7 @@ export interface SyncState {
 
 /** A server load that screens wait on (SPEC-v8 §7 states): running, failed with its error, or done in this run. */
 export type Load = { status: "loading" } | { status: "error"; error: unknown } | { status: "done" };
-export type LoadName = "history" | "photos" | "library";
+export type LoadName = "history" | "photos" | "library" | "calendar";
 
 export interface State {
   auth: AuthState;
@@ -48,6 +49,8 @@ export interface State {
     saved?: TimelineItem;
     /** Photos: start in compare mode, or with one photo open. */
     photos?: { compare?: boolean; open?: string };
+    /** Calendar: the week shown (its first date) and whether free times are on. */
+    calendar?: { week?: string; free?: boolean };
   };
   /** The selected tab (SPEC-v8 §5); pushed screens keep the tab they were opened from. */
   tab: TabName;
@@ -63,6 +66,9 @@ export interface State {
   library: Exercise[] | null;
   /** Session plans (SPEC-v3 M9c) by id: open plans and the plans of recent sessions. */
   plans: Record<string, SessionPlan>;
+  /** Training calendar (SPEC-v10 M13) by id: work shifts and planned gym sessions. */
+  shifts: Record<string, WorkShift>;
+  gymPlans: Record<string, GymPlan>;
   /** The full history, the photo list and the library: absent until first asked for. */
   loads: Partial<Record<LoadName, Load>>;
 }
@@ -80,6 +86,8 @@ let state: State = {
   pendingPhotos: {},
   library: null,
   plans: {},
+  shifts: {},
+  gymPlans: {},
   loads: {},
 };
 
@@ -111,6 +119,8 @@ export function useStore<T>(select: (s: State) => T): T {
 }
 
 export const settings = (): Settings => state.boot!.settings;
+/** The calendar settings (gym hours, buffers, preferred windows, reminder); the approved defaults until synced. */
+export const calendarSettings = (boot: BootData | null = state.boot): CalendarSettings => boot?.calendar_settings ?? DEFAULT_CALENDAR_SETTINGS;
 export const today = () => localDate(state.boot?.settings.timezone ?? "America/Denver");
 
 export function navigate(name: ViewName, sessionId?: string) {
@@ -133,6 +143,12 @@ export function openPhotos(opts: { compare?: boolean; open?: string } = {}) {
 /** A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). */
 export function openReport(sessionId: string, fresh = false) {
   setState({ view: { name: "report", sessionId, fresh } });
+  window.scrollTo(0, 0);
+}
+
+/** The training calendar (SPEC-v10 M13), on a week (its first date) and with free times on or off. */
+export function openCalendar(opts: { week?: string; free?: boolean } = {}) {
+  setState({ view: { name: "calendar", calendar: opts } });
   window.scrollTo(0, 0);
 }
 
@@ -176,19 +192,23 @@ export async function init() {
     if (state.sync.pending > 0) void syncNow();
   }, 30_000);
 
-  const [boot, loggedIn, sessions, outbox, library, plans] = await Promise.all([
+  const [boot, loggedIn, sessions, outbox, library, plans, shifts, gymPlans] = await Promise.all([
     ldb.kvGet<BootData>("boot"),
     ldb.kvGet<boolean>("logged_in"),
     ldb.allSessions(),
     ldb.outboxAll(),
     ldb.kvGet<Exercise[]>("library"),
     ldb.allPlans(),
+    ldb.allShifts(),
+    ldb.allGymPlans(),
   ]);
   setState({
     boot: boot ?? null,
     sessions: Object.fromEntries(sessions.map((s) => [s.id, s])),
     library: library ?? null,
     plans: Object.fromEntries(plans.map((p) => [p.id, p])),
+    shifts: Object.fromEntries(shifts.map((x) => [x.id, x])),
+    gymPlans: Object.fromEntries(gymPlans.map((x) => [x.id, x])),
   });
   await restorePendingPhotos();
   setSync({ pending: outbox.length });
@@ -209,11 +229,15 @@ export async function init() {
 export async function refresh() {
   try {
     const b = await api<Bootstrap>("GET", "/bootstrap");
-    const { sessions, server_time, plans, ...boot } = b;
+    const { sessions, server_time, plans, calendar, ...rest } = b;
+    const boot: BootData = { ...rest, calendar_settings: calendar?.settings ?? state.boot?.calendar_settings };
     await ldb.kvSet("boot", boot);
     await ldb.kvSet("logged_in", true);
-    await mergeServerSessions(sessions, addDays(localDate(boot.settings.timezone), -60));
+    const windowStart = addDays(localDate(boot.settings.timezone), -60);
+    await mergeServerSessions(sessions, windowStart);
     await mergeServerPlans(plans ?? []);
+    // A Worker from before M13 sends no calendar: keep what this device has.
+    if (calendar) await mergeServerCalendar(calendar.shifts, calendar.plans, windowStart, null);
     setState((s) => ({ boot, auth: s.auth === "locked" ? "locked" : "ready" }));
     setSync({ online: true, lastSync: server_time });
     void syncNow();
@@ -287,6 +311,54 @@ async function mergeServerPlans(server: SessionPlan[]) {
     }
   await ldb.putPlans(put, remove);
   setState({ plans: next });
+}
+
+/**
+ * Shifts and gym plans of [from, to] (to null: no end) from the server. The server wins unless a write is pending or
+ * the local copy is newer; a local one in the range the server no longer has was deleted on another device.
+ */
+async function mergeServerCalendar(shifts: WorkShift[], plans: GymPlan[], from: string, to: string | null) {
+  const outbox = new Set((await ldb.outboxAll()).map((e) => e.key));
+  const inRange = (date: string) => date >= from && (to === null || date <= to);
+  const merge = <T extends { id: string; date: string; updated_at: string }>(local: Record<string, T>, server: T[], prefix: string) => {
+    const next = { ...local };
+    const put: T[] = [];
+    const remove: string[] = [];
+    const seen = new Set<string>();
+    for (const x of server) {
+      seen.add(x.id);
+      if (outbox.has(prefix + x.id)) continue;
+      const mine = next[x.id];
+      if (!mine || Date.parse(x.updated_at) >= Date.parse(mine.updated_at)) {
+        next[x.id] = x;
+        put.push(x);
+      }
+    }
+    for (const x of Object.values(next))
+      if (!seen.has(x.id) && !outbox.has(prefix + x.id) && inRange(x.date)) {
+        delete next[x.id];
+        remove.push(x.id);
+      }
+    return { next, put, remove };
+  };
+  const sh = merge(state.shifts, shifts, "shift:");
+  const gp = merge(state.gymPlans, plans, "gymplan:");
+  await ldb.putCalendar(sh.put, sh.remove, gp.put, gp.remove);
+  setState({ shifts: sh.next, gymPlans: gp.next });
+}
+
+/**
+ * The calendar of a week older than the bootstrap's 60 days: its shifts and plans, and the full session history for
+ * its sessions (loaded once).
+ */
+export function loadCalendarRange(from: string, to: string) {
+  return tracked("calendar", async () => {
+    const [r] = await Promise.all([
+      api<{ shifts: WorkShift[]; plans: GymPlan[] }>("GET", `/calendar?from=${from}&to=${to}`),
+      state.loads.history?.status === "done" ? Promise.resolve() : api<{ sessions: WorkoutSession[] }>("GET", "/sessions").then((h) => mergeServerSessions(h.sessions, null)),
+    ]);
+    await mergeServerCalendar(r.shifts, r.plans, from, to);
+  });
 }
 
 /**

@@ -17,7 +17,8 @@ export type ViewName =
   | "plan"
   | "report"
   | "saved"
-  | "coach";
+  | "coach"
+  | "calendar";
 
 /** The five tabs, each named after its root screen. */
 export type TabName = "home" | "history" | "library" | "reports" | "me";
@@ -64,6 +65,7 @@ export function backTarget(view: ViewName, tab: TabName): ViewName | null {
     case "report":
     case "plan":
     case "coach":
+    case "calendar":
       return tab;
     default:
       return null;

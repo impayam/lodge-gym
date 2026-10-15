@@ -2,6 +2,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { readCalendar } from "./calendar";
 import type { AppBindings, Env } from "./env";
 import { rematchAround, readWatchForSessions } from "./health";
 import { fail, nowISO, readJson } from "./http";
@@ -289,7 +290,7 @@ dataRoutes.get("/bootstrap", async (c) => {
   const today = localDate(settings.timezone);
   const from = addDays(today, -60);
   const to = addDays(today, 1);
-  const [{ program, other_days }, programs, exercises, sessions, watch, body, review, plans] = await Promise.all([
+  const [{ program, other_days }, programs, exercises, sessions, watch, body, review, plans, calendar] = await Promise.all([
     readProgram(c.env),
     readProgramInfos(c.env),
     readExercises(c.env),
@@ -298,8 +299,9 @@ dataRoutes.get("/bootstrap", async (c) => {
     readBodyMetrics(c.env, from, to),
     readLatestReview(c.env),
     readPlans(c.env, from, to),
+    readCalendar(c.env, today, from),
   ]);
-  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, server_time: nowISO() };
+  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, calendar, server_time: nowISO() };
   return c.json(payload);
 });
 

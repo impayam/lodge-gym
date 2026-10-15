@@ -268,6 +268,43 @@ Every list and chart uses `web/src/components/States.tsx` (no new classes):
   of a row that also holds another button) around `.list-row__text`; Archive / Unarchive as `btn-sm t-muted`, Delete
   as `btn-sm t-danger` with a confirm sheet.
 
+### Training calendar (M13)
+
+```html
+<section class="card l-col l-gap-10">                                   <!-- Home: the week strip, above the hero card -->
+  <button class="cal-open press" aria-label="Calendar. This week: …. Next: Thu 17:30 · Day 3 · Back.">
+    <span class="cal-strip" aria-hidden="true">
+      <span class="cal-day" data-today="true"><span>Thu</span><b>15</b><span class="cal-shift" data-on="true"></span><span class="cal-dot" data-kind="planned"></span></span>
+      …7 days
+    </span>
+    <span class="t-title num">Next: Thu 17:30 · Day 3 · Back</span>    <!-- or caption "No gym time planned this week" -->
+  </button>
+  <button class="clay press btn-sm btn--fit t-pink">Find times</button>  <!-- only when nothing is planned -->
+</section>
+<div class="cal-month"><button class="cal-day press" aria-pressed="true">…</button>…</div>   <!-- month strip -->
+<section class="card card--calendar"><div class="cal-scroll"><div class="cal-week">
+  <span class="cal-week__head"></span><span class="cal-week__head" data-today="true"><span>Thu</span><b>15</b></span>…
+  <div><span class="cal-hour">04:00</span>…</div>
+  <div class="cal-col"><span class="cal-cell"></span>…20 hours
+    <div class="cal-block cal-block--work" style="--top: 132px; --h: 374px" role="img" aria-label="Work, Thursday 07:00–15:30">
+      <span class="cal-block__label" aria-hidden="true"><span>Work</span><span class="cal-block__time">07:00</span></span>
+    </div>
+  </div>…
+</div></div></section>
+<li class="list-row"><span class="cal-mark"><span class="cal-shift"></span></span><span class="list-row__text">…</span><span class="list-row__value">07:00–15:30</span></li>
+```
+- Added for M13 (SPEC-v10 §7), existing tokens only. Day chip (`.cal-day`): weekday, date (`--font-num`), a bar for a
+  work shift (`.cal-shift`, `--ink-3`), a dot for training (`.cal-dot`): `planned` pink outline, `done` pink fill,
+  `missed` `--ink-decor` outline, `free` violet dotted (legend only). Today is pressed in with pink text; in the month
+  strip the days of the week shown are pressed into the track (`aria-pressed`).
+- Week grid: 04:00–24:00 at 44 px an hour (the touch row), 7 columns, sticky day heads; it scrolls inside its card,
+  which ends above the tab bar, and opens on the current time. Blocks are placed by minutes (`--top`, `--h`) and named
+  for VoiceOver (`role="img"`, "Work, Tuesday 07:00–15:30"); the label stays in view under the heads while a long
+  block scrolls. `--work`: `--ink-3` on a well; `--plan`: pink outline; `--done`: pink fill with `--bg-solid` text;
+  `--missed`: grey outline, "Missed"; `--free`: violet dotted.
+- List view (the accessible alternative, like Table view on charts): `.card--list` with a `.card__title` per day and
+  `.list-row`s whose mark sits in `.cal-mark`. The key under the grid is a `.chart-legend` of the same marks.
+
 ## Contrast
 
 Every run of text is measured as drawn on every screen (`tests/e2e/a11y.spec.ts`, WebKit and Chromium) and must reach 4.5:1. Two cases are kept as designed (Payam, 2026-10-15):

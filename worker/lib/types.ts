@@ -1,5 +1,6 @@
 // Domain types shared by the Worker and the PWA.
 
+import type { CalendarSettings, GymPlan, WorkShift } from "./calendar";
 import type { Category } from "./category";
 import type { GeneratorInput } from "./generator/model";
 import type { SessionPlan } from "./plan";
@@ -216,6 +217,9 @@ export interface Bootstrap {
   review: WeeklyReview | null;
   /** Session plans (SPEC-v3 M9c): every open plan, and the plans of the sessions above. */
   plans: SessionPlan[];
+  /** Training calendar (SPEC-v10 M13): shifts and gym plans from the same 60 days on, and the calendar settings. A
+   *  bootstrap cached before M13 has none. */
+  calendar?: { shifts: WorkShift[]; plans: GymPlan[]; settings: CalendarSettings };
   server_time: string;
 }
 

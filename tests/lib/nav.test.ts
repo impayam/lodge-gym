@@ -26,11 +26,12 @@ describe("back", () => {
     for (const v of ["program", "settings", "ai", "backup", "photos"] as ViewName[]) expect(backTarget(v, "me"), v).toBe("me");
   });
 
-  it("goes to the tab a report, plan or the Coach was opened from", () => {
+  it("goes to the tab a report, plan, the Coach or the Calendar was opened from", () => {
     expect(backTarget("report", "history")).toBe("history");
     expect(backTarget("report", "reports")).toBe("reports");
     expect(backTarget("plan", "home")).toBe("home");
     expect(backTarget("coach", "library")).toBe("library");
+    expect(backTarget("calendar", "home")).toBe("home");
   });
 
   it("goes to Settings from Apple Watch and the program editor, to History from a saved report", () => {
@@ -50,12 +51,13 @@ describe("chrome", () => {
     expect(showsTabBar("session")).toBe(false);
     expect(showsTabBar("coach")).toBe(false);
     expect(showsTabBar("report")).toBe(true);
+    expect(showsTabBar("calendar")).toBe(true);
     expect(showsTabBar("home")).toBe(true);
   });
 
   it("the Coach button is on the five tab screens only", () => {
     expect(TABS.every((t) => showsCoachButton(t.name) && isTabRoot(t.name))).toBe(true);
-    for (const v of ["session", "coach", "report", "settings"] as ViewName[]) expect(showsCoachButton(v), v).toBe(false);
+    for (const v of ["session", "coach", "report", "settings", "calendar"] as ViewName[]) expect(showsCoachButton(v), v).toBe(false);
   });
 });
 
