@@ -6,6 +6,7 @@ import { countsVolume } from "../category";
 import { groupOf, isTargetGroup, setContribution, TARGET_GROUPS } from "../muscles";
 import type { Exercise } from "../types";
 import { isHeavyHinge } from "./pick";
+import { balanceStatus } from "../reports";
 import {
   FLOORS,
   MAJOR_GROUPS,
@@ -237,9 +238,11 @@ export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets
   else if (volume.some((v) => MAJOR_GROUPS.includes(v.group) && v.days < 2)) warnings.push({ code: "frequency", message: `${STYLE_NAME[plan.style]} ${plan.days_per_week} days: some muscles are trained 1×/week, below the ACSM minimum of 2×/week.` });
   for (const v of volume) {
     const floor = FLOORS[v.group];
+    // The Reports bands (balanceStatus); with a target, 0 planned sets ("none") is under it.
+    const band = v.target > 0 ? balanceStatus(v.planned, v.target) : null;
     if (floor !== undefined && v.planned < floor) warnings.push({ code: "floor", message: `${groupName(v.group)}: ${fmt(v.planned)} sets, below the floor of ${floor}.` });
-    else if (v.target > 0 && v.planned < 0.8 * v.target) warnings.push({ code: "under_target", message: `${groupName(v.group)}: ${fmt(v.planned)} of ${fmt(v.target)} target sets.` });
-    else if (v.target > 0 && v.planned > 1.2 * v.target) warnings.push({ code: "over_target", message: `${groupName(v.group)}: ${fmt(v.planned)} of ${fmt(v.target)} target sets.` });
+    else if (band === "under" || band === "none") warnings.push({ code: "under_target", message: `${groupName(v.group)}: ${fmt(v.planned)} of ${fmt(v.target)} target sets.` });
+    else if (band === "over") warnings.push({ code: "over_target", message: `${groupName(v.group)}: ${fmt(v.planned)} of ${fmt(v.target)} target sets.` });
   }
   minutes.forEach((mins, i) => {
     if (mins > plan.session_minutes) warnings.push({ code: "too_long", message: `${days[i].name_en}: about ${mins} min, longer than ${plan.session_minutes} min.`, day: i });

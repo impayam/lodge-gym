@@ -5,7 +5,7 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { errorText } from "../api";
-import { dayMonth, fmtNum } from "../format";
+import { dayMonth, fmtNum, plural } from "../format";
 import { allExercises, navigate, refresh } from "../store";
 import { Bars } from "./Bars";
 import { Columns } from "./Columns";
@@ -23,6 +23,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_body_weight: "Reading your body weight",
   get_photos: "Listing your progress photos",
   get_recovery: "Checking your recovery",
+  get_training_pattern: "Reading your training days",
   propose_program: "Writing a program draft",
 };
 export const toolLabel = (name: string) => TOOL_LABEL[name] ?? "Working";
@@ -55,20 +56,24 @@ type Library = { total: number; exercises: { id: string; name: string; equipment
 type Body = { unit: string; days: { date: string; value: number }[]; latest: { value: number } | null; change: number | null };
 type Photos = { total: number; photos: { id: string; date: string; pose: string; after_session: string | null }[] };
 type Recovery = { groups: { group: string; date: string; hours_ago: number; exercise: string }[] };
+type Pattern = { from: string; to: string; sessions: number; weekdays: { day: string; weeks: number; sessions: number }[]; max_days_in_a_row: number; program_days: { day: string; usual_weekday: string }[]; clear: boolean; summary: string };
 type Draft = { name: string; summary_fa?: string; days: ProgramDay[] };
-type DraftResult = { draft_id: string; names?: Record<string, string>; dropped: { exercise_id: string }[]; weekly_sets: { group: string; name: string; planned: number; current_target: number }[] };
+type DraftResult = { draft_id: string; names?: Record<string, string>; day_minutes?: number[]; warnings?: string[]; dropped: { exercise_id: string }[]; weekly_sets: { group: string; name: string; planned: number; current_target: number }[] };
 
 const setText = (s: SetRow) => (s.seconds != null && s.reps == null ? `${fmtNum(s.seconds)} s` : `${s.weight == null ? "" : `${fmtNum(s.weight)}×`}${fmtNum(s.reps ?? 0)}${s.weight == null ? " reps" : ""}`) + (s.rir == null ? "" : ` RIR ${s.rir >= 3 ? "3+" : s.rir}`);
 const reps = (x: { reps_min: number; reps_max: number; is_time?: boolean }) => `${x.reps_min === x.reps_max ? fmtNum(x.reps_max) : `${fmtNum(x.reps_min)}–${fmtNum(x.reps_max)}`}${x.is_time ? " s" : ""}`;
 
-function DaysList({ days }: { days: ProgramDay[] }) {
+function DaysList({ days, minutes }: { days: ProgramDay[]; minutes?: number[] }) {
   return (
     <div class="l-col l-gap-10">
       {days.map((d, i) => (
         <div class="l-row l-gap-10 l-top">
           <span class="well icon-well num">{fmtNum(i + 1)}</span>
           <span class="list-row__text">
-            <span class="t-title">{d.name}</span>
+            <span class="t-title num">
+              {d.name}
+              {minutes?.[i] != null ? ` · about ${fmtNum(minutes[i])} min` : ""}
+            </span>
             <span class="caption num">{d.exercises.map((x) => `${x.group ? `${x.group} ` : ""}${x.name ?? x.exercise_id} ${fmtNum(x.sets)} × ${reps(x)}`).join(", ")}</span>
           </span>
         </div>
@@ -102,37 +107,50 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
     }
   };
   return (
-    <section class="card l-col l-gap-10" data-testid="coach-draft">
-      <div class="card__head">
-        <h2 class="card__title l-m0">{input.name}</h2>
-        {chest ? <span class="caption num t-orange">Chest {fmtNum(chest.planned)} sets / week</span> : null}
-      </div>
-      {input.summary_fa ? (
-        <p class="prose-fa fa" dir="rtl" lang="fa">
-          {input.summary_fa}
-        </p>
+    <>
+      <section class="card l-col l-gap-10" data-testid="coach-draft">
+        <div class="card__head">
+          <h2 class="card__title l-m0">{input.name}</h2>
+          {chest ? <span class="caption num t-orange">Chest {fmtNum(chest.planned)} sets / week</span> : null}
+        </div>
+        {input.summary_fa ? (
+          <p class="prose-fa fa" dir="rtl" lang="fa">
+            {input.summary_fa}
+          </p>
+        ) : null}
+        <DaysList days={days} minutes={result.day_minutes} />
+        {result.dropped.length ? <span class="caption">Left out (not in the library): {result.dropped.map((x) => x.exercise_id).join(", ")}</span> : null}
+        {state === "added" ? (
+          <div class="l-row l-between l-gap-8" data-testid="coach-draft-added">
+            <span class="caption">Added to Me → Program → Drafts.</span>
+            <button type="button" class="clay press btn-sm t-pink" data-testid="coach-open-drafts" onClick={() => navigate("program")}>
+              Open
+            </button>
+          </div>
+        ) : (
+          <div class="l-row l-gap-8">
+            <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-draft" disabled={state === "busy"} onClick={() => void add()}>
+              Add to Planner
+            </button>
+            <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-draft" onClick={onChange}>
+              Change
+            </button>
+          </div>
+        )}
+        {problem ? <span class="caption t-orange">{problem}</span> : null}
+      </section>
+      {result.warnings?.length ? (
+        // The program generator's check (as New program shows it), warnings only: Add to Planner is never blocked.
+        <section class="callout" data-bad="false" data-testid="coach-draft-warnings">
+          <h2 class="card__title l-m0">Worth knowing</h2>
+          <ul class="prose-list ex-card__meta">
+            {result.warnings.map((w) => (
+              <li>{w}</li>
+            ))}
+          </ul>
+        </section>
       ) : null}
-      <DaysList days={days} />
-      {result.dropped.length ? <span class="caption">Left out (not in the library): {result.dropped.map((x) => x.exercise_id).join(", ")}</span> : null}
-      {state === "added" ? (
-        <div class="l-row l-between l-gap-8" data-testid="coach-draft-added">
-          <span class="caption">Added to Me → Program → Drafts.</span>
-          <button type="button" class="clay press btn-sm t-pink" data-testid="coach-open-drafts" onClick={() => navigate("program")}>
-            Open
-          </button>
-        </div>
-      ) : (
-        <div class="l-row l-gap-8">
-          <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-draft" disabled={state === "busy"} onClick={() => void add()}>
-            Add to Planner
-          </button>
-          <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-draft" onClick={onChange}>
-            Change
-          </button>
-        </div>
-      )}
-      {problem ? <span class="caption t-orange">{problem}</span> : null}
-    </section>
+    </>
   );
 }
 
@@ -303,6 +321,38 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
           ) : (
             <p class="state l-m0">No heavy compound lifts logged.</p>
           )}
+        </DataCard>
+      );
+    }
+    case "get_training_pattern": {
+      const r = result as Pattern;
+      return (
+        <DataCard title="Training days" sub={`${dayMonth(r.from)} – ${dayMonth(r.to)}`} testid={name}>
+          <span class="t-title num">{r.summary}</span>
+          {r.weekdays.length ? (
+            <table class="data-table num">
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col">Weeks of 4</th>
+                  <th scope="col">Sessions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.weekdays.map((w) => (
+                  <tr>
+                    <td>{w.day}</td>
+                    <td>{fmtNum(w.weeks)}</td>
+                    <td>{fmtNum(w.sessions)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p class="state l-m0">No sessions in the last 4 weeks.</p>
+          )}
+          {r.max_days_in_a_row ? <span class="caption num">At most {plural(r.max_days_in_a_row, "day")} in a row</span> : null}
+          {r.program_days.length ? <span class="caption">{r.program_days.map((p) => `${p.day}: usually ${p.usual_weekday}`).join(" · ")}</span> : null}
         </DataCard>
       );
     }

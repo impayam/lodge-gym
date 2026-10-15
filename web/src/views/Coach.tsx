@@ -33,6 +33,7 @@ import { dayMonth, instantShort, plural } from "../format";
 import { trainingSince } from "../model";
 import { addPhoto, flash, goBack, loadAllHistory, loadPhotos, photoSrc, today, useStore } from "../store";
 import { ulid } from "../../../worker/lib/ulid";
+import { statusMismatches, type VolumeResult } from "../../../worker/lib/coach/statusCheck";
 import type { Pose } from "../../../worker/lib/types";
 
 /** Suggested questions (decision 2, approved 2026-10-14). */
@@ -466,6 +467,14 @@ function TurnView({ turn, live, failed, onRetry, onChange }: { turn: Turn; live:
     }
     for (const c of live.cards) if (!c.is_error) body.push(<CoachCard name={c.name} input={c.input} result={c.result} messageId={c.message_id} toolUseId={c.tool_use_id} onChange={onChange} onAdd={addDraft} />);
   }
+  // The answer's text against its own get_volume cards: a status the cards do not show gets a note (never hidden).
+  const said = turn.replies.filter((r) => r.role === "assistant" && !r.error).flatMap((r) => r.content);
+  const volumes = said.flatMap((b) => {
+    const res = b.type === "tool_use" && b.name === "get_volume" ? results.get(b.id) : undefined;
+    return res && res.type === "tool_result" && !res.is_error ? [JSON.parse(res.content) as VolumeResult] : [];
+  });
+  const answerText = said.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+  const mismatch = !live && volumes.length > 0 && statusMismatches(answerText, volumes).length > 0;
   const lastProgress = live ? [...live.blocks.values()].filter((b) => b.kind === "progress").at(-1)?.text.trim() : null;
   const writing = live && !live.error && ![...live.blocks.values()].some((b) => b.kind === "text");
 
@@ -488,6 +497,11 @@ function TurnView({ turn, live, failed, onRetry, onChange }: { turn: Turn; live:
           {body}
           {writing ? <Typing label={lastProgress || (live?.tool ? toolLabel(live.tool) : "Thinking")} /> : null}
         </div>
+      ) : null}
+      {mismatch ? (
+        <p class="caption t-orange l-m0" data-testid="coach-status-note">
+          The numbers in the card are the app's; the text may be wrong.
+        </p>
       ) : null}
       {live?.error || failed ? (
         <div class="l-row l-between l-gap-8" data-testid="coach-failed">

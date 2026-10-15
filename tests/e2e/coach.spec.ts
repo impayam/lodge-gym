@@ -50,6 +50,9 @@ async function pickPhoto(page: Page, file: string) {
   await expect(page.getByTestId("coach-attachments").locator("img")).toHaveCount(1);
 }
 
+/** How the e2e mock words a group's status (a group with 0 sets of a target is under it). */
+const STATUS_WORD: Record<string, string> = { none: "under target", under: "under target", on: "on target", over: "over target" };
+
 async function ask(page: Page, text: string) {
   await page.getByTestId("coach-input").fill(text);
   await page.getByTestId("coach-send").click();
@@ -82,12 +85,17 @@ test("a question streams: the coach's progress note in the typing line, the app'
   await ask(page, "How was my week?");
 
   const answer = page.getByTestId("coach-answer");
-  await expect(answer).toContainText("So far this week chest is under target");
+  await expect(answer).toContainText("So far this week chest is");
   expect(await typed()).toBe(true);
   await expect(answer).toContainText("I'll count this week's sets.");
   const card = answer.locator('[data-card="get_volume"]');
   await expect(card).toContainText("Sets vs target");
   await expect(card).toContainText("Numbers calculated by the app from your logs");
+  // The mock writes its sentence from the card's numbers, as the real coach must: text and card agree, so no note.
+  const status = await card.locator('.bar-row[data-row="chest"]').getAttribute("data-status");
+  await expect(answer).toContainText(`So far this week chest is ${STATUS_WORD[status!]}`);
+  await expect(page.getByTestId("coach-cost")).toBeVisible();
+  await expect(page.getByTestId("coach-status-note")).toHaveCount(0);
   await expect(answer.locator("li")).toHaveText(["Bench first", "Then flyes"]);
   await expect(page.getByTestId("coach-cost")).toHaveText(/^(~\$\d+\.\d\d|<\$0\.01)$/);
 
@@ -106,7 +114,7 @@ test("a question streams: the coach's progress note in the typing line, the app'
   await page.getByRole("button", { name: "Ask the coach" }).click();
   await page.getByTestId("coach-chats").click();
   await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).getByTestId("coach-thread-open").click();
-  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
   await expect(page.locator('[data-card="get_volume"]')).toBeVisible();
 });
 
@@ -121,6 +129,13 @@ test("a program draft card: Change prefills the question; Add to Planner saves a
   // Dumbbell Flyes is only in the library (not on the phone): its name comes with the draft.
   await expect(draft).toContainText("Barbell Bench Press 4 × 5, A Cable Chest Fly 3 × 10–12, A Dumbbell Lateral Raise 3 × 12–15, Dumbbell Flyes 3 × 10–12");
   await expect(draft).toContainText("Barbell Back Squat 4 × 5");
+  // Each day's estimated length is information (no limit); the generator's check is advice under the card.
+  await expect(draft).toContainText(/Day 1 · Chest · about \d+ min/);
+  await expect(draft).toContainText(/Day 2 · Legs · about \d+ min/);
+  const warnings = page.getByTestId("coach-draft-warnings");
+  await expect(warnings).toContainText("Worth knowing");
+  await expect(warnings).toContainText("No hinge in the week.");
+  await expect(draft.getByTestId("coach-add-draft")).toBeEnabled();
   await expect(draft.locator('[dir="rtl"]')).toContainText("سینه دو بار در هفته");
 
   await draft.getByTestId("coach-change-draft").click();
@@ -172,7 +187,7 @@ test("a failed answer shows Answer failed with Retry; Retry answers the same que
   await expect(page.getByTestId("coach-failed")).toContainText("Answer failed");
   await aiMode({ coach: "ok" });
   await page.getByTestId("coach-retry").click();
-  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
   await expect(page.getByTestId("coach-failed")).toHaveCount(0);
   expect(sql("SELECT COUNT(*) AS n FROM coach_messages WHERE role = 'user' AND content_json LIKE '%How was my week?%'")).toEqual([{ n: 1 }]);
 });
@@ -180,7 +195,7 @@ test("a failed answer shows Answer failed with Retry; Retry answers the same que
 test("offline: the composer needs a connection and a saved chat is still readable", async ({ page, context }) => {
   await openCoach(page);
   await ask(page, "How was my week?");
-  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
   // The list once online, so the phone has it.
   await page.getByTestId("coach-chats").click();
   await expect(page.getByTestId("coach-thread")).toHaveCount(1);
@@ -192,7 +207,7 @@ test("offline: the composer needs a connection and a saved chat is still readabl
   await page.getByTestId("coach-chats").click();
   await page.getByTestId("coach-thread").getByTestId("coach-thread-open").click();
   await expect(page.getByTestId("coach-offline")).toBeVisible();
-  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
   await setOffline(context, page, false);
 });
 
@@ -234,6 +249,42 @@ test("archive and unarchive; Delete permanently removes only that archived chat,
   expect(counts()).toEqual(before);
 });
 
+test("an answer whose text names a status its card does not show gets a note under it; the answer stays as it is", async ({ page }) => {
+  await aiMode({ coach: "mismatch" });
+  await openCoach(page);
+  await ask(page, "How was my week?");
+  await expect(page.getByTestId("coach-cost")).toBeVisible();
+  const answer = page.getByTestId("coach-answer");
+  const status = await answer.locator('[data-card="get_volume"] .bar-row[data-row="chest"]').getAttribute("data-status");
+  const shown = status === "none" ? "under" : status!;
+  const said = ({ under: "over", on: "under", over: "under" } as Record<string, string>)[shown];
+  // The mock's text names another status on purpose; the text is shown unchanged and the note sits under it.
+  await expect(answer).toContainText(`So far this week chest is ${said} target`);
+  const note = page.getByTestId("coach-status-note");
+  await expect(note).toHaveText("The numbers in the card are the app's; the text may be wrong.");
+  await expect(answer.locator('[data-card="get_volume"] .bar-row[data-row="chest"]')).toHaveAttribute("data-status", status!);
+  // A saved chat shows the same note when opened again.
+  await page.reload();
+  await page.getByRole("button", { name: "Ask the coach" }).click();
+  await page.getByTestId("coach-chats").click();
+  await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).getByTestId("coach-thread-open").click();
+  await expect(page.getByTestId("coach-answer")).toContainText(`So far this week chest is ${said} target`);
+  await expect(page.getByTestId("coach-status-note")).toBeVisible();
+});
+
+test("which days: the training pattern card from the last 4 weeks, and an answer from it or a question when unclear", async ({ page }) => {
+  await openCoach(page);
+  await ask(page, "Which days do I usually train?");
+  const card = page.getByTestId("coach-answer").locator('[data-card="get_training_pattern"]');
+  await expect(card).toContainText("Training days");
+  await expect(card).toContainText("Numbers calculated by the app from your logs");
+  await expect(page.getByTestId("coach-cost")).toBeVisible();
+  const summary = (await card.locator(".t-title").first().textContent())!.trim();
+  const answer = page.getByTestId("coach-answer");
+  if (summary.startsWith("No clear pattern")) await expect(answer).toContainText("Which days do you usually train?");
+  else await expect(answer).toContainText(`You usually train ${summary}.`);
+});
+
 test.describe("moving to another chat while an answer finishes", () => {
   // The reload after the answer is held with page.route, so the service worker is blocked here (it would answer first).
   test.use({ serviceWorkers: "block" });
@@ -249,7 +300,7 @@ test.describe("moving to another chat while an answer finishes", () => {
       await route.continue();
     });
     await ask(page, "How was my week?");
-    await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+    await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
     await expect.poll(() => held).toBe(1);
 
     await page.getByTestId("coach-new").click();
@@ -271,7 +322,7 @@ test.describe("moving to another chat while an answer finishes", () => {
     await page.getByTestId("coach-chats").click();
     await page.getByTestId("coach-thread").filter({ hasText: "How was my week?" }).getByTestId("coach-thread-open").click();
     await expect(page.getByTestId("coach-answer")).toHaveCount(1);
-    await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is under target");
+    await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
   });
 });
 

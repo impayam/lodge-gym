@@ -261,7 +261,9 @@ Every list and chart uses `web/src/components/States.tsx` (no new classes):
   `--orange`, pulsing gently (still under reduced motion), then the coach's latest progress note or what the tool is reading.
 - Data cards reuse the Reports pieces: `Bars` (sets vs target, same status colours), `Columns` (sessions per week),
   `TimeChart` (e1RM, body weight), `.data-table`. The program draft card is a `.card` with numbered `.icon-well` days
-  and "Add to Planner" (`t-pink`) / "Change" (`t-muted`).
+  and "Add to Planner" (`t-pink`) / "Change" (`t-muted`); the generator's check sits under it as a `.callout`
+  (`data-bad="false"`, "Worth knowing", `.prose-list`), as on New program.
+- An answer whose text disagrees with its own card gets a `caption t-orange` note under it.
 - Chat list and Archived list: `.card--list` with `.list-row`; the chat opens from `.ex-row__main` (the tappable part
   of a row that also holds another button) around `.list-row__text`; Archive / Unarchive as `btn-sm t-muted`, Delete
   as `btn-sm t-danger` with a confirm sheet.

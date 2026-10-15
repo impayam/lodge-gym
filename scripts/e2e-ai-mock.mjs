@@ -7,8 +7,10 @@
 //   coach (SPEC-v9 M12):  streamed like the real API (server-sent events), with a progress note between tool calls as a
 //                      thinking block (thinking.display "updates"). A question about a program reads get_program, then
 //                      proposes a draft with one id that is not in the library; a message with a photo gets a short
-//                      visual-estimate answer; anything else reads get_volume for this week, then answers with text.
-// Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth&coach=ok|fail|auth
+//                      visual-estimate answer; "which days" reads get_training_pattern; anything else reads
+//                      get_volume for this week, then answers with text.
+// Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth&coach=ok|fail|auth|mismatch
+// (mismatch: the "this week" answer names a chest status other than the one its get_volume card shows)
 // and read GET /__calls (the count, the last call and the last call of each kind; coach calls also record the request
 // shape: tool_choice, thinking, betas, cache breakpoints, images and message count).
 import { createServer } from "node:http";
@@ -180,11 +182,28 @@ export function startAiMock(port) {
         usage
       );
     if (program) return void stream(res, [{ type: "text", text: persian ? "پیش‌نویس سینه را دو بار در هفته می‌گذارد. اگر خوب است به برنامه‌ریز اضافه کن." : "The draft trains chest twice a week. Add it to the Planner if it looks right." }], "end_turn", usage);
+    // "Which days do I usually train?": the training pattern, then an answer from it (or a question when unclear).
+    if (/which days|training days|روزهای تمرین/i.test(text)) {
+      if (!done.has("get_training_pattern")) return void stream(res, [note(persian ? "روزهای تمرینت را می‌خوانم." : "I'll read your training days."), tool("get_training_pattern", {})], "tool_use", usage);
+      const p = results.map((r) => JSON.parse(r.content)).find((r) => Array.isArray(r.usual_days));
+      const answer = p?.clear ? `You usually train ${p.summary}.` : "I don't see a clear pattern in your last 4 weeks. Which days do you usually train?";
+      return void stream(res, [{ type: "text", text: answer }], "end_turn", usage);
+    }
     if (!done.has("get_volume")) {
       const today = /Today: \w+ (\d{4}-\d{2}-\d{2})/.exec(question.map((b) => b.text ?? "").join("\n"))?.[1] ?? "2026-10-15";
       return void stream(res, [note(persian ? "ست‌های این هفته‌ات را می‌شمارم." : "I'll count this week's sets."), tool("get_volume", { from: today, to: today })], "tool_use", usage);
     }
-    return void stream(res, [{ type: "text", text: persian ? "این هفته تا امروز سینه زیر هدف است؛ دو ست دیگر اضافه کن.\n\n- اول پرس سینه\n- بعد فلای" : "So far this week chest is under target; add two more sets.\n\n- Bench first\n- Then flyes" }], "end_turn", usage);
+    // The answer says what the get_volume card shows (chest, this week). coach=mismatch says another status on
+    // purpose, to test the note under an answer whose text disagrees with its card.
+    const volume = results.map((r) => JSON.parse(r.content)).find((r) => Array.isArray(r.weeks));
+    const chest = volume?.weeks.at(-1)?.groups.find((g) => g.group === "chest");
+    const actual = chest?.status === "none" ? "under" : (chest?.status ?? "under");
+    const said = mode.coach === "mismatch" ? { under: "over", on: "under", over: "under" }[actual] : actual;
+    const word = persian ? { under: "زیر هدف", on: "روی هدف", over: "بالای هدف" }[said] : { under: "under target", on: "on target", over: "over target" }[said];
+    const sets = chest ? `${chest.fractional_sets} ${persian ? "از" : "of"} ${chest.target}` : "";
+    const line = persian ? `این هفته تا امروز سینه ${word} است (${sets} ست).` : `So far this week chest is ${word} (${sets} sets).`;
+    const more = said === "under" ? (persian ? " دو ست دیگر اضافه کن." : " Add two more sets.") : "";
+    return void stream(res, [{ type: "text", text: `${line}${more}\n\n${persian ? "- اول پرس سینه\n- بعد فلای" : "- Bench first\n- Then flyes"}` }], "end_turn", usage);
   };
 
   const server = createServer((req, res) => {

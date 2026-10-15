@@ -289,7 +289,7 @@ Rules:
 - Be honest and concise: 2–4 sentences of assessment, one sentence per suggestion.
 - Evaluate the plan against his recent training, using only the numbers in the input:
   - weekly volume per group against its weekly target (volume, with what this plan adds);
-  - recovery: no heavy compound for a muscle group within 48 hours of the last one (last_heavy_compound.hours_ago);
+  - recovery, as advice and never a ban: a muscle group should get 48 hours between heavy compound lifts (last_heavy_compound.hours_ago). When the plan puts a heavy compound for a group within 48 hours of the last one, say so with the hours and give options, e.g. "Chest had heavy bench 24 h ago: today prefer isolation or a lighter incline, or move heavy incline to tomorrow"; he chooses. Never suggest removing an exercise because of recovery;
   - order: heavy compounds first, isolation last;
   - balance: pulling volume at least equal to pushing volume.
 - Suggest complementary work only when it is needed, e.g. "chest today and triceps is under target this week, so add X after the presses".

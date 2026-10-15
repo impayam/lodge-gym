@@ -58,7 +58,7 @@ export function Bars({ rows, fmt, markWord, fill, testid }: { rows: BarRow[]; fm
         </table>
       ) : (
         rows.map((r) => (
-          <div class="bar-row" data-row={r.key}>
+          <div class="bar-row" data-row={r.key} data-status={r.status}>
             <span class="bar-row__label">{r.label}</span>
             <span class="target-bar" aria-hidden="true">
               <span

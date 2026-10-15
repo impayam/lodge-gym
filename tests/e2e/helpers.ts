@@ -110,7 +110,7 @@ export async function waitForSynced(page: Page) {
 type AiAnswer = "ok" | "fail" | "auth";
 
 /** Switches the mock model's answers (scripts/e2e-ai-mock.mjs): ok, fail (API error) or auth (expired key). */
-export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer; coach?: AiAnswer }) {
+export async function aiMode(mode: { report?: AiAnswer; advice?: AiAnswer; overview?: AiAnswer; coach?: AiAnswer | "mismatch" }) {
   const q = new URLSearchParams(mode as Record<string, string>);
   const res = await fetch(`${currentSlot().ai}/__mode?${q}`, { headers: { Connection: "close" } });
   if (!res.ok) throw new Error("AI mock did not switch");

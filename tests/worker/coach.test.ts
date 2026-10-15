@@ -99,7 +99,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
       expect(b.thinking).toEqual({ type: "adaptive", display: "updates", block_binding: { prefix_mismatch_behavior: "drop_block" } });
       expect(b.stream).toBe(true);
       expect(b.system).toEqual([{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }]);
-      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "propose_program"]);
+      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "propose_program"]);
       expect(b.messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
       for (const beta of COACH_BETAS) expect(c.headers["anthropic-beta"]).toContain(beta);
     }
@@ -236,9 +236,11 @@ describe("program drafts", () => {
     const ev = await ask(id, "Write me a chest program");
     const card = ev.find((e) => e.type === "card") as Extract<CoachEvent, { type: "card" }>;
     expect(card.name).toBe("propose_program");
-    const result = card.result as { draft_id: string; dropped: unknown[]; exercises: number };
+    const result = card.result as { draft_id: string; dropped: unknown[]; exercises: number; warnings: string[] };
     expect(result.dropped).toEqual([{ day: "Day 2 · Legs", exercise_id: "hack_squat_machine", reason: "not in the library" }]);
     expect(result.exercises).toBe(4);
+    // The generator's check comes back as warnings only; Add to Planner below still saves the draft.
+    expect(result.warnings).toContain("No hinge in the week.");
 
     const before = await env.DB.prepare("SELECT id, active FROM programs ORDER BY id").all();
     const res = await client.post("/api/coach/drafts", { message_id: card.message_id, tool_use_id: card.tool_use_id });

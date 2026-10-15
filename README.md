@@ -329,19 +329,32 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   **Unarchive**, and **Delete permanently** for archived chats only (the chat, its messages, its photo rows and its R2
   objects under `coach/<chat>/`; never training data or progress photos). Past chats are readable offline (saved on
   the phone); sending needs a connection. Me → AI reports: "Coach this month: N messages, ~$X". No limit.
-- The model (`COACH_MODEL`, default claude-opus-5-5) reads Payam's data only through 10 read-only tools
+- The model (`COACH_MODEL`, default claude-opus-5-5) reads Payam's data only through 11 read-only tools
   (`worker/lib/coach/tools.ts`): sessions, e1RM history, weekly sets vs target, planned vs done sessions, records, the
-  active program with its rules, the library, body weight, the progress-photo list and recovery (last heavy compound
-  per group, as the planner advice uses it). Every number comes from the app's own functions: weekly sets and their
+  active program with its rules, the library, body weight, the progress-photo list, recovery (last heavy compound
+  per group, as the planner advice uses it) and his training pattern (usual weekdays and times over the last 4 weeks;
+  when there is no clear pattern the coach asks him instead of guessing). Every number comes from the app's own functions: weekly sets and their
   under / on / over status are `muscleRows` / `balanceStatus` from `worker/lib/reports.ts`, exactly as on the Reports
   screen (under below 80 % of the target, on from 80 % to 120 %, over above 120 %, none at 0 sets). Each tool result
   is drawn as a data card captioned "Numbers calculated by the app from your logs".
 - The 48-hour recovery rule is advice, never a ban: the coach names the group, the lift and the hours, offers options
   (isolation or a lighter variation today, or the heavy lift another day) and leaves the choice to Payam. It never
-  refuses a request or removes an exercise because of it, and a draft keeps every exercise he asked for.
+  refuses a request or removes an exercise because of it, and a draft keeps every exercise he asked for. The planner's
+  Get advice uses the same wording and never suggests removing an exercise for recovery.
 - `propose_program` shows a draft card (ids not in the library are dropped and named). **Add to Planner** saves it as
   an inactive program (`generated_by = 'coach'`) under Me → Program → Drafts; approving it there is a separate tap.
   The active program is never changed by the coach.
+- The program generator's check (`checkPlan`) runs on every draft as **advice only**, shown under the card ("Worth
+  knowing"); Add to Planner is never blocked. Drafts have no time limit: each day shows its estimated length as
+  information ("Day 2 · Legs · about 75 min"). A draft has no weekdays, so the spacing rules (two heavy hinges, a main
+  lift for the same group, the same group trained) run on adjacent days in order (Day 1 → 2 → 3 → 4, and the last day
+  → Day 1; at most two training days in a row) and read as a condition: "If you train Day 1 and Day 2 back to back,
+  that is two heavy hinges within 24 h." The 1×/week note (it names a generator style) and set ranges (generator
+  slots) are left out. Planned dates from the calendar (M13) will replace the day order and the training pattern.
+- When an answer's text names a group's status (under / on / over target) that its own `get_volume` card does not
+  show, a note sits under the answer: "The numbers in the card are the app's; the text may be wrong." The answer is
+  never hidden or changed (`worker/lib/coach/statusCheck.ts`, English and Persian; cautious: a clause counts only with
+  exactly one status and no negation).
 - Photos: camera, library or a progress photo (copied into the chat). Resized to 1600 px and stripped of EXIF on the
   phone and again on the Worker; private in R2. "Save to progress photos" adds one to the gallery.
 - Opus 5.5 (Payam, 2026-10-15): `tool_choice` is never set (forced tool use is an error on this model);

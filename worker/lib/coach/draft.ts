@@ -4,8 +4,11 @@
 // (generated_by 'coach') under Me → Program → Drafts; approving it stays a separate tap there.
 
 import { z } from "zod";
-import { dayMinutes } from "../generator/check";
-import { setContribution, TARGET_GROUPS } from "../muscles";
+import { checkPlan, dayMinutes, groupName, type Plan } from "../generator/check";
+import { isHeavyHinge } from "../generator/pick";
+import type { TargetGroup } from "../generator/model";
+import type { Exercise } from "../types";
+import { groupOf, isTargetGroup, setContribution, TARGET_GROUPS } from "../muscles";
 import { countsVolume } from "../category";
 import { muscleTargets, programOn, type ReportData } from "../reports";
 import { GROUP_NAME } from "../ai/report";
@@ -130,6 +133,10 @@ export type ProposeResult =
         exercises: number;
         /** The English name of every kept exercise; the card shows names, and the phone may not have the library. */
         names: Record<string, string>;
+        /** Each day's estimated length (minutes), shown as information; drafts have no length limit. */
+        day_minutes: number[];
+        /** The program generator's check, as advice only: shown under the card, never blocking Add to Planner. */
+        warnings: string[];
         dropped: Dropped[];
         weekly_sets: { group: string; name: string; planned: number; current_target: number }[];
       };
@@ -137,6 +144,73 @@ export type ProposeResult =
   | { ok: false; error: string };
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * The generator's checks that need no weekdays (Payam, 2026-10-15), as advice. Left out: the day length (no limit for
+ * drafts; each day's estimate is shown as information instead), the 1×/week note (it names a generator style), set
+ * ranges (generator slots) and the weekday rules, which draftSpacing below runs on the day order instead.
+ */
+const DRAFT_CHECKS = new Set(["not_strength", "duplicate", "two_roles", "squat_deadlift_mains", "session_cap", "pull_push", "no_hinge", "no_squat", "rear_delts", "floor", "under_target", "over_target"]);
+
+function draftChecks(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>, targets: Record<string, number>): string[] {
+  const plan: Plan = {
+    style: "full_body", // read only by checks a draft skips
+    days_per_week: days.length,
+    session_minutes: Number.POSITIVE_INFINITY, // drafts get no length warning
+    days: days.map((day, i) => ({
+      name_en: day.name,
+      kind: "full",
+      offset: i, // read only by the weekday checks a draft skips
+      exercises: day.exercises.map((x) => ({
+        exercise_id: x.exercise_id,
+        slot: x.is_main ? "main" : "accessory",
+        sets: x.sets,
+        reps_min: x.reps_min,
+        reps_max: x.reps_max,
+        rest_sec: x.rest_sec,
+        target_rir_min: x.target_rir_min ?? 0,
+        target_rir_max: x.target_rir_max ?? 0,
+        per_leg: x.per_leg ?? false,
+        is_time: x.is_time ?? false,
+        superset_tag: null,
+        set_range: [1, 10] as const,
+      })),
+    })),
+  };
+  const r = checkPlan(plan, ex, targets as Record<TargetGroup, number>);
+  return [...r.violations, ...r.warnings].filter((i) => DRAFT_CHECKS.has(i.code)).map((i) => i.message);
+}
+
+/**
+ * The generator's spacing rules on the draft's day order, as conditional advice (Payam, 2026-10-15). A draft has no
+ * weekdays; his days run Day 1 → 2 → 3 → 4 and again, at most two training days in a row, so two adjacent days (and
+ * the last day and Day 1) may fall on consecutive calendar days. Planned dates (calendar, M13) will replace this.
+ */
+export function draftSpacing(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>): string[] {
+  const groupOfEx = (id: string) => {
+    const g = groupOf(ex.get(id)?.muscle_primary);
+    return g && isTargetGroup(g) ? (g as TargetGroup) : null;
+  };
+  const names = (list: Iterable<TargetGroup>) => [...list].map(groupName).join(", ");
+  const pairs: [number, number][] = days.slice(1).map((_, i) => [i, i + 1]);
+  if (days.length >= 3) pairs.push([days.length - 1, 0]);
+  const out: string[] = [];
+  for (const [a, b] of pairs) {
+    const lead = `If you train Day ${a + 1} and Day ${b + 1} back to back,`;
+    const mains = (i: number) => new Set(days[i].exercises.filter((x) => x.is_main).map((x) => groupOfEx(x.exercise_id)).filter((g): g is TargetGroup => g !== null));
+    const direct = (i: number) => new Set(days[i].exercises.map((x) => groupOfEx(x.exercise_id)).filter((g): g is TargetGroup => g !== null));
+    const hinge = (i: number) => days[i].exercises.some((x) => {
+      const e = ex.get(x.exercise_id);
+      return e !== undefined && isHeavyHinge(e);
+    });
+    if (hinge(a) && hinge(b)) out.push(`${lead} that is two heavy hinges within 24 h.`);
+    const bothMain = [...mains(a)].filter((g) => mains(b).has(g));
+    if (bothMain.length) out.push(`${lead} ${names(bothMain)} ${bothMain.length > 1 ? "have" : "has"} a main lift on both days.`);
+    const bothDays = [...direct(a)].filter((g) => direct(b).has(g) && !bothMain.includes(g));
+    if (bothDays.length) out.push(`${lead} ${names(bothDays)} ${bothDays.length > 1 ? "are" : "is"} trained on both days.`);
+  }
+  return out;
+}
 
 /**
  * Validates a draft, drops exercises that are not in the library (or archived), re-checks groups that lost a member,
@@ -178,6 +252,8 @@ export function proposeProgram(d: Pick<ReportData, "exercises" | "program" | "pr
       days: days.length,
       exercises: days.reduce((a, x) => a + x.exercises.length, 0),
       names: Object.fromEntries(days.flatMap((day) => day.exercises.map((x) => [x.exercise_id, ex.get(x.exercise_id)!.name_en]))),
+      day_minutes: days.map((day) => dayMinutes({ exercises: day.exercises })),
+      warnings: [...draftChecks(days, ex, targets), ...draftSpacing(days, ex)],
       dropped,
       weekly_sets: TARGET_GROUPS.map((g) => ({ group: g, name: GROUP_NAME[g], planned: round1(planned[g]), current_target: round1(targets[g] ?? 0) })),
     },

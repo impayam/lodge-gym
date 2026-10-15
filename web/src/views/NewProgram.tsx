@@ -31,6 +31,7 @@ import {
   type TargetGroup,
 } from "../../../worker/lib/generator";
 import { TARGET_GROUPS } from "../../../worker/lib/muscles";
+import { balanceStatus } from "../../../worker/lib/reports";
 import type { Exercise, ProgramVersion } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
@@ -363,7 +364,9 @@ export function NewProgram() {
           </thead>
           <tbody>
             {check.volume.map((v) => {
-              const st = v.target ? (v.planned < 0.8 * v.target ? "under" : v.planned > 1.2 * v.target ? "over" : "on") : "on";
+              // The Reports bands (balanceStatus); 0 planned sets of a target is under it, no target shows as on.
+              const band = v.target ? balanceStatus(v.planned, v.target) : "on";
+              const st = band === "none" ? "under" : band;
               return (
                 <tr data-group={v.group} data-status={st}>
                   <td>{groupName(v.group)}</td>

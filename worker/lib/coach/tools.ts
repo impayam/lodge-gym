@@ -1,4 +1,5 @@
-// Coach tools (SPEC-v9 M12 §4, approved by Payam 2026-10-15, with get_recovery added at his choice). All read-only
+// Coach tools (SPEC-v9 M12 §4, approved by Payam 2026-10-15, with get_recovery and get_training_pattern added at his
+// request). All read-only
 // and pure: every number comes from the functions the Reports screen, the training overview and the planner advice
 // already use (worker/lib/reports.ts, worker/lib/ai/overview.ts, worker/lib/ai/advice.ts), so the coach states the
 // same numbers the app shows. Each result is also what the chat draws as a data card. A bad input returns an error
@@ -25,7 +26,7 @@ import {
   type BalanceStatus,
   type ReportData,
 } from "../reports";
-import { addDays, DATE_RE, daysBetween } from "../time";
+import { addDays, DATE_RE, daysBetween, localHM, weekday } from "../time";
 import type { Exercise, Pose, ProgramVersion, WorkoutSession } from "../types";
 import { lastHeavyCompound } from "../ai/advice";
 import { GROUP_NAME, sessionDay } from "../ai/report";
@@ -147,6 +148,12 @@ export const COACH_TOOLS = [
   {
     name: "get_recovery",
     description: "Recovery for the 48-hour rule (advice for him, never a reason to refuse or remove an exercise), as the planner advice uses it: for each muscle group, his last heavy compound lift (a compound exercise done with load), its date and how many hours ago that session ended. Most recent first.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_training_pattern",
+    description:
+      "His usual training weekdays and times from the last 4 weeks of logged sessions (a weekday counts when he trained on it in at least 2 of the 4 weeks), the most days he trained in a row, and the weekday each program day usually falls on. Use it when you talk about recovery or spacing between days. When clear is false there is no clear pattern: ask him which days he trains instead of guessing.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   PROPOSE_PROGRAM_TOOL,
@@ -442,7 +449,78 @@ export function getPhotos(d: CoachData, f: { pose?: Pose; from?: string; to?: st
 /** The planner advice's recovery list (worker/lib/ai/advice.ts lastHeavyCompound), from every done session. */
 export function getRecovery(d: CoachData) {
   const ex = new Map(d.exercises.map((e) => [e.id, e]));
-  return { now: d.now, rule: "No heavy compound for a muscle group within 48 hours of the last one.", groups: lastHeavyCompound(doneSessions(d), ex, d.now) };
+  return { now: d.now, rule: "Advice, not a ban: a muscle group should get 48 hours between heavy compound lifts.", groups: lastHeavyCompound(doneSessions(d), ex, d.now) };
+}
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MON_FIRST = [1, 2, 3, 4, 5, 6, 0] as const;
+/** Days of logged sessions the pattern reads (Payam, 2026-10-15): the last 4 weeks. */
+export const PATTERN_DAYS = 28;
+
+const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+const toHM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const at = (sorted: number[], p: number) => sorted[Math.round(p * (sorted.length - 1))];
+
+/**
+ * His usual training days and times (Payam, 2026-10-15), for recovery and spacing: a draft has no weekdays, so the
+ * coach reads his real pattern, and asks him when there is none. Planned dates (calendar, M13) will replace this.
+ * A weekday is usual when he trained on it in at least 2 of the 4 weeks; the pattern is clear with 4 or more sessions,
+ * at least 75 % of them on usual days. The usual time is the median start to the median end (rounded to 30 minutes),
+ * given only when half his sessions start within 2 hours of each other.
+ */
+export function getTrainingPattern(d: CoachData) {
+  const from = addDays(d.today, -(PATTERN_DAYS - 1));
+  const list = doneSessions(d).filter((s) => s.local_date >= from && s.local_date <= d.today);
+  const tz = d.settings.timezone;
+  const weeks = new Map<number, Set<number>>();
+  const counts = new Map<number, number>();
+  for (const s of list) {
+    const w = weekday(s.local_date);
+    if (!weeks.has(w)) weeks.set(w, new Set());
+    weeks.get(w)!.add(Math.floor(daysBetween(from, s.local_date) / 7));
+    counts.set(w, (counts.get(w) ?? 0) + 1);
+  }
+  const usual = MON_FIRST.filter((w) => (weeks.get(w)?.size ?? 0) >= 2);
+  const onUsual = list.filter((s) => (usual as readonly number[]).includes(weekday(s.local_date))).length;
+  const clear = list.length >= 4 && usual.length > 0 && onUsual / list.length >= 0.75;
+
+  const starts = list.map((s) => toMin(localHM(tz, s.started_at))).sort((a, b) => a - b);
+  const ends = list.flatMap((s) => (s.ended_at ? [toMin(localHM(tz, s.ended_at))] : [])).sort((a, b) => a - b);
+  const steady = starts.length >= 3 && ends.length > 0 && at(starts, 0.75) - at(starts, 0.25) <= 120;
+  const usualTime = steady ? { from: toHM(Math.floor(at(starts, 0.5) / 30) * 30), to: toHM(Math.ceil(at(ends, 0.5) / 30) * 30) } : null;
+
+  const dates = [...new Set(list.map((s) => s.local_date))].sort();
+  let run = 0;
+  let maxRun = 0;
+  dates.forEach((x, i) => {
+    run = i > 0 && daysBetween(dates[i - 1], x) === 1 ? run + 1 : 1;
+    maxRun = Math.max(maxRun, run);
+  });
+
+  const byProgramDay = new Map<string, Map<number, number>>();
+  for (const s of list) {
+    const m = byProgramDay.get(s.program_day_id) ?? new Map<number, number>();
+    m.set(weekday(s.local_date), (m.get(weekday(s.local_date)) ?? 0) + 1);
+    byProgramDay.set(s.program_day_id, m);
+  }
+  const programDays = [...byProgramDay].flatMap(([id, m]) => {
+    const [w, n] = [...m].sort((a, b) => b[1] - a[1])[0];
+    return n >= 2 ? [{ day: sessionDay(d, id)?.name_en ?? id, usual_weekday: WEEKDAY[w], times: n }] : [];
+  });
+
+  const names = usual.map((w) => WEEKDAY[w]).join(", ");
+  return {
+    from,
+    to: d.today,
+    sessions: list.length,
+    weekdays: MON_FIRST.filter((w) => counts.has(w)).map((w) => ({ day: WEEKDAY[w], weeks: weeks.get(w)!.size, sessions: counts.get(w)! })),
+    usual_days: usual.map((w) => WEEKDAY[w]),
+    usual_time: usualTime,
+    max_days_in_a_row: maxRun,
+    program_days: programDays,
+    clear,
+    summary: clear ? `${names}, ${usualTime ? `usually ${usualTime.from}–${usualTime.to}` : "at varying times"}` : `No clear pattern in the last 4 weeks (${list.length} ${list.length === 1 ? "session" : "sessions"}).`,
+  };
 }
 
 /* ---------------- dispatch ---------------- */
@@ -479,6 +557,8 @@ export function runTool(d: CoachData, name: string, input: unknown, propose: (dr
       return parse(photosInput, (f) => ({ ok: true, result: getPhotos(d, f) }));
     case "get_recovery":
       return parse(z.object({}).strict(), () => ({ ok: true, result: getRecovery(d) }));
+    case "get_training_pattern":
+      return parse(z.object({}).strict(), () => ({ ok: true, result: getTrainingPattern(d) }));
     case "propose_program": {
       const r = propose(input);
       return r.ok ? { ok: true, result: r.result } : { ok: false, error: r.error };

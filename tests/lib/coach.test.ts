@@ -4,10 +4,12 @@ import { balanceStatus, bestSet, muscleTargets, setsPerMuscle, weeklyReport } fr
 import { buildOverviewInput } from "../../worker/lib/ai/overview";
 import { lastHeavyCompound } from "../../worker/lib/ai/advice";
 import { callCostUsd } from "../../worker/lib/ai/cost";
-import { COACH_TOOLS, getAdherence, getE1rmHistory, getPrs, getRecovery, getVolume, runTool, type CoachData } from "../../worker/lib/coach/tools";
+import { COACH_TOOLS, getAdherence, getE1rmHistory, getPrs, getRecovery, getTrainingPattern, getVolume, runTool, type CoachData } from "../../worker/lib/coach/tools";
+import type { WorkoutSession } from "../../worker/lib/types";
 import { draftDayRows, proposeProgram } from "../../worker/lib/coach/draft";
 import { contextWindow, estimateTokens, nextStamp, validHistory, type StoredMessage } from "../../worker/lib/coach/context";
 import { COACH_SYSTEM, CONTEXT_HEADER, contextBlock } from "../../worker/lib/coach/prompt";
+import { statusClaims, statusMismatches, type VolumeResult } from "../../worker/lib/coach/statusCheck";
 
 const data = (today = "2026-09-27", now = "2026-09-28T03:00:00.000Z"): CoachData => ({ ...reportData(), today, now });
 
@@ -102,8 +104,8 @@ describe("coach tool inputs", () => {
     expect(sessions[1].exercises.find((x) => x.exercise_id === "cs_row")!.sets[0].weight).toBe(55.1);
   });
 
-  it("every tool has a strict object schema; there are 10 read tools and propose_program", () => {
-    expect(COACH_TOOLS.map((t) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "propose_program"]);
+  it("every tool has a strict object schema; there are 11 read tools and propose_program", () => {
+    expect(COACH_TOOLS.map((t) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "propose_program"]);
     for (const t of COACH_TOOLS) expect(t.input_schema).toMatchObject({ type: "object", additionalProperties: false });
   });
 });
@@ -151,6 +153,133 @@ describe("propose_program", () => {
     expect(row.exercises.map((x) => x.superset_tag)).toEqual([null, "B1", "B2", "B3"]);
     expect(row.exercises[0]).toMatchObject({ is_main: true, position: 1, per_leg: false, is_time: false, target_rir_min: null });
     expect(row.est_minutes).toBeGreaterThan(0);
+  });
+
+  it("carries the program generator's check as advice; no length warning ever, each day's length is information", () => {
+    const d = data();
+    const long = day([ex("bench", { is_main: true, sets: 10, rest_sec: 240 }), ex("incline_db", { sets: 10, rest_sec: 240 })]);
+    const r = proposeProgram(d, { name: "X", days: [long, { ...long, name: "Day 2 · Chest" }] }, "x");
+    if (!r.ok) throw new Error(r.error);
+    const rows = draftDayRows(r.draft);
+    expect(r.result.day_minutes).toEqual(rows.map((x) => x.est_minutes));
+    expect(r.result.day_minutes[0]).toBeGreaterThan(90);
+    expect(r.result.warnings.some((w) => / min/.test(w))).toBe(false);
+    expect(r.result.warnings).toContain("No squat in the week.");
+    expect(r.result.warnings.some((w) => w.startsWith("Back:"))).toBe(true);
+  });
+
+  it("spacing rules run on adjacent days (and the last day and Day 1), worded as a condition", () => {
+    const d = data();
+    const r = proposeProgram(
+      d,
+      {
+        name: "X",
+        days: [
+          day([ex("bench", { is_main: true }), ex("rdl")], "Day 1 · A"),
+          day([ex("incline_bb", { is_main: true }), ex("deadlift")], "Day 2 · B"),
+          day([ex("squat", { is_main: true }), ex("curl")], "Day 3 · C"),
+          day([ex("pullup", { is_main: true }), ex("fly")], "Day 4 · D"),
+        ],
+      },
+      "x"
+    );
+    if (!r.ok) throw new Error(r.error);
+    const spacing = r.result.warnings.filter((w) => w.startsWith("If you train"));
+    expect(spacing).toEqual([
+      "If you train Day 1 and Day 2 back to back, that is two heavy hinges within 24 h.",
+      "If you train Day 1 and Day 2 back to back, Chest has a main lift on both days.",
+      // Romanian deadlift (hamstrings) and deadlift (glutes) are both the Hamstrings & glutes group.
+      "If you train Day 1 and Day 2 back to back, Hamstrings & glutes is trained on both days.",
+      "If you train Day 4 and Day 1 back to back, Chest is trained on both days.",
+    ]);
+    // Day 1 and Day 3 are never adjacent: his program has at most two training days in a row.
+    expect(spacing.some((w) => w.includes("Day 1 and Day 3"))).toBe(false);
+  });
+
+  it("two days are one pair; one day has none", () => {
+    const d = data();
+    const two = proposeProgram(d, { name: "X", days: [day([ex("bench", { is_main: true })]), day([ex("incline_bb", { is_main: true })], "Day 2 · B")] }, "x");
+    if (!two.ok) throw new Error(two.error);
+    expect(two.result.warnings.filter((w) => w.startsWith("If you train"))).toEqual(["If you train Day 1 and Day 2 back to back, Chest has a main lift on both days."]);
+    const one = proposeProgram(d, { name: "X", days: [day([ex("bench", { is_main: true })])] }, "x");
+    if (!one.ok) throw new Error(one.error);
+    expect(one.result.warnings.some((w) => w.startsWith("If you train"))).toBe(false);
+  });
+});
+
+describe("get_training_pattern", () => {
+  // Today is Thursday 2026-10-15 in Denver (UTC−6 in October); the window is 2026-09-18 to 2026-10-15.
+  const session = (date: string, start: string, end: string, day: string): WorkoutSession =>
+    ({ id: `s-${date}`, program_day_id: day, local_date: date, started_at: start, ended_at: end, status: "done", unit: "lb", note: "", created_at: start, updated_at: start, source: "app", sets: [] }) as unknown as WorkoutSession;
+  const withSessions = (list: WorkoutSession[]): CoachData => ({ ...data(), today: "2026-10-15", now: "2026-10-15T20:00:00.000Z", sessions: list });
+  const noon = (date: string, day: string) => session(date, `${date}T18:05:00.000Z`, `${date}T18:58:00.000Z`, day);
+
+  it("Mon, Tue, Thu, Sat around noon: a clear pattern with the usual time, two days in a row, and each day's weekday", () => {
+    const dates: [string, string][] = [
+      ["2026-09-19", "D4"], ["2026-09-21", "D1"], ["2026-09-22", "D2"], ["2026-09-24", "D3"], ["2026-09-26", "D4"],
+      ["2026-09-28", "D1"], ["2026-09-29", "D2"], ["2026-10-01", "D3"], ["2026-10-03", "D4"], ["2026-10-05", "D1"],
+      ["2026-10-06", "D2"], ["2026-10-08", "D3"], ["2026-10-10", "D4"], ["2026-10-12", "D1"], ["2026-10-13", "D2"], ["2026-10-15", "D3"],
+    ];
+    const r = getTrainingPattern(withSessions([...dates.map(([x, dd]) => noon(x, dd)), noon("2026-09-10", "D1")]));
+    expect(r).toMatchObject({ from: "2026-09-18", to: "2026-10-15", sessions: 16, usual_days: ["Mon", "Tue", "Thu", "Sat"], usual_time: { from: "12:00", to: "13:00" }, max_days_in_a_row: 2, clear: true });
+    expect(r.summary).toBe("Mon, Tue, Thu, Sat, usually 12:00–13:00");
+    expect(r.program_days.find((p) => p.usual_weekday === "Mon")).toMatchObject({ times: 4 });
+  });
+
+  it("too few sessions, or sessions spread over the week: no clear pattern, so the coach asks", () => {
+    const few = getTrainingPattern(withSessions([noon("2026-09-21", "D1"), noon("2026-10-01", "D2"), noon("2026-10-10", "D3")]));
+    expect(few).toMatchObject({ sessions: 3, clear: false, summary: "No clear pattern in the last 4 weeks (3 sessions)." });
+    const spread = getTrainingPattern(withSessions(["2026-09-21", "2026-09-23", "2026-09-26", "2026-09-30", "2026-10-02", "2026-10-04", "2026-10-07", "2026-10-11"].map((x) => noon(x, "D1"))));
+    expect(spread.clear).toBe(false);
+    expect(getTrainingPattern(withSessions([])).summary).toBe("No clear pattern in the last 4 weeks (0 sessions).");
+  });
+
+  it("days without a steady start time: the pattern stands, the time is given as varying", () => {
+    const times = ["13:00", "02:00", "21:00", "15:00", "23:30", "16:00", "03:00", "19:00"];
+    const dates = ["2026-09-21", "2026-09-22", "2026-09-28", "2026-09-29", "2026-10-05", "2026-10-06", "2026-10-12", "2026-10-13"];
+    const r = getTrainingPattern(withSessions(dates.map((x, i) => session(x, `${x}T${times[i]}:00.000Z`, `${x}T${times[i]}:00.000Z`, "D1"))));
+    expect(r).toMatchObject({ clear: true, usual_days: ["Mon", "Tue"], usual_time: null, summary: "Mon, Tue, at varying times" });
+  });
+});
+
+describe("status claims in an answer vs get_volume", () => {
+  const vol = (rows: Record<string, [string, number | null]>): VolumeResult => ({ weeks: [{ groups: Object.entries(rows).map(([group, [status, target]]) => ({ group, target, status: status as never })) }] });
+
+  it("Persian: 'chest is under target' while get_volume says on target is a mismatch; the same text with under is not", () => {
+    const text = "این هفته تا امروز سینه زیر هدف است؛ دو ست دیگر اضافه کن.";
+    expect(statusMismatches(text, [vol({ chest: ["on", 13] })])).toEqual([{ group: "chest", status: "under" }]);
+    expect(statusMismatches(text, [vol({ chest: ["under", 13] })])).toEqual([]);
+    // 0 sets of a target (none) is under it.
+    expect(statusMismatches(text, [vol({ chest: ["none", 13] })])).toEqual([]);
+  });
+
+  it("English clauses are read one by one; each group is checked against its own row", () => {
+    const text = "So far chest is on target, but back is under target.";
+    expect(statusClaims(text)).toEqual([{ group: "chest", status: "on" }, { group: "back", status: "under" }]);
+    expect(statusMismatches(text, [vol({ chest: ["on", 13], back: ["under", 17.5] })])).toEqual([]);
+    expect(statusMismatches(text, [vol({ chest: ["on", 13], back: ["on", 17.5] })])).toEqual([{ group: "back", status: "under" }]);
+  });
+
+  it("is cautious: negations, two statuses in one clause and groups without a target are not checked", () => {
+    expect(statusClaims("Chest is not under target.")).toEqual([]);
+    expect(statusClaims("Chest isn’t over target.")).toEqual([]);
+    expect(statusClaims("سینه زیر هدف نیست.")).toEqual([]);
+    expect(statusClaims("Chest is on target and back is under target.")).toEqual([]);
+    expect(statusMismatches("Chest is over target.", [vol({ chest: ["untracked", null] })])).toEqual([]);
+    expect(statusMismatches("Chest is over target.", [])).toEqual([]);
+  });
+
+  it("Persian names: the longer name wins (پشت بازو is triceps, not back), possessives and ZWNJ are read", () => {
+    expect(statusClaims("پشت بازو بالای هدف است.")).toEqual([{ group: "triceps", status: "over" }]);
+    expect(statusClaims("سینه زیر هدفش است.")).toEqual([{ group: "chest", status: "under" }]);
+    const zwnj = String.fromCharCode(0x200c);
+    expect(statusClaims(`سرشانه${zwnj}ها روی هدف هستند.`)).toEqual([{ group: "shoulders", status: "on" }]);
+  });
+
+  it("a claim that any week in the answer supports is not a mismatch", () => {
+    const twoWeeks: VolumeResult = { weeks: [...vol({ chest: ["under", 13] }).weeks, ...vol({ chest: ["on", 13] }).weeks] };
+    expect(statusMismatches("Chest is on target.", [twoWeeks])).toEqual([]);
+    expect(statusMismatches("Chest is over target.", [twoWeeks])).toEqual([{ group: "chest", status: "over" }]);
   });
 });
 
