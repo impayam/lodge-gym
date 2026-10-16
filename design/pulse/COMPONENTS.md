@@ -300,7 +300,7 @@ Every list and chart uses `web/src/components/States.tsx` (no new classes):
 - Week grid: 04:00–24:00 at 44 px an hour (the touch row), 7 columns, sticky day heads; it scrolls inside its card,
   which ends above the tab bar, and opens on the current time. Blocks are placed by minutes (`--top`, `--h`) and named
   for VoiceOver (`role="img"`, "Work, Tuesday 07:00–15:30"); the label stays in view under the heads while a long
-  block scrolls. `--work`: `--ink-3` on a well; `--plan`: pink outline; `--done`: pink fill with `--bg-solid` text;
+  block scrolls, and hides (`data-cut`) once the rest of the block is too short to hold it, so it never shows cut. `--work`: `--ink-3` on a well; `--plan`: pink outline; `--done`: pink fill with `--bg-solid` text;
   `--missed`: grey outline, "Missed"; `--free`: violet dotted.
 - List view (the accessible alternative, like Table view on charts): `.card--list` with a `.card__title` per day and
   `.list-row`s whose mark sits in `.cal-mark`. The key under the grid is a `.chart-legend` of the same marks.
