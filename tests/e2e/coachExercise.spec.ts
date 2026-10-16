@@ -64,7 +64,7 @@ test("one more exercise on the chest day: one card with only the change; no prog
   expect(D1).not.toContain(id);
   await expect(card.getByRole("heading").first()).toHaveText(`Day 1 · Chest: + ${name}`);
   await expect(card.getByTestId("coach-exercise-row")).toContainText(/\d+ × [\d–]+ · after Seated Cable Row/);
-  await expect(card.getByTestId("coach-exercise-row")).not.toContainText("at the end");
+  await expect(card.getByTestId("coach-exercise-place")).toHaveCount(0);
   // The reason once: in the coach's text, not in the card. No explanation under the buttons.
   await expect(answer).toContainText("یک حرکت ایزوله بعد از Seated Cable Row");
   await expect(card.locator('[dir="rtl"]')).toHaveCount(0);
@@ -173,8 +173,12 @@ test("just today, with a session open: Only this session first; it goes into tha
   await askCoach(page, "Just today add one chest exercise on my chest day");
   const { card, id: ex, name } = await exerciseCard(page);
   await expect(card).toHaveAttribute("data-prefer", "session");
-  // The card says where each button puts it: this session at its end, the program after Seated Cable Row.
-  await expect(card.getByTestId("coach-exercise-row")).toContainText(/\d+ × [\d–]+ · at the end of this session; in the program after Seated Cable Row/);
+  // The card says where each button puts it, on a line of its own that is never cut off: this session at its end, the
+  // program after Seated Cable Row.
+  const place = card.getByTestId("coach-exercise-place");
+  await expect(place).toHaveText("At the end of this session; in the program after Seated Cable Row.");
+  expect(await place.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== "ellipsis")).toBe(true);
+  await expect(card.getByTestId("coach-exercise-row").locator(".list-row__note")).toHaveText(/^\d+ × [\d–]+$/);
   await expect(card.getByRole("button")).toHaveText(["Only this session", "Whole program"]);
   await card.getByTestId("coach-exercise-session").click();
   await expect(page.getByTestId("toast")).toHaveText(`Added ${name} to today's session: Day 1 · Chest.`);
