@@ -25,6 +25,9 @@ const lib = (id: string, name: string, primary: string, extra: Partial<Exercise>
   instructions_en: [],
   archived_at: null,
   category: "strength",
+  license: null,
+  license_author: null,
+  regions: [],
   ...extra,
 });
 

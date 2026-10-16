@@ -5,17 +5,19 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppBindings } from "./env";
 import { fail, nowISO, readJson } from "./http";
-import { mapExercise } from "./data";
+import { attachRegions, mapExercise, readRegions } from "./data";
 import { isJpeg, stripJpegMetadata } from "./lib/jpeg";
 import { CATEGORIES } from "./lib/category";
 import { FEDB_PREFIX, PATTERNS } from "./lib/library";
+import { SOURCE_MEDIA_PREFIX } from "./lib/libraryDecisions";
+import { regionTags } from "./lib/regions";
 import { CANONICAL_MUSCLES, isLowerBody } from "./lib/muscles";
 import { ID_RE, ulid } from "./lib/ulid";
 
 const MAX_PHOTO = 2 * 1024 * 1024;
 export const CUSTOM_PREFIX = "library/custom/";
-/** R2 prefixes the media route may serve. */
-const MEDIA_PREFIXES = [`${FEDB_PREFIX}images/`, CUSTOM_PREFIX];
+/** R2 prefixes the media route may serve: the library images (free-exercise-db, the M14 sources) and custom photos. */
+const MEDIA_PREFIXES = [`${FEDB_PREFIX}images/`, `${SOURCE_MEDIA_PREFIX}wger/images/`, `${SOURCE_MEDIA_PREFIX}everkinetic/images/`, CUSTOM_PREFIX];
 
 const muscle = z.enum(CANONICAL_MUSCLES);
 const customSchema = z.object({
@@ -31,10 +33,10 @@ const customSchema = z.object({
 
 export const exerciseRoutes = new Hono<AppBindings>();
 
-/** The whole library, archived custom exercises included (the client hides them from the picker). */
+/** The whole library with each exercise's region tags, archived custom exercises included (the client hides them from the picker). */
 exerciseRoutes.get("/", async (c) => {
-  const rows = await c.env.DB.prepare("SELECT * FROM exercises ORDER BY name_en COLLATE NOCASE").all<Record<string, unknown>>();
-  return c.json({ exercises: rows.results.map(mapExercise) });
+  const [rows, regions] = await Promise.all([c.env.DB.prepare("SELECT * FROM exercises ORDER BY name_en COLLATE NOCASE").all<Record<string, unknown>>(), readRegions(c.env)]);
+  return c.json({ exercises: attachRegions(rows.results.map(mapExercise), regions) });
 });
 
 /** Creates or edits a custom exercise, keyed by the client id. Archiving sets archived_at; nothing is deleted. */
@@ -56,7 +58,15 @@ exerciseRoutes.put("/:id", async (c) => {
     .bind(id, body.name_en, body.muscle_primary, isLowerBody(body.muscle_primary) ? 1 : 0, body.equipment, id, JSON.stringify(secondary), body.pattern, archivedAt, body.category ?? null, body.category ?? null)
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM exercises WHERE id = ?").bind(id).first<Record<string, unknown>>();
-  return c.json({ ok: true, exercise: mapExercise(row!) });
+  // Its region tags come from the same reviewed rules as the library's (SPEC-v11 A3).
+  const ex = mapExercise(row!);
+  const tags = regionTags(ex);
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM exercise_regions WHERE exercise_id = ?").bind(id),
+    ...tags.map((t) => c.env.DB.prepare("INSERT INTO exercise_regions (exercise_id, region_key, emphasis, evidence, note) VALUES (?, ?, ?, ?, ?)").bind(id, t.region, t.emphasis, t.evidence, t.note)),
+  ]);
+  const [withRegions] = attachRegions([ex], tags.map((t) => ({ exercise_id: id, region_key: t.region, emphasis: t.emphasis, evidence: t.evidence })));
+  return c.json({ ok: true, exercise: withRegions });
 });
 
 /** Photo of a custom exercise (resized and stripped of EXIF on the phone; metadata stripped again here). */
@@ -84,7 +94,7 @@ export const mediaRoutes = new Hono<AppBindings>();
 /** Library media from the private bucket: only the library prefixes, only after auth, immutable keys. */
 mediaRoutes.get("/*", async (c) => {
   const key = decodeURIComponent(c.req.path.replace(/^\/api\/library\/media\//, ""));
-  if (!MEDIA_PREFIXES.some((p) => key.startsWith(p)) || key.includes("..") || !/\.(jpe?g|gif|png)$/i.test(key)) return fail(c, 404, "not_found", "Media not found.");
+  if (!MEDIA_PREFIXES.some((p) => key.startsWith(p)) || key.includes("..") || !/\.(jpe?g|jfif|gif|png|webp|avif)$/i.test(key)) return fail(c, 404, "not_found", "Media not found.");
   const obj = await c.env.PHOTOS.get(key);
   if (!obj) return fail(c, 404, "not_found", "Media not found.");
   return new Response(obj.body, {

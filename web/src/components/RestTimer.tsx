@@ -44,7 +44,8 @@ export function RestTimer() {
   }, [now, rest]);
 
   const shown = rest ?? last.current;
-  const left = shown ? (shown.endsAt - now) / 1000 : 0;
+  // The first frame of a new rest still has the previous tick's time: never show more than the rest itself.
+  const left = shown ? Math.min(shown.total, (shown.endsAt - now) / 1000) : 0;
   const over = !!rest && left <= 0;
   const act = activeSession(sessions);
   const color = effortColor(sessionEffort(act?.sets ?? []).e, effortStops());

@@ -6,7 +6,16 @@ import manual from "../../seed/library/manual.json";
 import patterns from "../../seed/library/fedb-patterns.json";
 import seedMatches from "../../seed/library/seed-matches.json";
 import sample from "../fixtures/library/fedb-sample.json";
+import overrides from "../../seed/library/region-overrides.json";
+import dedupe from "../../seed/library/m14/dedupe-review.json";
+import everkinetic from "../../seed/library/m14/everkinetic.json";
+import exercemus from "../../seed/library/m14/exercemus.json";
+import exercisedb from "../../seed/library/m14/exercisedb.json";
+import liftosaur from "../../seed/library/m14/liftosaur.json";
+import wger from "../../seed/library/m14/wger.json";
 import { buildLibrary, librarySql, type EquipmentReview, type FedbExercise, type ManualExercise, type PatternFile, type SeedMatch } from "../../worker/lib/library";
+import { libraryRegionTags, regionsSql, sourceRows, type DecisionFile, type DedupeEntry } from "../../worker/lib/libraryDecisions";
+import type { RegionOverrides } from "../../worker/lib/regions";
 import type { Bootstrap, Exercise, WorkoutSession } from "../../worker/lib/types";
 import { ulid } from "../../worker/lib/ulid";
 import { Client, resetAuth, setupOwner } from "./helpers";
@@ -143,5 +152,76 @@ describe("extra exercises in a session (SPEC-v2 §7.3)", () => {
     expect(s.sets.filter((x) => x.is_extra)).toHaveLength(2);
     const b = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
     expect(b.exercises.some((e) => e.id === "fedb-Trap_Bar_Deadlift")).toBe(true);
+  });
+});
+
+describe("M14 sources and region tags (SPEC-v11 A2, A3)", () => {
+  const added = sourceRows([wger, everkinetic, exercisedb, liftosaur, exercemus] as unknown as DecisionFile[], dedupe as unknown as DedupeEntry[]);
+  const rows = [...lib.rows, ...added];
+  const tags = libraryRegionTags(program.exercises, lib.seedUpdates, rows, overrides as unknown as RegionOverrides);
+  const runM14 = async () => {
+    const res = await env.DB.batch([...librarySql(rows, lib.seedUpdates), ...regionsSql(tags)].map((s) => env.DB.prepare(s)));
+    return res.reduce((n, r) => n + r.meta.changes, 0);
+  };
+  const all = async () => ((await (await client.fetch("/api/exercises")).json()) as { exercises: Exercise[] }).exercises;
+
+  it("adds the reviewed rows and every region tag; a second run changes nothing; existing ids keep their rows", async () => {
+    const before = await env.DB.prepare("SELECT id, name_en FROM exercises WHERE source IN ('seed', 'fedb', 'manual') ORDER BY id").all();
+    expect(await runM14()).toBeGreaterThan(added.length);
+    expect(await runM14()).toBe(0);
+    expect((await env.DB.prepare("SELECT id, name_en FROM exercises WHERE source IN ('seed', 'fedb', 'manual') ORDER BY id").all()).results).toEqual(before.results);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM exercise_regions WHERE exercise_id IN (SELECT id FROM exercises WHERE source != 'custom')").first<{ n: number }>();
+    expect(n?.n).toBe([...tags.values()].reduce((x, t) => x + t.length, 0));
+  });
+
+  it("lists a source row with its licence, its images' licence and author, and its regions, main focus first", async () => {
+    const goblet = (await all()).find((e) => e.id === "wger-203")!;
+    expect(goblet).toMatchObject({ source: "wger", name_en: "Dumbbell Goblet Squat", license: "CC-BY-SA-4.0", license_author: "ataraxie67", category: "strength" });
+    expect(goblet.media[0]).toEqual({ kind: "image", r2_key: "library/sources/wger/images/203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg", license: "CC-BY-SA-4.0", author: "philip" });
+    expect(goblet.regions).toEqual([
+      { region: "quads_squat", emphasis: "primary", evidence: "strong" },
+      { region: "glutes_ext", emphasis: "secondary", evidence: "strong" },
+      { region: "adductors", emphasis: "secondary", evidence: "moderate" },
+    ]);
+    expect(goblet.instructions_en.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("facts-only rows store no licence or media; stretching carries no region; free-exercise-db is Unlicense", async () => {
+    const list = await all();
+    const edb = list.filter((e) => e.source === "exercisedb");
+    expect(edb.length).toBeGreaterThan(0);
+    expect(edb.every((e) => e.license === null && e.media.length === 0)).toBe(true);
+    expect(list.find((e) => e.id === "wger-1011")).toMatchObject({ category: "stretching", regions: [] });
+    expect(list.find((e) => e.id === "fedb-Trap_Bar_Deadlift")?.license).toBe("Unlicense");
+  });
+
+  it("bootstrap carries the seeded exercises' regions for offline use", async () => {
+    const b = (await (await client.fetch("/api/bootstrap")).json()) as Bootstrap;
+    expect(b.exercises.find((e) => e.id === "bench")?.regions[0]).toEqual({ region: "chest_mid", emphasis: "primary", evidence: "strong" });
+  });
+
+  it("a custom exercise is tagged by the same rules on every save", async () => {
+    const id = ulid();
+    const body = { name_en: "Incline Cable Press", muscle_primary: "chest", muscles_secondary: ["triceps", "shoulders_front"], equipment: "cable", pattern: "h_push", archived: false };
+    const r = (await (await client.fetch(`/api/exercises/${id}`, { method: "PUT", json: body })).json()) as { exercise: Exercise };
+    expect(r.exercise.regions[0]).toEqual({ region: "chest_upper", emphasis: "primary", evidence: "moderate" });
+    const stored = await env.DB.prepare("SELECT region_key, emphasis FROM exercise_regions WHERE exercise_id = ? ORDER BY region_key").bind(id).all();
+    expect(stored.results).toContainEqual({ region_key: "chest_upper", emphasis: "primary" });
+    const edited = (await (await client.fetch(`/api/exercises/${id}`, { method: "PUT", json: { ...body, muscle_primary: "triceps", muscles_secondary: [], pattern: "isolation" } })).json()) as { exercise: Exercise };
+    expect(edited.exercise.regions.filter((t) => t.emphasis === "primary")).toEqual([{ region: "triceps_lateral_medial", emphasis: "primary", evidence: "moderate" }]);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM exercise_regions WHERE exercise_id = ? AND region_key LIKE 'chest%'").bind(id).first<{ n: number }>())?.n).toBe(0);
+    const stretch = (await (await client.fetch(`/api/exercises/${id}`, { method: "PUT", json: { ...body, category: "stretching", pattern: null } })).json()) as { exercise: Exercise };
+    expect(stretch.exercise.regions).toEqual([]);
+    expect((await all()).find((e) => e.id === id)?.regions).toEqual([]);
+  });
+
+  it("serves wger and everkinetic images from their folders only", async () => {
+    const key = "library/sources/wger/images/203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg";
+    await env.PHOTOS.put(key, JPEG);
+    expect((await client.fetch(`/api/library/media/${key}`)).status).toBe(200);
+    await env.PHOTOS.put("library/sources/manifest.json", "{}");
+    expect((await client.fetch("/api/library/media/library/sources/manifest.json")).status).toBe(404);
+    await env.PHOTOS.put("library/sources/exercisedb/images/x.png", JPEG);
+    expect((await client.fetch("/api/library/media/library/sources/exercisedb/images/x.png")).status).toBe(404);
   });
 });

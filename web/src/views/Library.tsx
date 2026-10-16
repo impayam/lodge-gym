@@ -4,7 +4,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { CATEGORIES, countsVolume, type Category } from "../../../worker/lib/category";
+import { LICENCE_URL } from "../../../worker/lib/librarySources";
 import { CANONICAL_MUSCLES } from "../../../worker/lib/muscles";
+import { REGION_INFO, type Region } from "../../../worker/lib/regions";
 import { bestSet } from "../../../worker/lib/reports";
 import type { Exercise, Pattern, SetEntry, WorkoutSession } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
@@ -17,7 +19,7 @@ import { Empty, LoadError, Loading } from "../components/States";
 import { TimeChart } from "../components/TimeChart";
 import { dateLong, dayMonth, fmtNum, ytLink } from "../format";
 import { BIG_THREE } from "../lib/lifts";
-import { inGroup, LIBRARY_GROUPS, rowFacts, type LibraryGroup, type RowFact } from "../lib/libraryView";
+import { emphasises, EVIDENCE_LABEL, inGroup, LIBRARY_GROUPS, loggedExerciseIds, regionChipLabel, regionsForGroup, rowFacts, type LibraryGroup, type RowFact } from "../lib/libraryView";
 import { loadAllHistory, loadLibrary, mediaSrc, saveCustomExercise, uploadCustomPhoto, useStore, type CustomExerciseInput } from "../store";
 
 export const MUSCLE_LABEL: Record<string, string> = {
@@ -77,7 +79,20 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   plyometrics: "Plyometrics",
   cardio: "Cardio",
 };
-const SOURCE_LABEL: Record<Exercise["source"], string> = { seed: "Program", fedb: "free-exercise-db", manual: "Added by hand", custom: "Your exercise" };
+const SOURCE_LABEL: Record<Exercise["source"], string> = {
+  seed: "Program",
+  fedb: "free-exercise-db",
+  manual: "Added by hand",
+  custom: "Your exercise",
+  wger: "wger",
+  everkinetic: "everkinetic",
+  exercisedb: "ExerciseDB (facts only)",
+  liftosaur: "Liftosaur (facts only)",
+  exercemus: "exercemus (facts only)",
+};
+/** Licence ids as people read them. */
+const LICENCE_LABEL: Record<string, string> = { Unlicense: "Unlicense", "CC-BY-SA-3.0": "CC BY-SA 3.0", "CC-BY-SA-4.0": "CC BY-SA 4.0", "CC0-1.0": "CC0", "CC-BY-4.0": "CC BY 4.0" };
+const licenceLink = (id: string) => LICENCE_URL[id as keyof typeof LICENCE_URL] ?? null;
 
 const EQUIPMENT_ICON: Record<Exercise["equipment"], (p: { size?: number }) => preact.JSX.Element> = {
   barbell: IconBarbell,
@@ -130,13 +145,19 @@ function useRowFacts() {
 interface Filters {
   q: string;
   group: LibraryGroup;
+  /** A region chip under the group (SPEC-v11 A4): exercises with it as their main focus. */
+  region: string;
   muscle: string;
   equipment: string;
   pattern: string;
+  /** Exercises never logged (SPEC-v11 A4). */
+  newToMe: boolean;
 }
 
-function matches(ex: Exercise, f: Filters): boolean {
+function matches(ex: Exercise, f: Filters, logged: ReadonlySet<string>): boolean {
   if (!inGroup(ex.muscle_primary, f.group)) return false;
+  if (f.region && !emphasises(ex.regions ?? [], f.region)) return false;
+  if (f.newToMe && logged.has(ex.id)) return false;
   if (f.muscle && ex.muscle_primary !== f.muscle && !ex.muscles_secondary.includes(f.muscle)) return false;
   if (f.equipment && ex.equipment !== f.equipment) return false;
   if (f.pattern && ex.pattern !== f.pattern) return false;
@@ -146,7 +167,7 @@ function matches(ex: Exercise, f: Filters): boolean {
 }
 
 const PAGE = 60;
-const NO_FILTERS: Filters = { q: "", group: "all", muscle: "", equipment: "", pattern: "" };
+const NO_FILTERS: Filters = { q: "", group: "all", region: "", muscle: "", equipment: "", pattern: "", newToMe: false };
 
 /**
  * The searchable exercise list (mockup 05): search, muscle-group chips, the count, more filters (muscle, equipment,
@@ -168,6 +189,8 @@ export function ExerciseList({
 }) {
   const library = useStore((s) => s.library);
   const load = useStore((s) => s.loads.library);
+  const sessions = useStore((s) => s.sessions);
+  const history = useStore((s) => s.loads.history);
   const facts = useRowFacts();
   const [f, setF] = useState<Filters>(NO_FILTERS);
   const [more, setMore] = useState(false);
@@ -175,16 +198,23 @@ export function ExerciseList({
   useEffect(() => {
     void loadLibrary();
   }, []);
-  const list = useMemo(() => (library ?? []).filter((e) => (archived || !e.archived_at) && matches(e, f)), [library, f, archived]);
+  // "New to me" needs every session, not only the last 60 days the phone keeps.
+  useEffect(() => {
+    if (f.newToMe && !history) void loadAllHistory();
+  }, [f.newToMe]);
+  const logged = useMemo(() => loggedExerciseIds(Object.values(sessions)), [sessions]);
+  const list = useMemo(() => (library ?? []).filter((e) => (archived || !e.archived_at) && matches(e, f, logged)), [library, f, archived, logged]);
   const set = (patch: Partial<Filters>) => {
     setF({ ...f, ...patch });
     setLimit(PAGE);
   };
-  const extra = [f.muscle, f.equipment, f.pattern].filter(Boolean).length + (archived ? 1 : 0);
+  const extra = [f.muscle, f.equipment, f.pattern].filter(Boolean).length + (f.newToMe ? 1 : 0) + (archived ? 1 : 0);
+  const regions = regionsForGroup(f.group);
   // Mockup 05 names the chip here ("Chest, …"), without repeating a total the page header already shows.
   const count = `${fmtNum(list.length)} ${list.length === 1 ? "exercise" : "exercises"}`;
   const group = LIBRARY_GROUPS.find((g) => g.key === f.group)!;
-  const countLine = f.group !== "all" ? `${group.label}, ${count}` : totalShown && !f.q.trim() && !extra ? "All exercises" : count;
+  const regionName = f.region ? regionChipLabel(f.region as Region, f.group) : "";
+  const countLine = f.group !== "all" ? `${group.label}${regionName ? ` (${regionName.toLowerCase()})` : ""}, ${count}` : totalShown && !f.q.trim() && !extra ? "All exercises" : count;
   return (
     <div class="l-col l-gap-12" data-testid={testId}>
       <label class="search-field well">
@@ -194,11 +224,20 @@ export function ExerciseList({
       </label>
       <div class="chip-wrap" role="group" aria-label="Muscle group">
         {LIBRARY_GROUPS.map((g) => (
-          <button type="button" class="clay press chip" aria-pressed={f.group === g.key} data-testid={`group-${g.key}`} onClick={() => set({ group: g.key })}>
+          <button type="button" class="clay press chip" aria-pressed={f.group === g.key} data-testid={`group-${g.key}`} onClick={() => set({ group: g.key, region: "" })}>
             {g.label}
           </button>
         ))}
       </div>
+      {regions.length ? (
+        <div class="chip-wrap" role="group" aria-label={`${group.label} regions`} data-testid="region-chips">
+          {regions.map((r) => (
+            <button type="button" class="clay press chip" aria-pressed={f.region === r} data-testid={`region-${r}`} onClick={() => set({ region: f.region === r ? "" : r })}>
+              {regionChipLabel(r, f.group)}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div class="l-row l-between l-gap-8">
         <span class="caption num" data-testid="library-count" aria-live="polite">
           {library === null ? "" : countLine}
@@ -209,7 +248,8 @@ export function ExerciseList({
       </div>
       {more ? (
         <div id={`${testId ?? "list"}-filters`} class="l-col l-gap-8">
-          <div class="l-grid-3 l-gap-8">
+          {/* One under another: three side by side cut their labels at iPhone width ("All muscl…"). */}
+          <div class="l-col l-gap-8">
             <Select aria-label="Muscle" value={f.muscle} onChange={(e) => set({ muscle: (e.currentTarget as HTMLSelectElement).value })}>
               <option value="">All muscles</option>
               {CANONICAL_MUSCLES.map((m) => (
@@ -229,12 +269,20 @@ export function ExerciseList({
               ))}
             </Select>
           </div>
-          {onArchived ? (
-            <div class="l-row">
+          <div class="chip-wrap">
+            <button type="button" class="clay press chip" aria-pressed={f.newToMe} data-testid="new-to-me" onClick={() => set({ newToMe: !f.newToMe })}>
+              New to me
+            </button>
+            {onArchived ? (
               <button type="button" class="clay press chip" aria-pressed={!!archived} data-testid="show-archived" onClick={() => onArchived(!archived)}>
                 Show archived exercises
               </button>
-            </div>
+            ) : null}
+          </div>
+          {f.newToMe ? (
+            <p class="caption l-m0" data-testid="new-to-me-note">
+              {history?.status === "loading" || !history ? "Checking your older sessions…" : history.status === "error" ? "Older sessions couldn't load: only the last 60 days are checked." : "Exercises you have never logged."}
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -499,6 +547,11 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
     }
   };
   const images = ex.media.filter((m) => m.kind === "image" || m.kind === "gif");
+  const [broken, setBroken] = useState<string[]>([]);
+  const shown = images.slice(0, 2).filter((m) => !broken.includes(mediaSrc(m)));
+  // Credit the authors of images from open-licence sources (their own licence, SPEC-v11 A1).
+  const credits = [...new Set(shown.filter((m) => m.license).map((m) => `${m.author ?? "unknown"}, ${LICENCE_LABEL[m.license!] ?? m.license}`))];
+  const regions = ex.regions ?? [];
   return (
     <Pushed onBack={onBack}>
       <main class="page" data-testid="exercise-detail">
@@ -517,13 +570,20 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
             <b class="t-orange">Not counted in volume</b> Sets are logged, but count 0 toward weekly muscle volume and the muscle map.
           </p>
         )}
-        {images.length ? (
-          <div class="media-pair">
-            {images.slice(0, 2).map((m, i) => (
-              <span class="media-frame well">
-                <img src={mediaSrc(m)} alt={`${ex.name_en}, ${i === 0 ? "start" : "end"} position`} loading="lazy" />
+        {shown.length ? (
+          <div class="l-col l-gap-8">
+            <div class="media-pair">
+              {shown.map((m, i) => (
+                <span class="media-frame well">
+                  <img src={mediaSrc(m)} alt={shown.length === 1 ? ex.name_en : `${ex.name_en}, ${i === 0 ? "start" : "end"} position`} loading="lazy" onError={() => setBroken((b) => [...b, mediaSrc(m)])} />
+                </span>
+              ))}
+            </div>
+            {credits.length ? (
+              <span class="caption" data-testid="image-credit">
+                Image: {credits.join("; ")}
               </span>
-            ))}
+            ) : null}
           </div>
         ) : (
           <p class="state card l-m0" data-testid="media-placeholder">
@@ -534,6 +594,24 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
           <IconPlay size={16} />
           Watch form video ↗
         </a>
+        {regions.length ? (
+          <section class="card card--list" aria-label="Regions" data-testid="exercise-regions">
+            <h2 class="card__title l-m0">Regions</h2>
+            {regions.map((r) => (
+              <div class="list-row" data-region={r.region} data-emphasis={r.emphasis}>
+                <span class="list-row__text">
+                  <span class="t-title">{REGION_INFO[r.region].label}</span>
+                  <span class="caption">
+                    {r.emphasis === "primary" ? "Main focus" : "Also trained"} · {EVIDENCE_LABEL[r.evidence]}
+                  </span>
+                </span>
+              </div>
+            ))}
+            <span class="caption" data-testid="evidence-note">
+              Strong: growth studies or clear anatomy and EMG. Moderate: EMG and biomechanics agree. Weak: anatomy alone or mixed findings.
+            </span>
+          </section>
+        ) : null}
         <section class="card card--list" aria-label="About this exercise">
           <Fact name="Primary muscle" value={muscleLabel(ex.muscle_primary)} />
           <Fact name="Secondary muscles" value={ex.muscles_secondary.length ? ex.muscles_secondary.map(muscleLabel).join(", ") : "–"} />
@@ -541,7 +619,24 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
           <Fact name="Pattern" value={ex.pattern ? PATTERN_LABEL[ex.pattern] : "–"} />
           <Fact name="Category" value={ex.category ? CATEGORY_LABEL[ex.category] : "–"} testid="category" />
           <Fact name="Mechanic · level" value={`${ex.mechanic ?? "–"} · ${ex.level ?? "–"}`} />
-          <Fact name="Source" value={SOURCE_LABEL[ex.source]} />
+          <Fact name="Source" value={SOURCE_LABEL[ex.source] ?? ex.source} testid="source" />
+          {ex.license ? (
+            <div class="list-row" data-testid="licence">
+              <span class="list-row__text">
+                <span class="caption">Licence</span>
+              </span>
+              <span class="list-row__value">
+                {licenceLink(ex.license) ? (
+                  <a class="t-pink" href={licenceLink(ex.license)!} target="_blank" rel="noopener noreferrer">
+                    {LICENCE_LABEL[ex.license] ?? ex.license}
+                  </a>
+                ) : (
+                  (LICENCE_LABEL[ex.license] ?? ex.license)
+                )}
+                {ex.license_author ? ` · ${ex.license_author}` : ""}
+              </span>
+            </div>
+          ) : null}
         </section>
         {ex.cue_en ? <p class="ex-card__cue l-m0">{ex.cue_en}</p> : null}
         {ex.instructions_en.length ? (

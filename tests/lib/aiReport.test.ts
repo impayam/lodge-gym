@@ -26,6 +26,9 @@ const stretch: Exercise = {
   instructions_en: [],
   archived_at: null,
   category: "stretching",
+  license: null,
+  license_author: null,
+  regions: [],
 };
 
 let k = 0;

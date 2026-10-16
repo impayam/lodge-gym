@@ -329,12 +329,19 @@ test("memory: opening and closing the picker 20 times leaves no renderer, contex
   expect(await hook(page, (h) => h.stats!.warm)).toBe(true);
 });
 
-test("Settings → About credits the 3D model (CC BY-SA 4.0)", async ({ page }) => {
+test("Settings → About credits the 3D model (CC BY-SA 4.0) and the exercise sources (SPEC-v11 A1)", async ({ page }) => {
   await page.goto("/");
   await goTo(page, "Settings");
-  const about = page.getByTestId("about");
+  const about = page.getByTestId("about-model");
   await expect(about).toHaveText("3D anatomy model: Body Anatomy 3D Viewer by hpfrei, based on Z-Anatomy, CC BY-SA 4.0.");
   await expect(about.getByRole("link", { name: "Body Anatomy 3D Viewer" })).toHaveAttribute("href", "https://github.com/hpfrei/body-anatomy-3d-viewer");
   await expect(about.getByRole("link", { name: "Z-Anatomy" })).toHaveAttribute("href", "https://www.z-anatomy.com/");
   await expect(about.getByRole("link", { name: "CC BY-SA 4.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by-sa/4.0/");
+  const library = page.getByTestId("about-library");
+  await expect(library).toContainText("free-exercise-db (Unlicense), wger (CC BY-SA 3.0, CC BY-SA 4.0 or CC0, per exercise) and everkinetic (CC BY-SA 4.0)");
+  await expect(library).toContainText("ExerciseDB, Liftosaur and exercemus (facts only, no text or images)");
+  await expect(library.getByRole("link", { name: "wger" })).toHaveAttribute("href", "https://wger.de");
+  await expect(library.getByRole("link", { name: "CC BY-SA 3.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by-sa/3.0/");
+  await expect(library.getByRole("link", { name: "CC0" })).toHaveAttribute("href", "https://creativecommons.org/publicdomain/zero/1.0/");
+  await expect(library.getByRole("link", { name: "Unlicense" })).toHaveAttribute("href", "https://unlicense.org/");
 });

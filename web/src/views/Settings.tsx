@@ -1,6 +1,7 @@
 import { CalendarSettingsCard } from "../components/CalendarSettings";
 import { ProgramDrafts } from "../components/ProgramDrafts";
 import { useEffect, useState } from "preact/hooks";
+import { LICENCE_URL, SOURCES } from "../../../worker/lib/librarySources";
 import { isValidTimeZone } from "../../../worker/lib/time";
 import { REST_BETWEEN_SETS_CHOICES, REST_NEXT_EXERCISE_CHOICES, type Settings as SettingsT, type WeekStart } from "../../../worker/lib/types";
 import { REST_DEFAULTS } from "../../../worker/lib/rest";
@@ -174,7 +175,7 @@ export function Settings() {
       <h2 class="section-label">About</h2>
       <section class="card" data-testid="about" aria-label="About">
         {/* CC BY-SA 4.0 attribution of the picker's 3D model (SPEC-v6 §1, web/public/models/ANATOMY-SOURCE.md). */}
-        <p class="ex-card__meta l-m0">
+        <p class="ex-card__meta l-m0" data-testid="about-model">
           3D anatomy model:{" "}
           <a class="t-pink" href="https://github.com/hpfrei/body-anatomy-3d-viewer" target="_blank" rel="noopener noreferrer">
             Body Anatomy 3D Viewer
@@ -188,6 +189,39 @@ export function Settings() {
             CC BY-SA 4.0
           </a>
           .
+        </p>
+        {/* SPEC-v11 A1: the exercise sources and their licences; authors are credited on each exercise. */}
+        <p class="ex-card__meta" data-testid="about-library">
+          Exercise library:{" "}
+          <a class="t-pink" href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener noreferrer">
+            free-exercise-db
+          </a>{" "}
+          (
+          <a class="t-pink" href={LICENCE_URL.Unlicense} target="_blank" rel="noopener noreferrer">
+            Unlicense
+          </a>
+          ),{" "}
+          <a class="t-pink" href={SOURCES.wger.site} target="_blank" rel="noopener noreferrer">
+            wger
+          </a>{" "}
+          (
+          <a class="t-pink" href={LICENCE_URL["CC-BY-SA-3.0"]} target="_blank" rel="noopener noreferrer">
+            CC BY-SA 3.0
+          </a>
+          ,{" "}
+          <a class="t-pink" href={LICENCE_URL["CC-BY-SA-4.0"]} target="_blank" rel="noopener noreferrer">
+            CC BY-SA 4.0
+          </a>{" "}
+          or{" "}
+          <a class="t-pink" href={LICENCE_URL["CC0-1.0"]} target="_blank" rel="noopener noreferrer">
+            CC0
+          </a>
+          , per exercise) and{" "}
+          <a class="t-pink" href={SOURCES.everkinetic.site} target="_blank" rel="noopener noreferrer">
+            everkinetic
+          </a>{" "}
+          (CC BY-SA 4.0); each exercise names its author. Names and muscles of further exercises from ExerciseDB, Liftosaur and exercemus (facts only, no text or
+          images). Instructions of those exercises and of the hand-written ones are our own.
         </p>
       </section>
 

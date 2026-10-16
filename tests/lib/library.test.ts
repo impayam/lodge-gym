@@ -7,6 +7,8 @@ import seedMatches from "../../seed/library/seed-matches.json";
 import sample from "../fixtures/library/fedb-sample.json";
 import {
   buildLibrary,
+  dropDuplicateImages,
+  duplicateImageErrors,
   fedbExerciseId,
   imageKeys,
   librarySql,
@@ -159,7 +161,7 @@ describe("library build from the fixture (real free-exercise-db entries)", () =>
     expect(() => buildLibrary(sample as FedbExercise[], {}, [{ id: "bench", fedb: "Nope", pattern: "h_push", mechanic: "compound", muscles_secondary: [] }], [], seedPrimary, review)).toThrow(/has no Nope/);
     expect(() => buildLibrary(sample as FedbExercise[], {}, [{ id: "bench", fedb: null, pattern: "h_push", mechanic: "compound", muscles_secondary: ["chest"] }], [], seedPrimary, review)).toThrow(/repeated/);
     const bad = [{ id: "manual-x", name_en: "X", equipment: "kettlebell", muscle_primary: "chest", muscles_secondary: ["chest"], pattern: "push", mechanic: "compound" }] as unknown as ManualExercise[];
-    expect(validateInputs([], bad, {}, review)).toEqual(["manual manual-x: equipment kettlebell", "manual manual-x: secondary chest", "manual manual-x: pattern push"]);
+    expect(validateInputs([], bad, {}, review)).toEqual(["manual manual-x: equipment kettlebell", "manual manual-x: secondary chest", "manual manual-x: pattern push", "manual manual-x: two or more instruction steps are required"]);
   });
 });
 
@@ -169,7 +171,7 @@ describe("library SQL", () => {
     const sql = librarySql(lib.rows, lib.seedUpdates);
     expect(sql).toHaveLength(lib.rows.length + lib.seedUpdates.length);
     expect(sql[0]).toMatch(/^INSERT INTO exercises .* ON CONFLICT \(id\) DO UPDATE SET .* WHERE exercises\.name_en IS NOT excluded\.name_en OR /);
-    expect(sql[0]).toContain(" OR exercises.category IS NOT excluded.category;");
+    expect(sql[0]).toContain(" OR exercises.category IS NOT excluded.category OR exercises.license IS NOT excluded.license OR exercises.license_author IS NOT excluded.license_author;");
     expect(sql[sql.length - 1]).toMatch(/^UPDATE exercises SET .* WHERE id = '[a-z_]+' AND source = 'seed' AND \(.* IS NOT .*\);$/);
   });
   it("never writes a seeded row's category, whatever its library match says (seeds stay strength)", () => {
@@ -180,5 +182,28 @@ describe("library SQL", () => {
     const seedSql = librarySql(lib.rows, lib.seedUpdates).filter((x) => x.startsWith("UPDATE"));
     expect(seedSql).toHaveLength(27);
     for (const x of seedSql) expect(x).not.toContain("category");
+  });
+});
+
+describe("the same picture twice (Payam, 2026-10-16)", () => {
+  const img = (k: string) => ({ kind: "image" as const, r2_key: `library/free-exercise-db/images/${k}` });
+  const rows = [
+    { id: "a", media: [img("A/0.jpg"), img("A/1.jpg")] },
+    { id: "b", media: [img("B/0.jpg"), img("B/1.jpg")] },
+  ];
+  const entry = { id: "a", name: "A", keep: "library/free-exercise-db/images/A/0.jpg", drop: "library/free-exercise-db/images/A/1.jpg", reason: "the same file twice" };
+
+  it("keeps one image of a listed exercise and leaves the others alone", () => {
+    const out = dropDuplicateImages(rows, [entry]);
+    expect(out[0].media).toEqual([img("A/0.jpg")]);
+    expect(out[1]).toBe(rows[1]);
+  });
+
+  it("refuses an entry that is not two images of one exercise, an unknown exercise, no reason, or a repeat", () => {
+    expect(duplicateImageErrors([entry], rows)).toEqual([]);
+    expect(duplicateImageErrors([{ ...entry, drop: entry.keep }], rows)).toEqual(["a: keep and drop must be two of its images"]);
+    expect(duplicateImageErrors([{ ...entry, drop: "library/free-exercise-db/images/B/1.jpg" }], rows)).toEqual(["a: keep and drop must be two of its images"]);
+    expect(duplicateImageErrors([{ ...entry, id: "z" }], rows)).toEqual(["z: not in the library"]);
+    expect(duplicateImageErrors([{ ...entry, reason: " " }, entry], rows)).toEqual(["a: a reason is required", "an exercise is listed twice"]);
   });
 });

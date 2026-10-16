@@ -1,0 +1,54 @@
+{
+ "about": "Exercises whose two images are the same picture: the first is kept, the second dropped (Payam, 2026-10-16). Found by comparing every exercise's two images (free-exercise-db, wger, everkinetic: 755 pairs) on 64x64 grayscale thumbnails; the 7 pairs below are byte-identical files. The closest pair after them (a one-arm triceps extension, 1.3% of pixels changed) already shows two different positions, checked by eye; every other pair differs more.",
+ "exercises": [
+  {
+   "id": "fedb-One_Arm_Against_Wall",
+   "name": "One Arm Against Wall",
+   "keep": "library/free-exercise-db/images/One_Arm_Against_Wall/0.jpg",
+   "drop": "library/free-exercise-db/images/One_Arm_Against_Wall/1.jpg",
+   "reason": "the same file twice"
+  },
+  {
+   "id": "fedb-Reverse_Grip_Bent-Over_Rows",
+   "name": "Reverse Grip Bent-Over Rows",
+   "keep": "library/free-exercise-db/images/Reverse_Grip_Bent-Over_Rows/0.jpg",
+   "drop": "library/free-exercise-db/images/Reverse_Grip_Bent-Over_Rows/1.jpg",
+   "reason": "the same file twice"
+  },
+  {
+   "id": "fedb-Seated_Floor_Hamstring_Stretch",
+   "name": "Seated Floor Hamstring Stretch",
+   "keep": "library/free-exercise-db/images/Seated_Floor_Hamstring_Stretch/0.jpg",
+   "drop": "library/free-exercise-db/images/Seated_Floor_Hamstring_Stretch/1.jpg",
+   "reason": "the same file twice"
+  },
+  {
+   "id": "fedb-Standing_Hamstring_and_Calf_Stretch",
+   "name": "Standing Hamstring and Calf Stretch",
+   "keep": "library/free-exercise-db/images/Standing_Hamstring_and_Calf_Stretch/0.jpg",
+   "drop": "library/free-exercise-db/images/Standing_Hamstring_and_Calf_Stretch/1.jpg",
+   "reason": "the same file twice"
+  },
+  {
+   "id": "fedb-The_Straddle",
+   "name": "The Straddle",
+   "keep": "library/free-exercise-db/images/The_Straddle/0.jpg",
+   "drop": "library/free-exercise-db/images/The_Straddle/1.jpg",
+   "reason": "the same file twice"
+  },
+  {
+   "id": "wger-203",
+   "name": "Dumbbell Goblet Squat",
+   "keep": "library/sources/wger/images/203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg",
+   "drop": "library/sources/wger/images/203/2ab30113-4e08-4d39-9d23-d901ce2c0971.jpeg",
+   "reason": "the same file twice"
+  },
+  {
+   "id": "wger-456",
+   "name": "Pistol Squat",
+   "keep": "library/sources/wger/images/456/3b681e59-377b-40db-9113-ca5873ce084b.jpg",
+   "drop": "library/sources/wger/images/456/93716d06-c378-49b8-820a-8bf3e1d7e45c.jpg",
+   "reason": "the same file twice"
+  }
+ ]
+}
