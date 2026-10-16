@@ -120,8 +120,14 @@ export async function outboxAll(): Promise<OutboxEntry[]> {
 export async function outboxGet(key: string) {
   return (await db()).get("outbox", key);
 }
-export async function outboxPut(e: OutboxEntry) {
-  await (await db()).put("outbox", e);
+/**
+ * Queues an entry made from the one already queued under its key, read and written in one transaction: two changes
+ * queued at the same moment (two settings in a row) both end up in it, neither overwrites the other.
+ */
+export async function outboxQueue(key: string, make: (prev: OutboxEntry | undefined) => OutboxEntry) {
+  const tx = (await db()).transaction("outbox", "readwrite");
+  await tx.store.put(make(await tx.store.get(key)));
+  await tx.done;
 }
 /** Removes the entry only if nothing newer was queued while it was in flight. */
 export async function outboxAck(key: string, rev: number) {

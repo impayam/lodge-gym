@@ -211,6 +211,48 @@ test("offline: the composer needs a connection and a saved chat is still readabl
   await setOffline(context, page, false);
 });
 
+test("offline: the reload after an answer that comes back late shows as the offline copy, never hides the offline note", async ({ page, context }) => {
+  // The reload after the answer is held in the page until the chat has been reopened offline (it once came back last
+  // on a busy machine and replaced the offline copy). In the page, not page.route: WebKit holds every request, the
+  // streamed answer too, while a route is set.
+  await page.addInitScript(() => {
+    const real = window.fetch.bind(window);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const hold = { held: false, release };
+    (window as unknown as { __hold: typeof hold }).__hold = hold;
+    let first = true;
+    window.fetch = async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      if (!first || method !== "GET" || !/^\/api\/coach\/threads\/[^/]+$/.test(url.pathname)) return real(input, init);
+      first = false;
+      const res = await real(input, init);
+      hold.held = true;
+      await gate;
+      return res;
+    };
+  });
+  await openCoach(page);
+  await ask(page, "How was my week?");
+  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __hold: { held: boolean } }).__hold.held)).toBe(true);
+  await page.getByTestId("coach-chats").click();
+  await expect(page.getByTestId("coach-thread")).toHaveCount(1);
+
+  await setOffline(context, page, true);
+  await page.getByTestId("coach-thread").getByTestId("coach-thread-open").click();
+  // Not saved on the phone yet: it cannot load.
+  await expect(page.getByTestId("coach-chat")).toContainText("Couldn't load this chat.");
+  // The held reload arrives: its copy shows, still as the offline one.
+  await page.evaluate(() => (window as unknown as { __hold: { release: () => void } }).__hold.release());
+  await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
+  await expect(page.getByTestId("coach-offline")).toBeVisible();
+  await expect(page.getByTestId("coach-chat")).not.toContainText("Couldn't load this chat.");
+  await expect(page.getByTestId("coach-input")).toBeDisabled();
+  await setOffline(context, page, false);
+});
+
 test("archive and unarchive; Delete permanently removes only that archived chat, never training data or progress photos", async ({ page }) => {
   await openCoach(page);
   await ask(page, "How was my week?");

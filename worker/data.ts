@@ -9,6 +9,8 @@ import { fail, nowISO, readJson } from "./http";
 import { addDays, DATE_RE, isValidTimeZone, localDate } from "./lib/time";
 import {
   DEFAULT_SETTINGS,
+  REST_BETWEEN_SETS_CHOICES,
+  REST_NEXT_EXERCISE_CHOICES,
   type BodyMetric,
   type Bootstrap,
   type DayExercise,
@@ -38,8 +40,12 @@ export async function readSettings(env: Env): Promise<Settings> {
     week_start: map.week_start === "sat" || map.week_start === "sun" || map.week_start === "mon" ? map.week_start : DEFAULT_SETTINGS.week_start,
     relock_minutes: Number.isFinite(Number(map.relock_minutes)) ? Number(map.relock_minutes) : DEFAULT_SETTINGS.relock_minutes,
     timezone: map.timezone && isValidTimeZone(map.timezone) ? map.timezone : DEFAULT_SETTINGS.timezone,
+    rest_between_sets_sec: restChoice(map.rest_between_sets_sec, REST_BETWEEN_SETS_CHOICES, DEFAULT_SETTINGS.rest_between_sets_sec),
+    rest_next_exercise_sec: restChoice(map.rest_next_exercise_sec, REST_NEXT_EXERCISE_CHOICES, DEFAULT_SETTINGS.rest_next_exercise_sec),
   };
 }
+
+const restChoice = (raw: string | undefined, choices: readonly number[], fallback: number) => (choices.includes(Number(raw)) ? Number(raw) : fallback);
 
 interface DayRow {
   id: string;
@@ -278,6 +284,8 @@ const settingsSchema = z
     week_start: z.enum(["sat", "sun", "mon"]),
     relock_minutes: z.number().int().min(0).max(1440),
     timezone: z.string().max(64).refine(isValidTimeZone, "timezone"),
+    rest_between_sets_sec: z.number().int().refine((n) => (REST_BETWEEN_SETS_CHOICES as readonly number[]).includes(n), "rest_between_sets_sec"),
+    rest_next_exercise_sec: z.number().int().refine((n) => (REST_NEXT_EXERCISE_CHOICES as readonly number[]).includes(n), "rest_next_exercise_sec"),
   })
   .partial();
 

@@ -45,9 +45,10 @@ test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, 
   const before = Date.now();
   await page.getByTestId("check-bench-0").click();
   const body = (await scheduled).postDataJSON() as { id: string; ends_at: number; label: string };
-  expect(body.label).toBe("Rest after Barbell Bench Press");
-  expect(body.ends_at).toBeGreaterThanOrEqual(before + 179_000);
-  expect(body.ends_at).toBeLessThanOrEqual(Date.now() + 181_000);
+  // The between-sets rest (30 s by default) and what comes next.
+  expect(body.label).toBe("Rest · next: set 2 of 4");
+  expect(body.ends_at).toBeGreaterThanOrEqual(before + 29_000);
+  expect(body.ends_at).toBeLessThanOrEqual(Date.now() + 31_000);
 
   const rescheduled = page.waitForRequest((r) => r.url().endsWith("/api/push/rest") && r.method() === "POST");
   await page.getByRole("button", { name: "+30 s" }).click();
@@ -71,9 +72,9 @@ test("rest push: enable from a tap, schedule on set check, reschedule on +30 s, 
   await cdp.send("ServiceWorker.deliverPushMessage", {
     origin: baseURL!,
     registrationId: await regId,
-    data: JSON.stringify({ title: "Rest is over", body: "Rest after Barbell Bench Press · next set", tag: "rest" }),
+    data: JSON.stringify({ title: "Rest is over", body: "Next: set 2 of 4", tag: "rest" }),
   });
   await expect
     .poll(() => page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications()).map((n) => [n.title, n.body, n.tag])))
-    .toEqual([["Rest is over", "Rest after Barbell Bench Press · next set", "rest"]]);
+    .toEqual([["Rest is over", "Next: set 2 of 4", "rest"]]);
 });

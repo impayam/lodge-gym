@@ -14,7 +14,7 @@
 // Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth&coach=ok|fail|auth|mismatch
 // (mismatch: the "this week" answer names a chest status other than the one its get_volume card shows)
 // and read GET /__calls (the count, the last call and the last call of each kind; coach calls also record the request
-// shape: tool_choice, thinking, betas, cache breakpoints, images and message count).
+// shape: tool_choice, thinking, betas, cache breakpoints, images, message count and the CONTEXT block).
 import { createServer } from "node:http";
 
 /**
@@ -151,6 +151,8 @@ export function startAiMock(port) {
       image_bytes: all.filter((b) => b.type === "image").map((b) => b.source?.data?.length ?? 0),
       thinking_replayed: all.filter((b) => b.type === "thinking" && b.signature).length,
       question: text,
+      // The app's CONTEXT block on the question (from the session screen it says what he is doing now).
+      context: question.filter((b) => b.type === "text" && b.text.startsWith("CONTEXT")).map((b) => b.text).join("\n"),
     };
     calls.push(call);
     lastOf.coach = call;

@@ -15,6 +15,10 @@ export interface Settings {
   week_start: WeekStart;
   relock_minutes: number;
   timezone: string;
+  /** The session's rest timer (Settings → Training, Payam 2026-10-16): between sets of one exercise, seconds. */
+  rest_between_sets_sec: number;
+  /** After an exercise's (or a group's) last set, before the next card, seconds. */
+  rest_next_exercise_sec: number;
 }
 
 export type ExerciseSource = "seed" | "fedb" | "manual" | "custom";
@@ -228,4 +232,10 @@ export const DEFAULT_SETTINGS: Settings = {
   week_start: "mon",
   relock_minutes: 0,
   timezone: "America/Denver",
+  rest_between_sets_sec: 30,
+  rest_next_exercise_sec: 120,
 };
+
+/** The choices Settings → Training offers for the rest timer (the API takes these values only). */
+export const REST_BETWEEN_SETS_CHOICES = [15, 30, 45, 60, 75, 90, 120, 150, 180] as const;
+export const REST_NEXT_EXERCISE_CHOICES = [30, 60, 90, 120, 150, 180, 240, 300] as const;

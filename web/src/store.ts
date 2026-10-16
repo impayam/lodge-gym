@@ -402,11 +402,12 @@ export function loadAllHistory() {
 type Draft<E = OutboxEntry> = E extends OutboxEntry ? Omit<E, "rev" | "queued_at"> : never;
 
 async function enqueue(entry: Draft) {
-  const prev = await ldb.outboxGet(entry.key);
-  let e = { ...entry, rev: (prev?.rev ?? 0) + 1, queued_at: new Date().toISOString() } as OutboxEntry;
-  if (e.op === "settings" && prev?.op === "settings") e = { ...e, patch: { ...prev.patch, ...e.patch } };
-  if (e.op === "calendar_settings" && prev?.op === "calendar_settings") e = { ...e, patch: { ...prev.patch, ...e.patch } };
-  await ldb.outboxPut(e);
+  await ldb.outboxQueue(entry.key, (prev) => {
+    let e = { ...entry, rev: (prev?.rev ?? 0) + 1, queued_at: new Date().toISOString() } as OutboxEntry;
+    if (e.op === "settings" && prev?.op === "settings") e = { ...e, patch: { ...prev.patch, ...e.patch } };
+    if (e.op === "calendar_settings" && prev?.op === "calendar_settings") e = { ...e, patch: { ...prev.patch, ...e.patch } };
+    return e;
+  });
   setSync({ pending: (await ldb.outboxAll()).length });
   scheduleSync();
 }

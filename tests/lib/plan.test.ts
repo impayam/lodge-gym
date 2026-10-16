@@ -18,7 +18,6 @@ import {
   planSeconds,
   removeItem,
   replaceItem,
-  restAfterGroupSet,
   setGroupRest,
   ungroup,
   updateItem,
@@ -219,17 +218,5 @@ describe("in the session", () => {
     expect(itemAsDayExercise(it, null, DAY.exercises[0])).toMatchObject({ exercise_id: "db_bench", sets: 4, reps_max: 5, rest_sec: 180, is_main: true, superset_tag: null });
     const added = liveItems(addItem(p, "dips", T1, "N1")).at(-1)!;
     expect(itemAsDayExercise(added, "B1")).toMatchObject({ reps_min: 8, reps_max: 12, rest_sec: 90, is_main: false, superset_tag: "B1" });
-  });
-
-  it("rest inside a round: none; after the round's last set: the group rest; extra sets alone: their own rest", () => {
-    // A1 set 1 done, A2 set 1 not yet: no timer.
-    expect(restAfterGroupSet([[true, false, false], [false, false, false]], 0, 120, 75)).toBeNull();
-    // A2 set 1 done too: the round is complete.
-    expect(restAfterGroupSet([[true, false, false], [true, false, false]], 0, 120, 75)).toBe(120);
-    // A tri-set waits for A3.
-    expect(restAfterGroupSet([[true], [true], [false]], 0, 150, 90)).toBeNull();
-    expect(restAfterGroupSet([[true], [true], [true]], 0, 150, 90)).toBe(150);
-    // A1 has a 4th set the others don't: done alone, with its own rest.
-    expect(restAfterGroupSet([[true, true, true, true], [true, true, true]], 3, 120, 90)).toBe(90);
   });
 });

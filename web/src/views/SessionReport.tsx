@@ -16,6 +16,7 @@ import { dateLong, fmtNum, hm, instantShort } from "../format";
 import { dayTitle } from "../lib/lifts";
 import { dayInfo } from "../model";
 import { goBack, navigate, photoSrc, useStore } from "../store";
+import { BodyWeight } from "../components/BodyWeight";
 import { PhotoPicker, poseLabel } from "./Photos";
 
 /** A session that ended this recently may not be queued on the server yet: keep asking for a little while. */
@@ -305,6 +306,14 @@ export function SessionReportScreen({ id, fresh }: { id: string; fresh: boolean 
         {dateLong(s.local_date)} · {hm(s.started_at, tz)}
         {s.ended_at ? `–${hm(s.ended_at, tz)}` : ""}
       </span>
+
+      {fresh ? (
+        // Payam, 2026-10-16: the day's body weight right after Finish (optional; the same value as in the More sheet).
+        <section class="card l-col l-gap-8" aria-label="Body weight" data-testid="finish-weight">
+          <BodyWeight date={s.local_date} unit={s.unit} label={`Body weight today (${s.unit})`} testId="finish-body-weight" />
+          <span class="caption">Optional.</span>
+        </section>
+      ) : null}
 
       <ReportPanel sessionId={s.id} />
 

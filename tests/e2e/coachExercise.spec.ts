@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiMode, resetCalendar, resetWorkouts, signIn, sql } from "./helpers";
+import { aiMode, resetCalendar, resetWorkouts, sessionOrder, signIn, sql } from "./helpers";
 import { localDate, zonedToUtcISO } from "../../worker/lib/time";
 import { ulid } from "../../worker/lib/ulid";
 
@@ -64,6 +64,7 @@ test("one more exercise on the chest day: one card with only the change; no prog
   expect(D1).not.toContain(id);
   await expect(card.getByRole("heading").first()).toHaveText(`Day 1 · Chest: + ${name}`);
   await expect(card.getByTestId("coach-exercise-row")).toContainText(/\d+ × [\d–]+ · after Seated Cable Row/);
+  await expect(card.getByTestId("coach-exercise-row")).not.toContainText("at the end");
   // The reason once: in the coach's text, not in the card. No explanation under the buttons.
   await expect(answer).toContainText("یک حرکت ایزوله بعد از Seated Cable Row");
   await expect(card.locator('[dir="rtl"]')).toHaveCount(0);
@@ -148,7 +149,9 @@ test("from now on: Whole program first; it saves his program with that exercise 
 test("just today, with a session open: Only this session first; it goes into that session as an extra; the program is unchanged", async ({ page, baseURL }) => {
   const before = program();
   const id = ulid();
-  const started = zonedToUtcISO(today(), "17:00", TZ);
+  // A minute ago once today's 17:00 is ahead: a save dated in the future would win over the app's Add (the server keeps
+  // the newer one).
+  const started = [zonedToUtcISO(today(), "17:00", TZ), new Date(Date.now() - 60_000).toISOString()].sort()[0];
   const res = await page.request.put(`${baseURL}/api/sessions/${id}`, {
     headers: { Origin: baseURL! },
     data: {
@@ -170,6 +173,8 @@ test("just today, with a session open: Only this session first; it goes into tha
   await askCoach(page, "Just today add one chest exercise on my chest day");
   const { card, id: ex, name } = await exerciseCard(page);
   await expect(card).toHaveAttribute("data-prefer", "session");
+  // The card says where each button puts it: this session at its end, the program after Seated Cable Row.
+  await expect(card.getByTestId("coach-exercise-row")).toContainText(/\d+ × [\d–]+ · at the end of this session; in the program after Seated Cable Row/);
   await expect(card.getByRole("button")).toHaveText(["Only this session", "Whole program"]);
   await card.getByTestId("coach-exercise-session").click();
   await expect(page.getByTestId("toast")).toHaveText(`Added ${name} to today's session: Day 1 · Chest.`);
@@ -177,6 +182,9 @@ test("just today, with a session open: Only this session first; it goes into tha
   await expect.poll(() => sql(`SELECT DISTINCT exercise_id FROM set_entries WHERE session_id = '${id}' AND is_extra = 1`), { timeout: 20_000 }).toEqual([{ exercise_id: ex }]);
   expect(count("SELECT COUNT(*) AS n FROM programs WHERE generated_by = 'coach'")).toBe(0);
   expect(program()).toBe(before);
+  // And it is at the end of the session.
+  await card.getByTestId("coach-exercise-session-added").getByRole("button", { name: "Open" }).click();
+  expect((await sessionOrder(page)).at(-1)).toBe(ex);
 });
 
 test("Sets vs target over three weeks is one card: muscles as rows, the weeks as columns (this week marked), and the target", async ({ page }) => {

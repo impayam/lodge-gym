@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardIndex, cardSwipeOutcome, currentSetIndex, restShare, sessionEffort } from "../../web/src/lib/session";
+import { cardIndex, cardSwipeOutcome, currentSetIndex, groupCurrent, restShare, sessionEffort, sessionUnits } from "../../web/src/lib/session";
 
 const sets = (...done: boolean[]) => done.map((d) => ({ done: d }));
 
@@ -49,5 +49,32 @@ describe("active session (SPEC-v8 §6.02)", () => {
     expect(restShare(-5, 90)).toBe(0);
     expect(restShare(120, 90)).toBe(1);
     expect(restShare(10, 0)).toBe(0);
+  });
+
+  it("cards: a superset or tri-set is one card with its members in order; Prev / Next move between cards", () => {
+    const b = (id: string, tag: string | null) => ({ ex: { id }, group: tag ? { tag } : null });
+    const units = sessionUnits([b("bench", null), b("incline_db", null), b("lateral", "A"), b("facepull", "A"), b("fly", "B"), b("dip", "B"), b("pec", "B"), b("curl", null)]);
+    expect(units.map((u) => [u.key, u.blocks.map((x) => x.ex.id)])).toEqual([
+      ["bench", ["bench"]],
+      ["incline_db", ["incline_db"]],
+      ["group:lateral", ["lateral", "facepull"]],
+      ["group:fly", ["fly", "dip", "pec"]],
+      ["curl", ["curl"]],
+    ]);
+    // A group left with one member is an exercise alone.
+    expect(sessionUnits([b("lateral", "A"), b("curl", null)]).map((u) => u.key)).toEqual(["lateral", "curl"]);
+    expect(sessionUnits([])).toEqual([]);
+  });
+
+  it("a group card's current set goes round by round; extra sets are rounds at the end", () => {
+    const m = (id: string, done: boolean[]) => ({ id, sets: done.map((d) => ({ done: d })) });
+    expect(groupCurrent([m("a", [false, false]), m("b", [false, false])])).toEqual({ exerciseId: "a", set: 0 });
+    expect(groupCurrent([m("a", [true, false]), m("b", [false, false])])).toEqual({ exerciseId: "b", set: 0 });
+    expect(groupCurrent([m("a", [true, false]), m("b", [true, false])])).toEqual({ exerciseId: "a", set: 1 });
+    // A1 has a fourth set: its own round after the third.
+    expect(groupCurrent([m("a", [true, true, true, false]), m("b", [true, true, true])])).toEqual({ exerciseId: "a", set: 3 });
+    // A skipped set comes back first.
+    expect(groupCurrent([m("a", [true, true]), m("b", [false, true])])).toEqual({ exerciseId: "b", set: 0 });
+    expect(groupCurrent([m("a", [true]), m("b", [true])])).toBeNull();
   });
 });

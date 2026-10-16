@@ -242,6 +242,21 @@ Approved by Payam on 2026-10-12.
   - It never criticizes or flags Payam's own groups (same-muscle groups included) as a problem.
   - It never changes Payam's groups without an **Apply** tap.
 
+### Change by Payam, 2026-10-16: the session screen (Step 2)
+Replaces the logging flow and rest settings above, and SPEC §7's "rest timer with that exercise's rest time". Rules in `worker/lib/rest.ts` (pure, unit-tested).
+- **Rest timer:**
+  - An exercise alone: 30 s between its sets; after its last set, 2 min before the next exercise.
+  - A superset or tri-set: no timer inside a round; the group's rest after each round (the planner's group rest, by default the longest planned rest of its members, e.g. 75 s); 2 min after its last round.
+  - Both defaults are in **Settings → Training** ("Rest between sets": 15 s–3 min; "Rest before the next exercise": 30 s–5 min). They are settings keys `rest_between_sets_sec` and `rest_next_exercise_sec` (no migration); the API takes only the offered values.
+  - The label says what comes next: "Rest · next: set 3 of 4", "Rest · next: round 2 of 3", "Rest · next: Pull-Up". The next set is the first one not done; the next exercise is the next card with a set left (round to one he skipped). Nothing left in the session: no timer. +30 s and Skip stay. The "Rest is over" push says "Next: set 3 of 4".
+- **Supersets and tri-sets on one card:**
+  - The card shows the group's name ("Superset A"), its exercises' numbers and its rest; each member keeps its own Last time, suggested weight, cue, form video, target and RIR.
+  - Sets are interleaved round by round (A1 set 1, A2 set 1, then round 2 …); the current row moves through the round. A member's extra sets (more than the others, or added with + Add set) are rounds of their own at the end, each followed by the group's rest.
+  - No swiping inside a group: Prev / Next and the swipe move between cards (an exercise alone or a whole group).
+  - Volume, progression, reports and history are unchanged: each set still counts for its own exercise.
+- **Body weight after Finish:** the end-of-session screen has an optional "Body weight today (lb)" with − / +, shown from his last entry (the − / + start from it). It is the same value as the session's More sheet (one manual value per day); skipping it blocks nothing.
+- **Ask Coach** from the session's More sheet: SPEC-v9 §13.
+
 ### AI plan advice (button only)
 - The planner has an **Get advice** button. It is never automatic, and each tap is one model call.
 - Model: the same as the session report (`REPORT_MODEL`, `claude-opus-5-5`), with the same `ANTHROPIC_API_KEY`, cost log and Settings cost line.

@@ -18,7 +18,9 @@ const ASK_TODAY = "امروز پشت دارم، جلوبازو و ساعد هم 
 
 /** A session through the API, as the app saves it: status, and sets [weight, reps, done, at]. */
 async function putSession(page: Page, baseURL: string, o: { id: string; day: string; date: string; status: "active" | "done"; sets: [number, number, boolean, string][] }) {
-  const started = zonedToUtcISO(o.date, "17:00", TZ);
+  // 17:00 on its day, or a minute ago while today's 17:00 is still ahead: a start in the future would be a save newer
+  // than the app's own, and the server keeps the newer one (the app's Add would be dropped before 17:00 Denver time).
+  const started = [zonedToUtcISO(o.date, "17:00", TZ), new Date(Date.now() - 60_000).toISOString()].sort()[0];
   const sets = o.sets.map(([weight, reps, done, at], i) => ({ id: `${o.id}-${i}`, exercise_id: "bench", set_index: i, weight, reps, seconds: null, done, rir: null, updated_at: at }));
   const res = await page.request.put(`${baseURL}/api/sessions/${o.id}`, {
     headers: { Origin: baseURL },

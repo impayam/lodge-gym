@@ -49,3 +49,25 @@ export function restShare(leftSec: number, totalSec: number): number {
   if (totalSec <= 0) return 0;
   return Math.min(1, Math.max(0, leftSec / totalSec));
 }
+
+/**
+ * The session's cards (Payam, 2026-10-16): an exercise alone, or a superset / tri-set as one card (its members in
+ * order). Prev / Next and the swipe move between cards. A card's key: the exercise id, or "group:" + its first member's.
+ */
+export function sessionUnits<B extends { ex: { id: string }; group: { tag: string } | null }>(blocks: readonly B[]): { key: string; blocks: B[] }[] {
+  const out: { key: string; blocks: B[] }[] = [];
+  for (const b of blocks) {
+    const last = out.at(-1);
+    if (b.group && last && last.blocks[0].group?.tag === b.group.tag) last.blocks.push(b);
+    else out.push({ key: b.ex.id, blocks: [b] });
+  }
+  for (const u of out) if (u.blocks.length >= 2) u.key = `group:${u.blocks[0].ex.id}`;
+  return out;
+}
+
+/** A group card's set to do next: the first one not done, round by round; null when every set is done. */
+export function groupCurrent(members: readonly { id: string; sets: readonly { done: boolean }[] }[]): { exerciseId: string; set: number } | null {
+  const rounds = Math.max(0, ...members.map((m) => m.sets.length));
+  for (let r = 0; r < rounds; r++) for (const m of members) if (m.sets[r] && !m.sets[r].done) return { exerciseId: m.id, set: r };
+  return null;
+}

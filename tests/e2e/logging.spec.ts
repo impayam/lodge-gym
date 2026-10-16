@@ -32,7 +32,7 @@ test("logs a full session in airplane mode; after reconnecting it is in D1 exact
   await page.getByTestId("check-bench-0").click();
   await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "true");
   await expect(page.getByTestId("rest-timer")).toBeVisible();
-  await expect(page.getByTestId("rest-timer")).toContainText("Rest after Barbell Bench Press");
+  await expect(page.getByTestId("rest-timer")).toContainText("Rest · next: set 2 of 4");
   await expect(page.getByTestId("r-bench-0")).toHaveText("5");
 
   // The session is full screen: its sync status is in the More sheet.

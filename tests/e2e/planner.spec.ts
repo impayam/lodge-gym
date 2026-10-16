@@ -129,12 +129,12 @@ test("plan Day 1 offline (replace, delete, reorder), save, start it; reorder in 
   await showExercise(page, "cable_row");
   await expect(page.locator('[data-ex="cable_row"] .set-row')).toHaveCount(4);
   await showExercise(page, "lateral");
-  await expect(page.getByTestId("sgroup-A")).toContainText("Superset A");
+  await expect(page.getByTestId("group-card")).toContainText("Superset A");
 
   // Log a set.
   await enterSet(page, "bench", 0, "w", "135");
   await page.getByTestId("check-bench-0").click();
-  await expect(page.getByTestId("rest-timer")).toContainText("Rest after Barbell Bench Press");
+  await expect(page.getByTestId("rest-timer")).toContainText("Rest · next: set 2 of 4");
   await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
 
   // Reorder during the session (More sheet).
@@ -177,13 +177,13 @@ test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only
   test.setTimeout(120_000);
   await page.goto("/");
   await page.getByTestId("start").click();
-  // The day's own superset (A1/A2) already rests after the round only.
+  // The day's own superset (A1/A2) is one card and rests after the round only.
   await checkSet(page, "lateral", 0);
   await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "false");
-  // Inside the round the card moves on to the next member.
-  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "facepull");
+  // Inside the round the next member's row is the current one, on the same card.
+  await expect(page.locator('[data-set="facepull-0"]')).toHaveClass(/set-row--current/);
   await page.getByTestId("check-facepull-0").click();
-  await expect(page.getByTestId("rest-timer")).toContainText("Rest after Superset A");
+  await expect(page.getByTestId("rest-timer")).toContainText("Rest · next: round 2 of 3");
   await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
 
   // A third chest exercise, added during the session.
@@ -202,26 +202,29 @@ test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only
   await expect(page.getByTestId("pgroup-B")).toContainText("Superset B");
   await page.getByTestId("arrange-panel").getByRole("button", { name: "Done", exact: true }).click();
 
-  const tri = page.getByTestId("sgroup-A");
+  // One card for the tri-set: its three members, A1 to A3.
+  await showExercise(page, "bench");
+  const tri = page.getByTestId("group-card");
+  await expect(tri).toHaveAttribute("data-ex", "bench incline_db fly");
+  await expect(tri.getByRole("heading", { level: 2 })).toHaveText("Tri-set A");
+  await expect(tri).toContainText("rest 180 s after each round");
   for (const [id, label] of [
     ["bench", "A1"],
     ["incline_db", "A2"],
     ["fly", "A3"],
-  ]) {
-    await showExercise(page, id);
-    await expect(tri).toContainText(`${label} · Tri-set A`);
-    await expect(tri).toContainText("rest 180 s after each round");
-  }
+  ])
+    await expect(tri.locator(`[data-testid="group-member"][data-ex="${id}"]`)).toContainText(label);
 
-  // Round 1: A1, A2, A3; the card follows the round and the timer starts only after A3.
+  // Round 1: A1, A2, A3 on the same card; the timer starts only after A3, with the tri-set's own rest.
   await checkSet(page, "bench", 0);
   await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "false");
-  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "incline_db");
+  await expect(page.locator('[data-set="incline_db-0"]')).toHaveClass(/set-row--current/);
   await page.getByTestId("check-incline_db-0").click();
   await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "false");
-  await expect(page.getByTestId("ex-card")).toHaveAttribute("data-ex", "fly");
+  await expect(page.locator('[data-set="fly-0"]')).toHaveClass(/set-row--current/);
   await page.getByTestId("check-fly-0").click();
-  await expect(page.getByTestId("rest-timer")).toContainText("Rest after Tri-set A");
+  await expect(page.getByTestId("rest-timer")).toContainText("Rest · next: round 2 of 4");
+  await expect(page.getByTestId("rest-timer")).toContainText(/[23]:\d\d/);
   await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
 
   // Ungroup: the order stays and each set rests on its own again.
@@ -229,10 +232,10 @@ test("tri-set of three chest exercises (no warning): A1 → A2 → A3, rest only
   await page.getByTestId("pgroup-A").getByRole("button", { name: "Ungroup" }).click();
   await page.getByTestId("arrange-panel").getByRole("button", { name: "Done", exact: true }).click();
   await showExercise(page, "lateral");
-  await expect(page.getByTestId("sgroup-A")).toContainText("Superset A");
+  await expect(page.getByTestId("group-card")).toContainText("Superset A");
   expect(await sessionOrder(page)).toEqual(["bench", "incline_db", "fly", "rdl", "cable_row", "lateral", "facepull"]);
   await checkSet(page, "bench", 1);
-  await expect(page.getByTestId("rest-timer")).toContainText("Rest after Barbell Bench Press");
+  await expect(page.getByTestId("rest-timer")).toContainText("Rest · next: set 3 of 4");
 
   // The session got a started plan with its own id (approved default 7); the sets are unchanged.
   await waitForSynced(page);

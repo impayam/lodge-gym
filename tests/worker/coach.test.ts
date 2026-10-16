@@ -1,11 +1,11 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { hasExif } from "../../worker/lib/jpeg";
 import { COACH_SYSTEM } from "../../worker/lib/coach/prompt";
 import { COACH_BETAS, MAX_TOOL_CALLS } from "../../worker/coachTurn";
 import type { CoachEvent } from "../../worker/lib/coach/events";
 import { ulid } from "../../worker/lib/ulid";
-import { addDays, localDate } from "../../worker/lib/time";
+import { addDays, localDate, localHM } from "../../worker/lib/time";
 import { fakeJpeg } from "../fixtures/jpeg";
 import { mockAnthropicStream, type StreamReply } from "../fixtures/anthropic-mock";
 import type { ExerciseChange } from "../../worker/lib/coach/exerciseTool";
@@ -126,6 +126,82 @@ describe("coach answers (SPEC-v9 M12)", () => {
     expect(toolResult).toContain("not a find_free_slots time for that week");
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM gym_plans").first<{ n: number }>()).toEqual({ n: 0 });
     await env.DB.prepare("DELETE FROM work_shifts").run();
+  });
+
+  it("Ask Coach from the session screen: the CONTEXT says the day, the exercise and set on his screen and his done sets; nothing once the session is finished", async () => {
+    const tz = "America/Denver";
+    const now = Date.now();
+    const at = (min: number) => new Date(now - min * 60_000).toISOString();
+    const set = (exercise_id: string, set_index: number, done: [number, number] | null, min: number) => ({
+      id: ulid(),
+      exercise_id,
+      set_index,
+      weight: done ? done[0] : null,
+      reps: done ? done[1] : null,
+      seconds: null,
+      done: Boolean(done),
+      updated_at: at(min),
+    });
+    const s = {
+      id: ulid(),
+      program_day_id: "D1",
+      local_date: localDate(tz),
+      started_at: at(20),
+      ended_at: null,
+      status: "active",
+      unit: "lb",
+      note: "",
+      created_at: at(20),
+      updated_at: at(1),
+      source: "app",
+      // Bench sets 1–2 done, then A1 of Superset A; bench set 3 is on his screen.
+      sets: [set("bench", 0, [135, 5], 12), set("bench", 1, [135, 5], 9), set("bench", 2, null, 9), set("bench", 3, null, 9), set("lateral", 0, [15, 12], 4), set("lateral", 1, null, 4), set("lateral", 2, null, 4)],
+    };
+    expect((await client.fetch(`/api/sessions/${s.id}`, { method: "PUT", json: s })).status).toBe(200);
+    onTestFinished(async () => {
+      await env.DB.prepare("DELETE FROM set_entries WHERE session_id = ?").bind(s.id).run();
+      await env.DB.prepare("DELETE FROM workout_sessions WHERE id = ?").bind(s.id).run();
+    });
+    const started = localHM(tz, s.started_at);
+    const lines = [
+      `He is training now (the session open today): Day 1 · Chest, started ${started}.`,
+      "On his screen: Barbell Bench Press, set 3 of 4.",
+      "Done so far (lb): Barbell Bench Press 135×5, 135×5; Dumbbell Lateral Raise 15×12.",
+    ];
+    const sent = async (session: unknown) => {
+      mock?.restore();
+      mock = mockAnthropicStream([{ blocks: [{ type: "text", text: "۱۳۵ پوند، ۵ تکرار." }] }]);
+      const thread = ulid();
+      const res = await client.post(`/api/coach/threads/${thread}/messages`, { id: ulid(), text: "How heavy for the next set?", attachments: [], session });
+      expect(res.status).toBe(200);
+      await res.text();
+      const saved = JSON.parse((await rows(thread))[0].content_json) as { type: string; text: string }[];
+      const context = saved.at(-1)!.text;
+      // The model reads the same CONTEXT block (finishing the session also writes its report: another call).
+      const call = mock.calls.find((c) => JSON.stringify(c.body.messages).includes("How heavy for the next set?"));
+      expect(JSON.stringify(call!.body.messages)).toContain(JSON.stringify(context).slice(1, -1));
+      return context;
+    };
+
+    const context = await sent({ id: s.id, exercise_id: "bench", set: 2 });
+    expect(context.startsWith("CONTEXT (written by the app for this message)\n")).toBe(true);
+    expect(context.split("\n").slice(-3)).toEqual(lines);
+    // No exercise on his screen (the list of a session): the day and done sets only.
+    const list = await sent({ id: s.id, exercise_id: null, set: null });
+    expect(list.split("\n").slice(-2)).toEqual([lines[0], lines[2]]);
+    // A set number past the exercise's sets is read as its last set.
+    expect(await sent({ id: s.id, exercise_id: "bench", set: 40 })).toContain("On his screen: Barbell Bench Press, set 4 of 4.");
+
+    // Finished: the message is an ordinary question again.
+    expect((await client.fetch(`/api/sessions/${s.id}`, { method: "PUT", json: { ...s, status: "done", ended_at: at(0), updated_at: at(0) } })).status).toBe(200);
+    expect(await sent({ id: s.id, exercise_id: "bench", set: 2 })).not.toContain("He is training now");
+    // A session id that is not his: nothing about a session.
+    expect(await sent({ id: ulid(), exercise_id: "bench", set: 2 })).not.toContain("He is training now");
+    // Bad session refs are refused.
+    for (const bad of [{ id: s.id, exercise_id: "bench", set: -1 }, { id: s.id, exercise_id: "bench", set: 2, extra: 1 }, { id: "not an id!", exercise_id: null, set: null }]) {
+      const res = await client.post(`/api/coach/threads/${ulid()}/messages`, { id: ulid(), text: "?", attachments: [], session: bad });
+      expect([JSON.stringify(bad), res.status, await res.text()]).toEqual([JSON.stringify(bad), 400, expect.stringContaining("invalid_input")]);
+    }
   });
 
   it("exercises for today: the app's numbers and target on the card, unknown ids dropped and told; nothing saved, program unchanged", async () => {

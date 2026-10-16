@@ -1,10 +1,12 @@
 // Coach chat (SPEC-v8 §6.07 shell, SPEC-v9 M12): full-screen chat with saved conversations. Answers stream in as the
 // model writes them; between tool calls the model's short progress notes show as the typing line; every tool result is
 // drawn as a data card whose numbers the app calculated. Past chats stay readable offline; sending needs a connection.
+// Ask Coach from the session screen (Payam, 2026-10-16) shows the same chat in a sheet over the session (`inSession`):
+// one chat per session, each message carrying the session and the exercise and set on screen.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { errorText } from "../api";
+import { errorText, NetworkError } from "../api";
 import {
   addDraft,
   archiveThread,
@@ -19,6 +21,7 @@ import {
   retryAnswer,
   sendMessage,
   type Attachment,
+  type SessionRef,
   type CoachEvent,
   type CoachMessage,
   type CoachThread,
@@ -31,7 +34,7 @@ import { Sheet } from "../components/Sheet";
 import { Empty, LoadError, Loading } from "../components/States";
 import { dayMonth, instantShort, plural } from "../format";
 import { trainingSince } from "../model";
-import { addPhoto, flash, goBack, loadAllHistory, loadPhotos, photoSrc, today, useStore } from "../store";
+import { addPhoto, flash, goBack, loadAllHistory, loadPhotos, photoSrc, syncNow, today, useStore } from "../store";
 import { ulid } from "../../../worker/lib/ulid";
 import { statusMismatches, type VolumeResult } from "../../../worker/lib/coach/statusCheck";
 import type { Pose } from "../../../worker/lib/types";
@@ -99,7 +102,10 @@ function failure(t: Turn): string | null {
   return null;
 }
 
-export function Coach() {
+/** The chat of each session asked from the session screen, so the sheet opens it again. */
+const sessionChats = new Map<string, string>();
+
+export function Coach({ inSession }: { inSession?: { session: () => SessionRef } } = {}) {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
   const online = useStore((s) => s.sync.online);
@@ -116,17 +122,39 @@ export function Coach() {
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
-  const draftThread = useRef<string>(ulid());
+  const root = useRef<HTMLDivElement>(null);
+  const sessionId = inSession?.session().id ?? null;
+  const draftThread = useRef<string>((sessionId && sessionChats.get(sessionId)) || ulid());
   // The chat on screen. A load or an answer that finishes after Payam has moved to another chat leaves the screen alone.
   const shown = useRef<string>(draftThread.current);
   const isShown = (id: string) => shown.current === id;
+  // Loads of the chat on screen can overlap (the reload after an answer, and Payam reopening the chat, say offline):
+  // the server's copy is the newest (of two, the later load's); the copy saved on the phone shows only from the latest
+  // load and only if no server copy came in since that load started; the latest load says whether it is the offline copy.
+  const loads = useRef(0);
+  const served = useRef({ load: 0, started: 0 });
+  const took = (id: string, load: number, r: { data: CoachThreadData; offline: boolean }) => {
+    if (!isShown(id)) return;
+    const take = r.offline ? load === loads.current && served.current.started < load : load > served.current.load;
+    if (take) {
+      setData(r.data);
+      setLoadFailure(null);
+      if (!r.offline) served.current = { load, started: loads.current };
+    }
+    if (load === loads.current) setOffline(r.offline);
+  };
 
   useEffect(() => {
     void loadAllHistory();
+    // In the session: this session's chat again, when there is one.
+    if (sessionId && sessionChats.has(sessionId)) void open(sessionChats.get(sessionId)!);
   }, []);
-  // The newest message stays in view while an answer streams in, and when a chat opens.
+  // The newest message stays in view while an answer streams in, and when a chat opens (in the session: in the sheet).
   useEffect(() => {
-    if (mode === "chat") window.scrollTo(0, document.documentElement.scrollHeight);
+    if (mode !== "chat") return;
+    const sheet = inSession ? root.current?.closest<HTMLElement>(".sheet") : null;
+    if (sheet) sheet.scrollTop = sheet.scrollHeight;
+    else if (!inSession) window.scrollTo(0, document.documentElement.scrollHeight);
   }, [data, live, mode]);
   const since = trainingSince(boot);
   const done = Object.values(sessions).filter((s) => s.status === "done" && (!since || s.local_date >= since)).length;
@@ -137,13 +165,14 @@ export function Coach() {
     setThreadId(id);
     setMode("chat");
     setLoadFailure(null);
+    const load = ++loads.current;
     try {
-      const r = await loadThread(id);
-      if (!isShown(id)) return;
-      setData(r.data);
-      setOffline(r.offline);
+      took(id, load, await loadThread(id));
     } catch (e) {
-      if (isShown(id)) setLoadFailure(e);
+      if (!isShown(id) || load !== loads.current) return;
+      setLoadFailure(e);
+      // Offline before this chat was saved on the phone: a reload still on its way shows as the offline copy.
+      if (e instanceof NetworkError) setOffline(true);
     }
   };
   const newChat = () => {
@@ -173,11 +202,9 @@ export function Coach() {
   };
   const finish = async (id: string) => {
     if (!isShown(id)) return;
+    const load = ++loads.current;
     try {
-      const r = await loadThread(id);
-      if (!isShown(id)) return;
-      setData(r.data);
-      setOffline(r.offline);
+      took(id, load, await loadThread(id));
     } catch {
       /* the streamed answer stays on screen */
     }
@@ -203,7 +230,7 @@ export function Coach() {
     const q = question.trim();
     if ((!q && !attachments.length) || live || attachments.some((a) => a.uploading)) return;
     const id = currentId;
-    const message = { id: ulid(), text: q, attachments: attachments.map(({ id: a, width, height }) => ({ id: a, width, height })) };
+    const message = { id: ulid(), text: q, attachments: attachments.map(({ id: a, width, height }) => ({ id: a, width, height })), ...(inSession ? { session: inSession.session() } : {}) };
     const optimistic: CoachMessage = {
       id: message.id,
       role: "user",
@@ -219,6 +246,11 @@ export function Coach() {
     setThreadId(id);
     setText("");
     setAttachments([]);
+    if (inSession) {
+      sessionChats.set(message.session!.id, id);
+      // The coach reads the session as saved: the sets checked just now go first.
+      await syncNow().catch(() => undefined);
+    }
     await run(message.id, (on) => sendMessage(id, message, on), id);
   };
 
@@ -263,6 +295,113 @@ export function Coach() {
   const canSend = online && !live && !offline;
   const title = mode === "list" ? "Chats" : mode === "archived" ? "Archived" : "Coach";
 
+  const chat = (
+    <div class="l-col l-gap-14" data-testid="coach-chat" ref={root}>
+      {offline && data ? <p class="caption l-m0" data-testid="coach-offline">Offline: this is the copy saved on your phone.</p> : null}
+      {data?.omitted ? (
+        <p class="caption l-m0" data-testid="coach-omitted">
+          {plural(data.omitted, "older message")} in this chat {data.omitted === 1 ? "is" : "are"} kept but no longer sent to the coach.
+        </p>
+      ) : null}
+      {loadFailure ? <LoadError what="Couldn't load this chat." error={loadFailure} onRetry={() => threadId && void open(threadId)} /> : null}
+      {!data && !loadFailure ? (
+        <p class="state l-m0" data-testid="coach-empty">
+          {inSession
+            ? "Ask about this session. The coach sees the day, the exercise and set on your screen, and the sets you have done."
+            : "Ask about your training, your program or a photo. Answers about your numbers come with the app's own data."}
+        </p>
+      ) : null}
+      {turns.map((t, i) => {
+        const last = i === turns.length - 1;
+        const streaming = live && live.questionId === t.question.id ? live : null;
+        return (
+          <TurnView
+            key={t.question.id}
+            turn={t}
+            live={streaming}
+            failed={!streaming && last ? failure(t) : null}
+            onRetry={canSend ? () => void retry(t) : null}
+            onChange={changeDraft}
+          />
+        );
+      })}
+      {/* Full screen the composer stays at the bottom of the screen; in the session sheet it ends the chat. */}
+      <div class={inSession ? "l-col l-gap-10" : "coach-dock"} data-testid="coach-dock">
+        {!data && !live && !inSession ? (
+          <div class="chip-scroll" aria-label="Suggested questions">
+            {SUGGESTIONS.map((q) => (
+              <button type="button" class="clay press chip fa" dir="rtl" lang="fa" disabled={!canSend} onClick={() => void send(q)}>
+                {q}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {attachments.length ? (
+          <div class="l-grid-4" data-testid="coach-attachments">
+            {attachments.map((a) => (
+              <div class="photo-thumb" aria-busy={a.uploading ? "true" : undefined}>
+                <span class="photo-thumb__frame">
+                  <img src={a.url} alt="Attached photo" />
+                </span>
+                <button type="button" class="clay press btn-sm t-muted" onClick={() => setAttachments((list) => list.filter((x) => x.id !== a.id))}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div class="composer" aria-disabled={canSend ? undefined : "true"}>
+          <button type="button" class="clay press btn-icon t-violet" aria-label="Attach a photo" data-testid="coach-attach" disabled={!canSend || attachments.length >= MAX_PHOTOS} onClick={() => setPicker(true)}>
+            <IconCamera size={20} />
+          </button>
+          <label class="l-grow l-row">
+            <span class="l-sr">Message the coach</span>
+            <input
+              ref={input}
+              class={`composer__input${isPersian(text) ? " fa" : ""}`}
+              dir="auto"
+              data-testid="coach-input"
+              placeholder={online ? "Ask about your training" : "Needs connection"}
+              value={text}
+              disabled={!canSend}
+              onInput={(e) => setText((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => e.key === "Enter" && void send()}
+            />
+          </label>
+          <button
+            type="button"
+            class="clay press btn-icon t-orange"
+            aria-label="Send"
+            data-testid="coach-send"
+            disabled={!canSend || (!text.trim() && !attachments.length) || attachments.some((a) => a.uploading)}
+            onClick={() => void send()}
+          >
+            <IconSend size={20} />
+          </button>
+        </div>
+        <input ref={camera} class="l-sr" type="file" accept="image/*" capture="environment" data-testid="coach-camera" onChange={(e) => {
+            const el = e.target as HTMLInputElement;
+            void addFiles(el.files).then(() => (el.value = ""));
+          }}
+        />
+        <input ref={library} class="l-sr" type="file" accept="image/*" multiple data-testid="coach-library" onChange={(e) => {
+            const el = e.target as HTMLInputElement;
+            void addFiles(el.files).then(() => (el.value = ""));
+          }}
+        />
+      </div>
+    </div>
+  );
+  const attach = <AttachSheet open={picker} onClose={() => setPicker(false)} onCamera={() => (setPicker(false), camera.current?.click())} onLibrary={() => (setPicker(false), library.current?.click())} onProgress={addProgressPhoto} />;
+
+  if (inSession)
+    return (
+      <div data-testid="coach" class="l-col">
+        {chat}
+        {attach}
+      </div>
+    );
+
   return (
     <main class="page" data-testid="coach">
       <header class="screen-head">
@@ -294,98 +433,7 @@ export function Coach() {
       </header>
 
       {mode === "chat" ? (
-        <div class="l-col l-gap-14" data-testid="coach-chat">
-          {offline ? <p class="caption l-m0" data-testid="coach-offline">Offline: this is the copy saved on your phone.</p> : null}
-          {data?.omitted ? (
-            <p class="caption l-m0" data-testid="coach-omitted">
-              {plural(data.omitted, "older message")} in this chat {data.omitted === 1 ? "is" : "are"} kept but no longer sent to the coach.
-            </p>
-          ) : null}
-          {loadFailure ? <LoadError what="Couldn't load this chat." error={loadFailure} onRetry={() => threadId && void open(threadId)} /> : null}
-          {!data && !loadFailure ? (
-            <p class="state l-m0" data-testid="coach-empty">
-              Ask about your training, your program or a photo. Answers about your numbers come with the app's own data.
-            </p>
-          ) : null}
-          {turns.map((t, i) => {
-            const last = i === turns.length - 1;
-            const streaming = live && live.questionId === t.question.id ? live : null;
-            return (
-              <TurnView
-                key={t.question.id}
-                turn={t}
-                live={streaming}
-                failed={!streaming && last ? failure(t) : null}
-                onRetry={canSend ? () => void retry(t) : null}
-                onChange={changeDraft}
-              />
-            );
-          })}
-          <div class="coach-dock" data-testid="coach-dock">
-            {!data && !live ? (
-              <div class="chip-scroll" aria-label="Suggested questions">
-                {SUGGESTIONS.map((q) => (
-                  <button type="button" class="clay press chip fa" dir="rtl" lang="fa" disabled={!canSend} onClick={() => void send(q)}>
-                    {q}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {attachments.length ? (
-              <div class="l-grid-4" data-testid="coach-attachments">
-                {attachments.map((a) => (
-                  <div class="photo-thumb" aria-busy={a.uploading ? "true" : undefined}>
-                    <span class="photo-thumb__frame">
-                      <img src={a.url} alt="Attached photo" />
-                    </span>
-                    <button type="button" class="clay press btn-sm t-muted" onClick={() => setAttachments((list) => list.filter((x) => x.id !== a.id))}>
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            <div class="composer" aria-disabled={canSend ? undefined : "true"}>
-              <button type="button" class="clay press btn-icon t-violet" aria-label="Attach a photo" data-testid="coach-attach" disabled={!canSend || attachments.length >= MAX_PHOTOS} onClick={() => setPicker(true)}>
-                <IconCamera size={20} />
-              </button>
-              <label class="l-grow l-row">
-                <span class="l-sr">Message the coach</span>
-                <input
-                  ref={input}
-                  class={`composer__input${isPersian(text) ? " fa" : ""}`}
-                  dir="auto"
-                  data-testid="coach-input"
-                  placeholder={online ? "Ask about your training" : "Needs connection"}
-                  value={text}
-                  disabled={!canSend}
-                  onInput={(e) => setText((e.target as HTMLInputElement).value)}
-                  onKeyDown={(e) => e.key === "Enter" && void send()}
-                />
-              </label>
-              <button
-                type="button"
-                class="clay press btn-icon t-orange"
-                aria-label="Send"
-                data-testid="coach-send"
-                disabled={!canSend || (!text.trim() && !attachments.length) || attachments.some((a) => a.uploading)}
-                onClick={() => void send()}
-              >
-                <IconSend size={20} />
-              </button>
-            </div>
-            <input ref={camera} class="l-sr" type="file" accept="image/*" capture="environment" data-testid="coach-camera" onChange={(e) => {
-                const el = e.target as HTMLInputElement;
-                void addFiles(el.files).then(() => (el.value = ""));
-              }}
-            />
-            <input ref={library} class="l-sr" type="file" accept="image/*" multiple data-testid="coach-library" onChange={(e) => {
-                const el = e.target as HTMLInputElement;
-                void addFiles(el.files).then(() => (el.value = ""));
-              }}
-            />
-          </div>
-        </div>
+        chat
       ) : (
         <ThreadList archived={mode === "archived"} onOpen={(id) => void open(id)} onArchived={() => setMode("archived")} current={threadId} onDeletedCurrent={newChat} />
       )}
@@ -398,7 +446,7 @@ export function Coach() {
         </ul>
         <p class="caption l-m0">It reads your data only through the app, never changes it, and can only propose a program draft that you add with a tap. The cost of each answer shows under it.</p>
       </Sheet>
-      <AttachSheet open={picker} onClose={() => setPicker(false)} onCamera={() => (setPicker(false), camera.current?.click())} onLibrary={() => (setPicker(false), library.current?.click())} onProgress={addProgressPhoto} />
+      {attach}
     </main>
   );
 }

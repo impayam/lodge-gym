@@ -463,6 +463,10 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
   const plan = target.kind === "open_session" ? null : openPlanFor(plans, target.day_id);
   const inSession = session ? session.sets.some((s) => s.exercise_id === x.exercise_id) : plan ? inPlan(plan, x.exercise_id) : false;
   const inDrafts = saved || (boot.programs ?? []).some((p) => p.id === result.draft_id);
+  // Where it goes (Payam, 2026-10-16): a session open today takes it at its end; the day's plan and the program, after
+  // that exercise. With a session open the card offers both, so it names both places.
+  const after = result.after ? `after ${result.after.name}` : null;
+  const place = dayKnown && session ? ` · at the end of this session${after ? `; in the program ${after}` : ""}` : after ? ` · ${after}` : "";
 
   const addSession = async () => {
     setBusy(true);
@@ -527,7 +531,7 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
             <span class="t-title">{x.name}</span>
             <span class="list-row__note num">
               {fmtNum(x.sets)} × {repsText(x)}
-              {result.after ? ` · after ${result.after.name}` : ""}
+              {place}
             </span>
             <span class="caption">{x.rule}</span>
           </span>

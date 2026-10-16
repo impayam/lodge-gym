@@ -19,6 +19,7 @@ import type { AppBindings, Env } from "./env";
 import { fail, nowISO, readJson } from "./http";
 import { readProgramVersions, readSettings } from "./data";
 import { contextBlock } from "./lib/coach/prompt";
+import { sessionFacts } from "./lib/coach/sessionContext";
 import { contextWindow, nextStamp, type StoredBlock } from "./lib/coach/context";
 import { draftDayRows, proposeProgram, type CleanDraft } from "./lib/coach/draft";
 import { exerciseDraft, type ExerciseChange } from "./lib/coach/exerciseTool";
@@ -68,6 +69,8 @@ const sendSchema = z.object({
   id,
   text: z.string().max(8000),
   attachments: z.array(z.object({ id, width: z.number().int().min(1).max(10_000), height: z.number().int().min(1).max(10_000) })).max(MAX_IMAGES),
+  /** Ask Coach from the session screen (Payam, 2026-10-16): the open session and the exercise and set on screen. */
+  session: z.object({ id, exercise_id: z.string().min(1).max(120).nullable(), set: z.number().int().min(0).max(99).nullable() }).strict().optional(),
 });
 
 export const coachRoutes = new Hono<AppBindings>();
@@ -106,10 +109,13 @@ coachRoutes.post("/threads/:id/messages", async (c) => {
     const today = localDate(settings.timezone);
     const active = (d.programs ?? []).find((p) => p.status === "active");
     const program = programOn(d, today).program;
+    // From the session screen: the session as saved (the app syncs it before asking); none once it is finished.
+    const open = body.session ? d.sessions.find((x) => x.id === body.session!.id && x.status === "active") : undefined;
+    const session = open ? sessionFacts(d, open, body.session!.exercise_id, body.session!.set, settings.timezone) : null;
     const content: StoredBlock[] = [
       ...(text ? [{ type: "text" as const, text }] : []),
       ...body.attachments.map((a) => ({ type: "image" as const, attachment_id: a.id, width: a.width, height: a.height })),
-      { type: "text", text: contextBlock({ today, timezone: settings.timezone, unit: settings.unit, week_start: settings.week_start, program: { name: programName(active ?? null, program.name), since: activeSince(d, today) } }) },
+      { type: "text", text: contextBlock({ today, timezone: settings.timezone, unit: settings.unit, week_start: settings.week_start, program: { name: programName(active ?? null, program.name), since: activeSince(d, today) }, session }) },
     ];
     const prev = await c.env.DB.prepare("SELECT MAX(created_at) AS at FROM coach_messages WHERE thread_id = ?").bind(threadId).first<{ at: string | null }>();
     const now = nextStamp(prev?.at);
