@@ -43,9 +43,10 @@ function useRelock() {
 }
 
 /** The 5 icon tabs with the pressed-in well that slides to the current one (SPEC-v8 §5). */
-function TabBar({ tab }: { tab: TabName }) {
+/** The five tabs; `coach` leaves room at the right end for the Coach button. */
+function TabBar({ tab, coach }: { tab: TabName; coach: boolean }) {
   return (
-    <nav class="tabbar" aria-label="Sections" style={{ "--i": String(tabIndex(tab)) }}>
+    <nav class={coach ? "tabbar tabbar--coach" : "tabbar"} aria-label="Sections" style={{ "--i": String(tabIndex(tab)) }}>
       <span class="tabbar__indicator" aria-hidden="true" />
       {TABS.map(({ name, label }) => {
         const Icon = TabIcon[name];
@@ -73,8 +74,6 @@ export function App() {
   const view = useStore((s) => s.view);
   const tab = useStore((s) => s.tab);
   const flashMsg = useStore((s) => s.flash);
-  // The rest pill sits where the Coach button is: the button steps aside while resting.
-  const resting = useStore((s) => s.rest !== null);
   const hasBoot = useStore((s) => s.boot !== null);
   useRelock();
 
@@ -137,12 +136,12 @@ export function App() {
         screen
       )}
       <RestTimer />
-      {showsCoachButton(view.name) && !resting ? (
+      {showsCoachButton(view.name) ? (
         <button type="button" class="clay press fab" aria-label="Ask the coach" data-testid="coach-button" onClick={() => navigate("coach")}>
           <IconCoach size={22} />
         </button>
       ) : null}
-      {showsTabBar(view.name) ? <TabBar tab={tab} /> : null}
+      {showsTabBar(view.name) ? <TabBar tab={tab} coach={showsCoachButton(view.name)} /> : null}
       {flashMsg ? (
         <div class="toast" role="status" data-testid="toast">
           {flashMsg}

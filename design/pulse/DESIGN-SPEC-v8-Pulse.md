@@ -52,7 +52,7 @@ Chart colors passed the colorblind checker (dark mode): series order **orange, v
 
 - **Bottom bar: 5 icon-only tabs**: Train (home), History, Library, Reports, Me. `aria-label` on each. The active tab sits in a pressed-in well that slides (320 ms) to the tapped tab.
 - **Me** holds what used to be separate tabs: Photos, Program, Planner, Settings (plus AI reports and Backup rows). **CONFIRM** (§9.1).
-- **Coach button** (floating, orange icon) on every tab screen; it opens the Coach screen full screen. Hidden during an active session.
+- **Coach button** (orange icon) on every tab screen; it opens the Coach screen full screen. Hidden during an active session. Since 2026-10-16 (Payam) it sits beside the tab bar, at its right end and centred on it, instead of floating above it, so it never covers content; the tab bar is shorter on those screens to make room.
 - **Active session** is full screen: no tab bar.
 - **Gestures (iOS-style):**
   - Swipe from the left edge (first 20 px) on any pushed screen (session report, exercise detail, Coach) = back. The visible back button always exists too.

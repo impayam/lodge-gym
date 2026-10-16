@@ -14,7 +14,8 @@
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-ui);
-  /* The end of the content clears the tab bar (bottom 10 + 68) and the Coach button or rest pill above it (top 152-158). */
+  /* The end of the content clears the tab bar and the Coach button beside it (bottom 10 + 68) and the rest pill above
+     them (top 158). */
   padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) calc(env(safe-area-inset-bottom) + 164px);
   display: flex; flex-direction: column; gap: var(--gap);
 }
@@ -72,9 +73,10 @@
 .tabbar > a { position: relative; height: 52px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
 .tabbar > a[aria-current="page"] { color: var(--pink); }
 .tabbar svg { width: 24px; height: 24px; }
+.tabbar--coach { right: calc(var(--gutter) + 66px); }   /* the Coach button sits at its right end */
 
-/* ---------- Floating coach button ---------- */
-.fab { position: fixed; right: var(--gutter); bottom: calc(env(safe-area-inset-bottom) + 96px); width: 56px; height: 56px; border-radius: 20px; color: var(--orange); }
+/* ---------- Coach button: beside the tab bar, centred on it, so it never floats over content (Payam, 2026-10-16) ---------- */
+.fab { position: fixed; right: var(--gutter); bottom: calc(env(safe-area-inset-bottom) + 16px); width: 56px; height: 56px; border-radius: 20px; color: var(--orange); }
 
 /* ---------- Bottom sheet ---------- */
 .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); transition: opacity 200ms; }

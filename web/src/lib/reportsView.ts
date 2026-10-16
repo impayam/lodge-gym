@@ -17,9 +17,14 @@ export function chartFrom(period: Period, end: string, firstSession: string | nu
   return firstSession ?? end;
 }
 
-/** The chart's window in words, after the unit: "8 weeks", "6 months", "since Sep 27". */
-export function chartWindow(period: Period, since: string): string {
-  return period === "week" ? "8 weeks" : period === "month" ? "6 months" : `since ${since}`;
+/**
+ * The chart's window in words, after the unit, saying what the chart shows (Payam, 2026-10-16): "8 weeks" or "6 months"
+ * when the sessions reach back to the window's start (`from`), otherwise (and always for All) "since" the first date
+ * drawn, e.g. "since Sep 7". `first` is the first done session; `since` is the first drawn date, already formatted.
+ */
+export function chartWindow(period: Period, from: string, first: string | null, since: string): string {
+  if (period !== "all" && (first === null || first <= from)) return period === "week" ? "8 weeks" : "6 months";
+  return `since ${since}`;
 }
 
 export interface CalendarWeek {

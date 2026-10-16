@@ -7,9 +7,10 @@ import { goTo, resetWorkouts, signIn, type Place } from "./helpers";
 // bounce with the page).
 test.describe.configure({ mode: "serial" });
 
-/** .tabbar bottom and .fab bottom above the screen's bottom edge (the emulated profile has no safe area). */
+/** .tabbar bottom and .fab bottom above the screen's bottom edge (the emulated profile has no safe area); the Coach
+ *  button is centred on the 68 px bar (Payam, 2026-10-16). */
 const BAR_BOTTOM = 10;
-const FAB_BOTTOM = 96;
+const FAB_BOTTOM = 16;
 
 const TABS = ["Train", "History", "Library", "Reports", "Me"] as const;
 
@@ -94,6 +95,14 @@ test("the tab bar and the Coach button stay at the bottom while each tab scrolls
   for (const tab of TABS) {
     await goTo(page, tab);
     await page.waitForTimeout(800);
+    // The Coach button sits beside the tab bar, inside its row, so it never covers content (Payam, 2026-10-16).
+    const { bar, fab } = await page.evaluate(() => ({
+      bar: document.querySelector(".tabbar")!.getBoundingClientRect().toJSON() as DOMRect,
+      fab: document.querySelector(".fab")!.getBoundingClientRect().toJSON() as DOMRect,
+    }));
+    expect(fab.top, `${tab}: Coach button within the tab bar's row`).toBeGreaterThanOrEqual(bar.top);
+    expect(fab.bottom, `${tab}: Coach button within the tab bar's row`).toBeLessThanOrEqual(bar.bottom);
+    expect(fab.left - bar.right, `${tab}: Coach button beside the tab bar`).toBe(10);
     // Keys go to the page, not to a field.
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     const down = await scrollToEnd(page, 1);

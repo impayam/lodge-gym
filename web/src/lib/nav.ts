@@ -80,7 +80,7 @@ export function showsTabBar(view: ViewName): boolean {
   return view !== "session" && view !== "coach";
 }
 
-/** The floating Coach button sits on the five tab screens only. */
+/** The Coach button (at the right end of the tab bar) sits on the five tab screens only. */
 export function showsCoachButton(view: ViewName): boolean {
   return isTabRoot(view);
 }

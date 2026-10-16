@@ -179,7 +179,9 @@ function MainLifts({ period, end, rows, changeLabel, caption }: { period: Period
       .map(({ date, value }) => ({ date, value })),
   })).filter((s) => s.points.length);
   const latest = series.map((s) => `${s.label} ${fmtNum(s.points[s.points.length - 1].value, 1)}`).join(", ");
-  const window = chartWindow(period, first ? dayMonth(first) : dayMonth(end));
+  // The x-axis starts at the first date drawn; the label says the same.
+  const drawn = series.reduce<string | null>((m, s) => (m === null || s.points[0].date < m ? s.points[0].date : m), null);
+  const window = chartWindow(period, from, first, dayMonth(drawn ?? first ?? end));
   return (
     <Card title="Main lifts (estimated 1RM)" sub={`${unit}, ${window}`} testid="main-lifts">
       {series.length ? (

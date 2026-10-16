@@ -311,6 +311,13 @@ and the order of the page. Top to bottom, in every period:
 The month report adds `prs` and `muscles` (the average week), the progress report `records` per period (additive
 fields; no other API change, no migration).
 
+Review fixes (Payam, 2026-10-16):
+- The Coach button no longer floats over content: on every tab screen it sits beside the tab bar, at its right end
+  and centred on it (the tab bar is shorter there). It stays while the rest pill shows, since the pill sits above
+  the bar and no longer takes the button's place.
+- The Main lifts chart's label says what the chart shows: "8 weeks" or "6 months" when the sessions reach back to
+  the window's start, otherwise "since <first date drawn>" (as All always does).
+
 ### AI plan advice (button only)
 - The planner has an **Get advice** button. It is never automatic, and each tap is one model call.
 - Model: the same as the session report (`REPORT_MODEL`, `claude-opus-5-5`), with the same `ANTHROPIC_API_KEY`, cost log and Settings cost line.
