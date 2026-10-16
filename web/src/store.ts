@@ -159,7 +159,7 @@ export function openCalendar(opts: { week?: string; free?: boolean; find?: boole
   window.scrollTo(0, 0);
 }
 
-/** A saved report from History → Reports timeline, read-only (SPEC-v7 M9d). */
+/** A saved report from the Reports timeline, read-only (SPEC-v7 M9d). */
 export function openSaved(item: TimelineItem) {
   setState({ view: { name: "saved", saved: item } });
   window.scrollTo(0, 0);

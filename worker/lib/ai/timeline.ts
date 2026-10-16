@@ -1,4 +1,5 @@
-// History → Reports timeline (SPEC-v7 M9d, design approved 2026-10-13): every saved report on the date it belongs to.
+// Reports timeline (SPEC-v7 M9d, design approved 2026-10-13; in the Reports tab since Step 3): every saved report on
+// the date it belongs to.
 // Pure, so the date rules are unit-tested:
 //   session report    the session's date (its latest report, when that one is ok)
 //   training overview the date of the session it was written after, or the local date it was written (Regenerate)

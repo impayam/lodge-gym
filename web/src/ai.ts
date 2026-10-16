@@ -62,7 +62,7 @@ export async function fetchReviews(): Promise<WeeklyReview[]> {
 }
 export const cachedReviews = () => ldb.kvGet<WeeklyReview[]>("reviews");
 
-/** Every saved report on its date (History → Reports timeline); kept on the device for offline use. */
+/** Every saved report on its date (the Reports timeline); kept on the device for offline use. */
 export async function fetchTimeline(): Promise<TimelineItem[]> {
   const r = await api<{ items: TimelineItem[] }>("GET", "/report-timeline");
   await ldb.kvSet("ai:timeline", r.items);

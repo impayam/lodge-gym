@@ -17,6 +17,7 @@ import { LoadError } from "../components/States";
 import { SyncStatus } from "../components/SyncStatus";
 import { costText, dateLong, dayMonth, fmtNum, hm, instantShort } from "../format";
 import { dayTitle } from "../lib/lifts";
+import { restOfWeek } from "../lib/reportsView";
 import { dayInfo } from "../model";
 import { goBack, navigate, openReport, photoSrc, useStore } from "../store";
 import { BodyWeight } from "../components/BodyWeight";
@@ -284,12 +285,16 @@ function nextChange(n: NextTimeRow): string {
 }
 
 /**
- * The report: today on top (summary, records and highlights, volume today and this week against the target, extras,
- * skipped, next time, warnings), then "Where you are" in 2–4 lines (reports written before Step 3 have none).
+ * The report: today on top (summary, records and highlights, the volume of the groups trained today against the week's
+ * target and one line for the rest of the week, extras, skipped, next time, warnings), then "Where you are" in 2–4
+ * lines and one motivational line (reports written before Step 3 have neither).
  */
 export function ReportBody({ view }: { view: ReportView }) {
   const r = view.report!;
   const where = r.where_fa ?? [];
+  // The groups trained today in the table; the rest of the week in one line (Payam, 2026-10-16).
+  const trained = r.volume.filter((v) => v.today > 0);
+  const rest = restOfWeek(r.volume);
   const list = (title: string, items: string[], mark: string, testid: string, warn = false) =>
     items.length ? (
       <div class="l-col l-gap-4" data-testid={testid}>
@@ -320,35 +325,42 @@ export function ReportBody({ view }: { view: ReportView }) {
           {r.summary_fa}
         </p>
         {list("Highlights", r.highlights, "✓", "report-highlights")}
-        {r.volume.length ? (
+        {trained.length || rest ? (
           <div class="l-col l-gap-4">
             <h4 class="card__title l-m0">Volume today and this week (fractional sets)</h4>
-            <table class="data-table num" data-testid="report-volume">
-              <thead>
-                <tr>
-                  <th scope="col">Group</th>
-                  <th scope="col">Today</th>
-                  <th scope="col">Week</th>
-                  <th scope="col">Target</th>
-                  <th scope="col">
-                    <span class="l-sr">Status</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.volume.map((v) => (
-                  <tr data-status={v.status}>
-                    <td>{v.group}</td>
-                    <td>{fmtNum(v.today, 1)}</td>
-                    <td>{fmtNum(v.week, 1)}</td>
-                    <td>{v.target == null ? "–" : fmtNum(v.target, 1)}</td>
-                    <td class={v.status === "under" || v.status === "over" ? "t-orange" : v.status === "on" ? "t-violet" : "t-muted"} title={STATUS_NAME[v.status as BalanceStatus]}>
-                      <span aria-hidden="true">{STATUS_ICON[v.status as BalanceStatus]}</span> <span class="l-sr">{STATUS_NAME[v.status as BalanceStatus]}</span>
-                    </td>
+            {trained.length ? (
+              <table class="data-table num" data-testid="report-volume">
+                <thead>
+                  <tr>
+                    <th scope="col">Group</th>
+                    <th scope="col">Today</th>
+                    <th scope="col">Week</th>
+                    <th scope="col">Target</th>
+                    <th scope="col">
+                      <span class="l-sr">Status</span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {trained.map((v) => (
+                    <tr data-status={v.status}>
+                      <td>{v.group}</td>
+                      <td>{fmtNum(v.today, 1)}</td>
+                      <td>{fmtNum(v.week, 1)}</td>
+                      <td>{v.target == null ? "–" : fmtNum(v.target, 1)}</td>
+                      <td class={v.status === "under" || v.status === "over" ? "t-orange" : v.status === "on" ? "t-violet" : "t-muted"} title={STATUS_NAME[v.status as BalanceStatus]}>
+                        <span aria-hidden="true">{STATUS_ICON[v.status as BalanceStatus]}</span> <span class="l-sr">{STATUS_NAME[v.status as BalanceStatus]}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            {rest ? (
+              <span class="caption" data-testid="report-volume-rest">
+                {rest}
+              </span>
+            ) : null}
           </div>
         ) : null}
         {para("Extra exercises", r.extras_note_fa, "report-extras")}
@@ -388,6 +400,11 @@ export function ReportBody({ view }: { view: ReportView }) {
             ))}
           </ul>
         </div>
+      ) : null}
+      {r.motivation_fa ? (
+        <p class="fa prose-fa t-title" dir="rtl" lang="fa" data-testid="report-motivation">
+          {r.motivation_fa}
+        </p>
       ) : null}
     </>
   );

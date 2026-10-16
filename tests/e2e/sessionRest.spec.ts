@@ -244,8 +244,8 @@ test("after Finish: body weight today, shown from his last entry; − / + save o
   await page.getByTestId("check-bench-0").click();
   await page.getByTestId("finish").click();
   await expect(page.getByTestId("report-screen")).toBeVisible();
-  // Nothing waits for it: the report is written without it.
-  await expect(page.getByTestId("report-summary")).toBeVisible({ timeout: 30_000 });
+  // Nothing waits for it: the report's own timing rule goes on (body weight and the Apple Health workout, or 2 hours).
+  await expect(page.getByTestId("report-status")).toHaveAttribute("data-phase", "waiting", { timeout: 30_000 });
 
   const field = page.getByTestId("finish-weight");
   await expect(field).toContainText("Body weight today (lb)");

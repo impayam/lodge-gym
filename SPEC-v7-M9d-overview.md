@@ -109,3 +109,11 @@ CREATE INDEX training_overviews_created ON training_overviews(created_at);
   every week it reports; none of the praise words (آفرین، عالی، فوق‌العاده، …) when one of those weeks is bad. A line
   that breaks a rule is dropped (counted in `dropped`); the overview itself is kept, no retry.
 - No change to the data model or API: the line and its label facts are stored inside `overview_json` (`motivation`).
+
+## 10. Step 3 (Payam, 2026-10-16): no overview after each session
+- The overview is no longer written after each session: the after-session report carries "Where you are" (SPEC-v3,
+  Step 3), built from this overview's consistency and main-lift facts. The motivational line goes with it; the report
+  ends with its own line.
+- The Reports tab drops the overview card; its main-lift table is the app's own (no AI). The endpoints stay
+  (GET/POST `/api/overview`, `/api/overviews/:id`) and the older overviews stay readable on the reports timeline, now in
+  Reports.

@@ -1,7 +1,8 @@
 // Mock of the Claude Messages API for the Playwright tests (SPEC-v3: the real API is never called in tests). The e2e
 // Workers point ANTHROPIC_BASE_URL here. It answers like the model would, from the request's own input:
-//   session report:    a short Persian report that names the extra exercises and copies the volume rows given, and
-//                      "Where you are" lines from where_you_are plus one with a number the input lacks (the app drops it)
+//   session report:    a short Persian report that names the extra exercises, "Where you are" lines from
+//                      where_you_are plus one with a number the input lacks (the app drops it), and a closing
+//                      motivational line that is not among recent_motivation
 //   plan advice:       "add" the first candidate not in the plan, at position 2
 //   training overview: Persian prose using only the input's numbers, plus one warning with a number the input lacks
 //                      (the app must drop it), and the weekly motivational line from the motivation block
@@ -61,6 +62,18 @@ export function whereLines(w) {
   return lines;
 }
 
+/** The closing lines the mock picks from: the first one not among the recent ones, so each report says something new. */
+export const MOTIVATION_LINES = [
+  "همین که امروز آمدی و کامل تمرین کردی، یعنی مسیر درست است.",
+  "قدرت با همین جلسه‌های پشت‌سرهم ساخته می‌شود؛ جلسهٔ بعد هم همین‌طور.",
+  "امروز یک قدم جلوتر رفتی؛ آرام و پیوسته ادامه بده.",
+  "فرم درست امروز، رکورد فردای توست.",
+];
+
+export function closingLine(recent = []) {
+  return MOTIVATION_LINES.find((l) => !recent.includes(l)) ?? MOTIVATION_LINES[recent.length % MOTIVATION_LINES.length];
+}
+
 export function startAiMock(port) {
   const mode = { report: "ok", advice: "ok", overview: "ok", coach: "ok" };
   const calls = [];
@@ -82,11 +95,9 @@ export function startAiMock(port) {
 
   const report = (input) => {
     const extras = input.exercises.filter((x) => x.is_extra && x.done_sets.length).map((x) => x.name);
-    const trained = input.week_so_far.volume.filter((v) => v.today > 0 || v.target != null);
     return {
       summary_fa: `جلسهٔ ${input.session.program_day} انجام شد؛ ${input.exercises.filter((x) => x.done_sets.length).length} حرکت با ست‌های کامل.`,
       highlights: input.prs_today.map((p) => `رکورد تازه در ${p.name}: ${p.weight} × ${p.reps}`),
-      volume: trained.map((v) => ({ group: v.group, today: v.today, week: v.week, target: v.target, status: v.status })),
       extras_note_fa: extras.length ? `حرکت‌های اضافه: ${extras.join("، ")}.` : null,
       missed_note_fa: input.missed.exercises_not_done.length ? `انجام نشد: ${input.missed.exercises_not_done.join("، ")}.` : null,
       // Notes only, like the real prompt asks; one with a number, which the app must not show.
@@ -94,6 +105,7 @@ export function startAiMock(port) {
       warnings: [],
       // "Where you are": numbers from where_you_are only, plus one line with a number it lacks (the app drops it).
       where_fa: whereLines(input.where_you_are),
+      motivation_fa: closingLine(input.recent_motivation),
     };
   };
 

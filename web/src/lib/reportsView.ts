@@ -80,3 +80,25 @@ export function signedPct(n: number | null): string {
 export function barScale(values: readonly number[]): number {
   return Math.max(20, ...values);
 }
+
+/**
+ * The after-session report's one line for the groups not trained that day (Payam, 2026-10-16): how many are under
+ * their weekly target, not trained yet this week, over it and on it, naming all but the ones on target. Groups without
+ * a target are left out; null when nothing is left to say.
+ */
+export function restOfWeek(rows: readonly { group: string; today: number; target: number | null; status: string }[]): string | null {
+  const rest = rows.filter((r) => r.today === 0 && r.target != null);
+  const named = (status: string) => rest.filter((r) => r.status === status).map((r) => r.group);
+  const parts = [
+    { names: named("under"), text: "under target" },
+    { names: named("none"), text: "not trained yet" },
+    { names: named("over"), text: "over target" },
+  ]
+    .filter((x) => x.names.length)
+    .map((x) => ({ n: x.names.length, text: `${x.text} (${x.names.join(", ")})` }));
+  const on = named("on").length;
+  if (on) parts.push({ n: on, text: "on target" });
+  if (!parts.length) return null;
+  const text = parts.map((x, i) => (i === 0 ? `${x.n} ${x.n === 1 ? "group" : "groups"} ${x.text}` : `${x.n} ${x.text}`));
+  return `Rest of the week: ${text.join(", ")}.`;
+}

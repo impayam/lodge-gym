@@ -1,5 +1,6 @@
 // Weekly reviews (table weekly_reviews, written by Claude into D1). Read-only in the app. SPEC-v7 M9d replaced the card
-// on Home and Reports with the training overview; every review stays readable from History → Reports timeline.
+// on Home and Reports with the training overview; every review stays readable from the reports timeline (in Reports
+// since Step 3).
 // The review text stays in Persian (SPEC-v2 M6), so its content is rendered right-to-left inside the English UI.
 
 import { useState } from "preact/hooks";

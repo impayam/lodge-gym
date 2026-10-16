@@ -69,6 +69,7 @@ export async function generateReport(env: Env, sessionId: string): Promise<Repor
     const input = buildReportInput(d, sessionId, await readPlan(env, sessionId));
     // "Where you are" as of the session's date: the overview's consistency and main-lift facts (no plans needed).
     input.where_you_are = whereYouAre(buildOverviewInput(d, [], input.session.date, null));
+    input.recent_motivation = await recentMotivation(env);
     const r: AiOk<ReportOutput> | AiFail = await callModel(env, { system: REPORT_SYSTEM, input, schema: ReportOutput, effort: effortOf(env.REPORT_EFFORT, "low") });
     Object.assign(row, { model: r.model, input_tokens: r.input_tokens, output_tokens: r.output_tokens });
     if (r.ok) Object.assign(row, { status: "ok", report_json: JSON.stringify(normalizeReport(r.data, input)) });
@@ -83,6 +84,19 @@ export async function generateReport(env: Env, sessionId: string): Promise<Repor
     .bind(row.id, row.session_id, row.created_at, row.model, row.status, row.report_json, row.error, row.input_tokens, row.output_tokens)
     .run();
   return reportView(row);
+}
+
+/** Lines kept so the next report's motivational line says something new. */
+const RECENT_MOTIVATION = 6;
+
+/** The motivational lines of the latest written reports (a rewrite of this session's included), newest first. */
+async function recentMotivation(env: Env): Promise<string[]> {
+  const rows = await env.DB.prepare(
+    "SELECT json_extract(report_json, '$.motivation_fa') AS line FROM session_reports WHERE status = 'ok' AND json_extract(report_json, '$.motivation_fa') IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT ?"
+  )
+    .bind(RECENT_MOTIVATION)
+    .all<{ line: string }>();
+  return rows.results.map((r) => r.line);
 }
 
 /** A queued job: a session's report, or the training overview (a manual Regenerate). */

@@ -56,11 +56,12 @@ export function mockAnthropic(replies: MockReply[]) {
 export const REPORT_REPLY = {
   summary_fa: "جلسهٔ خوبی بود؛ پرس سینه از هفتهٔ پیش قوی‌تر شد.",
   highlights: ["رکورد تازه در پرس سینه"],
-  volume: [{ group: "Chest", today: 0, week: 0, target: 0, status: "on" }],
   extras_note_fa: "جلوبازو با دمبل حجم بازو را کامل کرد.",
   missed_note_fa: null,
   next_time: [{ exercise_id: "bench", note_fa: "همین وزن را نگه دار و همهٔ تکرارها را کامل کن." }],
   warnings: [],
+  where_fa: ["جلسه‌ها طبق برنامه پیش می‌رود.", "پرس سینه رو به بالاست."],
+  motivation_fa: "همین که امروز آمدی، یعنی مسیر درست است.",
 };
 
 /** A valid training overview reply (SPEC-v7 M9d output format), with no numbers. */
