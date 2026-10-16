@@ -196,6 +196,8 @@ test("offline: the composer needs a connection and a saved chat is still readabl
   await openCoach(page);
   await ask(page, "How was my week?");
   await expect(page.getByTestId("coach-answer")).toContainText("So far this week chest is");
+  // The answer is saved and the chat reloaded (the composer is free again): the phone has its copy.
+  await expect(page.getByTestId("coach-input")).toBeEnabled();
   // The list once online, so the phone has it.
   await page.getByTestId("coach-chats").click();
   await expect(page.getByTestId("coach-thread")).toHaveCount(1);
