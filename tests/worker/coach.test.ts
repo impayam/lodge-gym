@@ -157,7 +157,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
     const card = ev.find((e): e is Extract<CoachEvent, { type: "card" }> => e.type === "card" && e.name === "propose_session_additions")!;
     expect(card.is_error).toBe(false);
     const r = card.result as { target: { kind: string; day_id: string; label: string }; named_day_id: string; items: { exercise_id: string; sets: number; basis: string }[]; dropped: { exercise_id: string; reason: string }[] };
-    expect(r.target).toMatchObject({ kind: "start_today", day_id: "D3", label: "today's Day 3 · Back" });
+    expect(r.target).toMatchObject({ kind: "today", day_id: "D3", label: "today's Day 3 · Back" });
     expect(r.named_day_id).toBe("D3");
     expect(r.items).toEqual([expect.objectContaining({ exercise_id: "lateral", basis: "program", sets: 3 })]);
     expect(r.dropped).toEqual([{ exercise_id: "made_up_curl", reason: "not in the library: use an id from get_library" }]);

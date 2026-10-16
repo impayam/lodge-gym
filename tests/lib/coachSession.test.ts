@@ -94,7 +94,7 @@ describe("propose_session_additions", () => {
         ],
       })
     );
-    expect(r.target.kind).toBe("start_today");
+    expect(r.target.kind).toBe("today");
     expect(r.items.map((x) => x.exercise_id)).toEqual(["wrist_curl"]);
     expect(r.items[0]).toMatchObject({ reps_min: 10, reps_max: 15, reason_fa });
     expect(r.dropped).toEqual([
@@ -119,8 +119,8 @@ describe("propose_session_additions", () => {
 
     // 2. Today: the day he names, else today's planned gym session's day (with its time).
     const plans = [gym("g-today", "2026-10-16", 17 * 60 + 30, "D2"), gym("g-tom", "2026-10-17", 8 * 60, "D4")];
-    expect(add(data(undefined, plans), "D3").target).toMatchObject({ kind: "start_today", day_id: "D3", gym_plan_id: null, label: "today's Day 3 · Back" });
-    expect(add(data(undefined, plans)).target).toMatchObject({ kind: "start_today", day_id: "D2", gym_plan_id: "g-today", label: "today's Day 2 · Legs (17:30)" });
+    expect(add(data(undefined, plans), "D3").target).toMatchObject({ kind: "today", day_id: "D3", gym_plan_id: null, label: "today's Day 3 · Back" });
+    expect(add(data(undefined, plans)).target).toMatchObject({ kind: "today", day_id: "D2", gym_plan_id: "g-today", label: "today's Day 2 · Legs (17:30)" });
 
     // 3. Nothing today: the nearest planned session ahead.
     const ahead = add(data(undefined, [gym("g-sat", "2026-10-24", 9 * 60, "D1"), gym("g-tom", "2026-10-17", 8 * 60, "D4"), gym("g-gone", "2026-10-17", 7 * 60, "D2", "cancelled")]));
@@ -129,10 +129,10 @@ describe("propose_session_additions", () => {
 
     // 4. Nothing planned: Home's next day, today.
     const d = data();
-    expect(add(d).target).toMatchObject({ kind: "start_today", day_id: nextProgramDay(d).id, gym_plan_id: null });
+    expect(add(d).target).toMatchObject({ kind: "today", day_id: nextProgramDay(d).id, gym_plan_id: null });
 
     // A session left open from an earlier day is never the target (the app closes it).
-    expect(add(data([...base.sessions.filter((s) => s.status === "done"), openToday("2026-10-15")])).target.kind).toBe("start_today");
+    expect(add(data([...base.sessions.filter((s) => s.status === "done"), openToday("2026-10-15")])).target.kind).toBe("today");
   });
 
   it("Change offers today's session (or every day started today) and the planned sessions ahead, the default first", () => {
@@ -142,8 +142,8 @@ describe("propose_session_additions", () => {
     const withOpen = additionTargets({ ...base2, sessions });
     expect(withOpen.choices.map((c) => c.kind)).toEqual(["open_session", ...Array(UPCOMING_MAX).fill("planned")]);
     const none = additionTargets({ ...base2, sessions: [], plans: [] });
-    expect(none.target).toMatchObject({ kind: "start_today", day_id: "D2" });
-    expect(none.choices.map((c) => c.kind === "start_today" && c.day_id)).toEqual(["D2", "D1", "D3", "D4"]);
+    expect(none.target).toMatchObject({ kind: "today", day_id: "D2" });
+    expect(none.choices.map((c) => c.kind === "today" && c.day_id)).toEqual(["D2", "D1", "D3", "D4"]);
     // Two weeks ahead at most.
     expect(additionTargets({ ...base2, sessions: [], plans: [gym("far", "2026-11-01", 480, "D1")] }).choices.some((c) => c.kind === "planned")).toBe(false);
   });

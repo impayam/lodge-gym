@@ -1,10 +1,10 @@
 // Where the coach's exercises for a session go (Payam, 2026-10-16), pure and shared by the coach tool and the card:
 // chosen by date, always confirmed by his tap, and Change offers the other choices.
 //   1. a session open today → that session (the items become "Added today" extras);
-//   2. else today: the day he named, else today's planned gym session's day, → that day started now with them;
-//   3. else the nearest upcoming planned gym session (calendar) → that day's plan in the planner, so they appear when
-//      the session starts;
-//   4. with nothing planned: Home's next program day, started today.
+//   2. else today: the day he named, else today's planned gym session's day → that day's plan in the planner, so they
+//      are in the session when he taps Start at the gym (nothing is started by the coach);
+//   3. else the nearest upcoming planned gym session (calendar) → that day's plan in the planner, the same way;
+//   4. with nothing planned: Home's next program day, today (as 2).
 // A session left open from an earlier day is never a target: the app closes it after its day ends.
 
 import { hm } from "../calendar";
@@ -28,7 +28,7 @@ export interface TargetPlan {
 
 export type AdditionTarget =
   | { kind: "open_session"; date: string; day_id: string; session_id: string }
-  | { kind: "start_today"; date: string; day_id: string; gym_plan_id: string | null; start_min: number | null }
+  | { kind: "today"; date: string; day_id: string; gym_plan_id: string | null; start_min: number | null }
   | { kind: "planned"; date: string; day_id: string; gym_plan_id: string; start_min: number };
 
 /** Upcoming planned sessions offered under Change: the next ones within two weeks. */
@@ -60,7 +60,7 @@ export function additionTargets(x: TargetInput): { target: AdditionTarget; choic
 
   const today = (dayId: string): AdditionTarget => {
     const p = todayPlans.find((q) => q.program_day_id === dayId) ?? null;
-    return { kind: "start_today", date: x.today, day_id: dayId, gym_plan_id: p?.id ?? null, start_min: p?.start_min ?? null };
+    return { kind: "today", date: x.today, day_id: dayId, gym_plan_id: p?.id ?? null, start_min: p?.start_min ?? null };
   };
   const ahead = upcoming.map((p): AdditionTarget => ({ kind: "planned", date: p.date, day_id: p.program_day_id, gym_plan_id: p.id, start_min: p.start_min }));
 
@@ -80,7 +80,7 @@ export function additionTargets(x: TargetInput): { target: AdditionTarget; choic
 
 /** One string per target, for choosing among them. */
 export const targetKey = (t: AdditionTarget): string =>
-  t.kind === "open_session" ? `open:${t.session_id}` : t.kind === "start_today" ? `today:${t.day_id}` : `planned:${t.gym_plan_id}`;
+  t.kind === "open_session" ? `open:${t.session_id}` : t.kind === "today" ? `today:${t.day_id}` : `planned:${t.gym_plan_id}`;
 
 /** "today", "tomorrow" or "Sat, Oct 24" for a local date. */
 function dayWord(date: string, today: string): string {
@@ -92,6 +92,6 @@ function dayWord(date: string, today: string): string {
 /** The card's heading for a target: "today's session: Day 3 · Back", "today's Day 3 · Back", "tomorrow 08:00 · Day 4 · Deadlift". */
 export function targetLabel(t: AdditionTarget, day: string, today: string): string {
   if (t.kind === "open_session") return `today's session: ${day}`;
-  if (t.kind === "start_today") return `today's ${day}${t.start_min != null ? ` (${hm(t.start_min)})` : ""}`;
+  if (t.kind === "today") return `today's ${day}${t.start_min != null ? ` (${hm(t.start_min)})` : ""}`;
   return `${dayWord(t.date, today)} ${hm(t.start_min)} · ${day}`;
 }

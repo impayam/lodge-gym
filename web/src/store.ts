@@ -14,7 +14,7 @@ import { cancelPush, schedulePush } from "./push";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
-import { activeSession, homeModel, newSession, openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
+import { activeSession, homeModel, openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
 import type { BootData, OutboxEntry } from "./localdb";
 import { backTarget, tabAfter, type TabName, type ViewName } from "./lib/nav";
 
@@ -739,13 +739,12 @@ export function coachTargets(named: string | null) {
 
 /**
  * The coach's exercises, on Payam's tap (2026-10-16), where the card says:
- * - a session open today: appended as extras, as the 3D picker adds them (is_extra, after the other extras);
- * - today: the day started now (its open plan first, if it has one) with them as extras;
- * - a planned session ahead: added to that day's plan in the planner (a new plan copying the day if it has none), so
- *   they are in the session when it starts.
- * Sets are prefilled with the card's reps and its weight when the units match, not checked (as "Copy last" fills a
- * set); a plan item keeps sets and reps, and the session screen suggests the weight. Exercises already there are
- * skipped. The program never changes.
+ * - a session open today: appended as extras, as the 3D picker adds them (is_extra, after the other extras), each set
+ *   prefilled with the card's reps and its weight when the units match, not checked (as "Copy last" fills a set);
+ * - otherwise (today's day, or a planned session ahead): added to that day's plan in the planner (a new plan copying
+ *   the day if it has none). Nothing is started: they are in the session when he taps Start, and the session screen
+ *   suggests the weight with the same progression.
+ * Exercises already there are skipped. The program never changes.
  */
 export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget): Promise<{ added: number; missing: number; sessionId: string | null; planId: string | null }> {
   const boot = state.boot!;
@@ -753,12 +752,16 @@ export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget
   if (items.some((it) => !allExercises().has(it.exercise_id))) await loadLibrary();
   const lib = allExercises();
   const missing = items.filter((it) => !lib.has(it.exercise_id)).length;
-  // Nothing it can add: no session is started and no plan is saved.
+  // Nothing it can add: nothing is saved.
   if (missing === items.length) return { added: 0, missing, sessionId: null, planId: null };
   const now = new Date().toISOString();
-  const day = boot.program.days.find((d) => d.id === target.day_id) ?? null;
 
-  if (target.kind === "planned") {
+  await closeStaleSessions();
+  const t = today();
+  const active = activeSession(state.sessions);
+  const s = active && active.local_date === t ? active : null;
+  if (!s) {
+    const day = boot.program.days.find((d) => d.id === target.day_id);
     if (!day) return { added: 0, missing, sessionId: null, planId: null };
     const fresh = ulid();
     let plan = openPlanFor(state.plans, day.id) ?? planFromDay(day, fresh, now, seqIds(fresh));
@@ -774,24 +777,6 @@ export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget
     return { added, missing, sessionId: null, planId: plan.id };
   }
 
-  await closeStaleSessions();
-  const t = today();
-  const openToday = () => {
-    const a = activeSession(state.sessions);
-    return a && a.local_date === t ? a : null;
-  };
-  let s = (target.kind === "open_session" ? state.sessions[target.session_id] : null) ?? null;
-  if (!s || s.status !== "active") s = openToday();
-  if (!s) {
-    const start = day ?? boot.program.days.find((d) => d.id === homeModel(boot, state.sessions, t).next.dayId) ?? boot.program.days[0];
-    const plan = openPlanFor(state.plans, start.id);
-    if (plan) {
-      const started: SessionPlan = { ...plan, status: "started", started_at: now, updated_at: now };
-      s = sessionFromPlan(boot, started, t, now);
-      await saveSession(s);
-      await savePlan(started);
-    } else s = newSession(boot, start, t);
-  }
   let position = Math.max(-1, ...s.sets.filter((x) => x.is_extra).map((x) => x.position ?? 0));
   const sets: SetEntry[] = [];
   let added = 0;

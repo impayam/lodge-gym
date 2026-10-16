@@ -274,7 +274,7 @@ const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
  * The coach's exercises for a session (Payam, 2026-10-16): each with sets × reps and weight from the app's
  * progression, the step it took, and the coach's reason in Persian. The heading says where they go, chosen by date
  * from this device's state (a session open today, today's day, or the next planned session); Change picks another.
- * Nothing changes before Add, and the program never changes.
+ * Add puts them into the open session, or into the day's plan (nothing is started). The program never changes.
  */
 function AdditionsCard({ result }: { result: Additions }) {
   const boot = useStore((s) => s.boot)!;
@@ -292,7 +292,8 @@ function AdditionsCard({ result }: { result: Additions }) {
   const ids = result.items.map((x) => x.exercise_id);
   // Already there: every exercise in the open session, or in the day's open plan.
   const session = target.kind === "open_session" ? sessions[target.session_id] : null;
-  const plan = target.kind === "planned" ? openPlanFor(plans, target.day_id) : null;
+  // Today's day or a session ahead: that day's plan (nothing is started until he taps Start).
+  const plan = target.kind === "open_session" ? null : openPlanFor(plans, target.day_id);
   const added = session ? ids.every((id) => session.sets.some((x) => x.exercise_id === id)) : plan ? ids.every((id) => inPlan(plan, id)) : false;
 
   const add = async () => {
@@ -351,7 +352,7 @@ function AdditionsCard({ result }: { result: Additions }) {
       <span class="caption">Sets, reps and weights from the app's progression; your program does not change.</span>
       {added ? (
         <div class="l-row l-between l-gap-8" data-testid="coach-additions-added">
-          <span class="caption">{session ? "In today's session." : "In that day's plan: they are there when you start it."}</span>
+          <span class="caption">{session ? "In today's session." : "In the plan: they are there when you tap Start."}</span>
           <button type="button" class="clay press btn-sm t-pink" onClick={() => (session ? navigate("session", session.id) : plan && openPlan(plan.id))}>
             Open
           </button>

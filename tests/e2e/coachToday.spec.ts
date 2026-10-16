@@ -4,7 +4,8 @@ import { addDays, localDate, zonedToUtcISO } from "../../worker/lib/time";
 import { ulid } from "../../worker/lib/ulid";
 
 // Coach: exercises for a session (Payam, 2026-10-16), with the model mocked. The card names the session by date (open
-// today, today's day, the next planned session); Add puts them there; the program never changes. Sessions left open
+// today, today's day, the next planned session); Add puts them into the open session or the day's plan (nothing starts
+// before Start); the program never changes. Sessions left open
 // from an earlier day close by themselves: finished at the last done set, or deleted when nothing was done.
 test.describe.configure({ mode: "serial" });
 
@@ -70,29 +71,35 @@ test("a session open today: the card asks to add to it; Add appends the exercise
   expect(program()).toBe(before);
 });
 
-test("no session today: today's named day; Change lists the other choices; Add starts the day with the exercises", async ({ page }) => {
+test("no session today: today's named day; Change lists the other choices; Add puts them in today's plan, nothing starts until Start", async ({ page }) => {
   const before = program();
   const { card, ids } = await askCoach(page, ASK_TODAY);
   await expect(card.getByTestId("coach-additions-target")).toHaveText("Add to today's Day 3 · Back");
-  // Change: every day started today (no plans ahead), the default first; another choice changes the heading.
+  // Change: every program day today (no plans ahead), the default first; another choice changes the heading.
   await card.getByTestId("coach-change-additions").click();
   const where = card.locator("#coach-additions-where");
   await expect(where.locator("option")).toHaveText(["Today's Day 3 · Back", "Today's Day 1 · Chest", "Today's Day 2 · Legs", "Today's Day 4 · Deadlift"]);
   await where.selectOption({ label: "Today's Day 1 · Chest" });
   await expect(card.getByTestId("coach-additions-target")).toHaveText("Add to today's Day 1 · Chest");
   await where.selectOption({ label: "Today's Day 3 · Back" });
-  expect(count("SELECT COUNT(*) AS n FROM workout_sessions")).toBe(0);
 
   await card.getByTestId("coach-add-additions").click();
   await expect(page.getByTestId("toast")).toHaveText(`Added ${ids.length} exercises to today's Day 3 · Back.`);
-  await expect(card.getByTestId("coach-additions-added")).toContainText("In today's session.");
-  await expect.poll(() => sql(`SELECT program_day_id, local_date, status FROM workout_sessions`), { timeout: 20_000 }).toEqual([{ program_day_id: "D3", local_date: today(), status: "active" }]);
-  // The day's own exercises, then the coach's as extras (prefilled, not checked).
+  await expect(card.getByTestId("coach-additions-added")).toContainText("In the plan: they are there when you tap Start.");
+  // Day 3's plan holds them, with the card's sets and reps; no session is started.
   await expect
-    .poll(() => sql("SELECT DISTINCT exercise_id FROM set_entries WHERE is_extra = 1 ORDER BY exercise_id"), { timeout: 20_000 })
+    .poll(() => sql("SELECT i.exercise_id FROM session_plan_items i JOIN planned_sessions p ON p.id = i.session_id WHERE p.program_day_id = 'D3' AND p.status = 'planned' AND i.origin = 'added' ORDER BY i.exercise_id"), { timeout: 20_000 })
     .toEqual([...ids].sort().map((exercise_id) => ({ exercise_id })));
-  expect(count("SELECT COUNT(*) AS n FROM set_entries WHERE is_extra = 1 AND done = 1")).toBe(0);
-  expect(count("SELECT COUNT(*) AS n FROM set_entries WHERE is_extra = 0")).toBeGreaterThan(0);
+  expect(count("SELECT COUNT(*) AS n FROM workout_sessions")).toBe(0);
+
+  // At the gym: Start → the session has the day's exercises and the coach's.
+  await card.getByRole("button", { name: "Open" }).click();
+  await page.getByTestId("plan-start").click();
+  await expect(page.getByTestId("finish")).toBeVisible();
+  await expect.poll(() => sql("SELECT program_day_id, local_date, status FROM workout_sessions"), { timeout: 20_000 }).toEqual([{ program_day_id: "D3", local_date: today(), status: "active" }]);
+  await expect
+    .poll(() => sql("SELECT DISTINCT exercise_id FROM set_entries").map((r) => (r as { exercise_id: string }).exercise_id), { timeout: 20_000 })
+    .toEqual(expect.arrayContaining([...ids, "cs_row"]));
   expect(program()).toBe(before);
 });
 
@@ -105,7 +112,7 @@ test("tomorrow's planned session: the exercises go into that day's plan and are 
   await expect(card.getByTestId("coach-additions-target")).toHaveText("Add to tomorrow 08:00 · Day 4 · Deadlift");
   await card.getByTestId("coach-add-additions").click();
   await expect(page.getByTestId("toast")).toHaveText(`Added ${ids.length} exercises to tomorrow 08:00 · Day 4 · Deadlift.`);
-  await expect(card.getByTestId("coach-additions-added")).toContainText("In that day's plan");
+  await expect(card.getByTestId("coach-additions-added")).toContainText("In the plan: they are there when you tap Start.");
   // Saved as Day 4's plan in the planner; no session yet.
   await expect
     .poll(() => sql("SELECT i.exercise_id FROM session_plan_items i JOIN planned_sessions p ON p.id = i.session_id WHERE p.program_day_id = 'D4' AND p.status = 'planned' AND i.origin = 'added' ORDER BY i.exercise_id"), { timeout: 20_000 })
