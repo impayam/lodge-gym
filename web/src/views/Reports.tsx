@@ -102,8 +102,8 @@ function Card({ title, sub, testid, children }: { title: string; sub?: Component
   );
 }
 
-/** Three tiles (SPEC-v8 §6.03): sessions, bench and squat; the line under each number is short, as in the mockup, and
- *  screen readers hear what the change is measured against. */
+/** Three tiles (SPEC-v8 §6.03): the line under each number is short, as in the mockup, and screen readers hear what
+ *  the number counts. */
 function Tiles({ tiles, testid }: { tiles: { value: string; label: string; context?: string }[]; testid: string }) {
   return (
     <section class="l-grid-3 l-gap-10" data-testid={testid} aria-label="Summary">
