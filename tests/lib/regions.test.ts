@@ -80,6 +80,32 @@ describe("rule details", () => {
     expect(primary(ex("Reverse Barbell Curl", "biceps", [], "isolation"))).toEqual(["brachialis"]);
   });
 
+  it("presses, push-ups and dips tag the triceps lateral and medial heads only, never the long head (Payam, 2026-10-16)", () => {
+    const presses = [
+      ex("Barbell Bench Press", "chest", ["shoulders_front", "triceps"], "h_push"),
+      ex("Incline Barbell Bench Press", "chest", ["shoulders_front", "triceps"], "h_push"),
+      ex("Decline Dumbbell Bench Press", "chest", ["triceps"], "h_push"),
+      ex("Standing Overhead Press", "shoulders_front", ["triceps"], "v_push"),
+      ex("Barbell Press Behind Neck", "shoulders_front", ["triceps"], "v_push"),
+      ex("Dips - Chest Version", "chest", ["triceps"], "v_push"),
+      ex("Dips - Triceps Version", "triceps", ["chest"], "v_push"),
+      ex("Close-Grip Barbell Bench Press", "triceps", ["chest"], "h_push"),
+      ex("Diamond Push-Up", "triceps", ["chest"], "h_push"),
+      ex("JM Press", "triceps", [], "h_push"),
+      // A custom press without a pattern: the name decides.
+      ex("Machine Press", "chest", ["triceps"], null),
+    ];
+    for (const x of presses) {
+      const t = regionTags(x);
+      expect(t.some((r) => r.region === "triceps_long"), x.name_en).toBe(false);
+      expect(t.find((r) => r.region === "triceps_lateral_medial")?.emphasis, x.name_en).toBe(x.muscle_primary === "triceps" ? "primary" : "secondary");
+    }
+    // Extensions keep the long head.
+    expect(tagOf(ex("Overhead Cable Triceps Extension", "triceps", [], "isolation"), "triceps_long")?.emphasis).toBe("primary");
+    expect(tagOf(ex("Triceps Pushdown", "triceps", [], "isolation"), "triceps_long")?.emphasis).toBe("secondary");
+    expect(tagOf(ex("Lying Triceps Press", "triceps", [], "isolation"), "triceps_long")?.emphasis).toBe("primary");
+  });
+
   it("a row trains the upper back first, even with the lats as its main muscle; a pulldown the lats", () => {
     expect(primary(ex("One-Arm Dumbbell Row", "back_lats", ["back_upper", "biceps"], "h_pull"))).toEqual(["back_upper"]);
     expect(primary(ex("Chin-Up", "back_lats", ["biceps"], "v_pull"))).toEqual(["back_lats"]);

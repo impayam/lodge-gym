@@ -3,7 +3,7 @@
 // `npm run library:report`. Pure: no I/O.
 
 import { countsVolume } from "./category";
-import type { LibraryRow } from "./library";
+import type { DuplicateImage, LibraryRow } from "./library";
 import { regionChecks, type DecisionFile, type DedupeEntry, type ScreeningFile } from "./libraryDecisions";
 import { SOURCES, SOURCE_ORDER, type ScreenKind } from "./librarySources";
 import { CANONICAL_MUSCLES } from "./muscles";
@@ -17,6 +17,8 @@ interface ReportInput {
   before: { id: string; name_en: string; muscle_primary: string; category: string | null; source: string; muscles_secondary: string[] }[];
   added: LibraryRow[];
   tags: ReadonlyMap<string, RegionTag[]>;
+  /** Exercises whose two images are the same picture: the second is left out (seed/library/duplicate-images.json). */
+  duplicates: DuplicateImage[];
 }
 
 const SCREEN_LABEL: Record<Exclude<ScreenKind, "candidate" | "duplicate">, string> = {
@@ -107,6 +109,12 @@ export function m14ReportMarkdown(r: ReportInput): string {
     "|---|---|---|",
     ...SOURCE_ORDER.map((s) => `| ${SOURCES[s].label} | ${withImages.filter((a) => a.source === s).length} | ${withImages.filter((a) => a.source === s).reduce((n, a) => n + a.media.length, 0)} |`),
     ""
+  );
+  list(
+    "Same picture twice: one image kept (every source, seed/library/duplicate-images.json)",
+    r.duplicates,
+    (d) => `${d.name} (\`${d.id}\`): kept \`${d.keep.split("/").slice(-2).join("/")}\`, left out \`${d.drop.split("/").slice(-2).join("/")}\` (${d.reason})`,
+    "###"
   );
 
   // Duplicates.

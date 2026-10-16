@@ -64,8 +64,8 @@ Tagged by the reviewed rule table (worker/lib/regions.ts); stretching and cardio
 | back_lats | Lats (vertical pull) | 60 | 202 |
 | back_upper | Upper back (horizontal pull) | 73 | 172 |
 | traps | Traps | 19 | 113 |
-| triceps_long | Triceps long head | 20 | 223 |
-| triceps_lateral_medial | Triceps lateral and medial heads | 70 | 281 |
+| triceps_long | Triceps long head | 18 | 55 |
+| triceps_lateral_medial | Triceps lateral and medial heads | 72 | 281 |
 | biceps_long | Biceps long head | 44 | 219 |
 | biceps_short | Biceps short head | 44 | 173 |
 | brachialis | Brachialis | 36 | 83 |
@@ -84,12 +84,12 @@ Tagged by the reviewed rule table (worker/lib/regions.ts); stretching and cardio
 
 | Emphasis and evidence | Tags |
 |---|---|
-| primary moderate | 304 |
+| primary moderate | 307 |
 | primary strong | 624 |
-| primary weak | 49 |
-| secondary moderate | 1107 |
-| secondary strong | 816 |
-| secondary weak | 245 |
+| primary weak | 46 |
+| secondary moderate | 962 |
+| secondary strong | 804 |
+| secondary weak | 234 |
 
 ### No region: main muscle has no region in the approved list (forearms, neck) (28)
 
@@ -136,11 +136,21 @@ Only from open-licence sources, each image's own licence and author stored with 
 
 | Source | Rows with images | Images |
 |---|---|---|
-| wger | 22 | 24 |
+| wger | 22 | 22 |
 | everkinetic | 15 | 30 |
 | ExerciseDB | 0 | 0 |
 | Liftosaur | 0 | 0 |
 | exercemus | 0 | 0 |
+
+### Same picture twice: one image kept (every source, seed/library/duplicate-images.json) (7)
+
+- One Arm Against Wall (`fedb-One_Arm_Against_Wall`): kept `One_Arm_Against_Wall/0.jpg`, left out `One_Arm_Against_Wall/1.jpg` (the same file twice)
+- Reverse Grip Bent-Over Rows (`fedb-Reverse_Grip_Bent-Over_Rows`): kept `Reverse_Grip_Bent-Over_Rows/0.jpg`, left out `Reverse_Grip_Bent-Over_Rows/1.jpg` (the same file twice)
+- Seated Floor Hamstring Stretch (`fedb-Seated_Floor_Hamstring_Stretch`): kept `Seated_Floor_Hamstring_Stretch/0.jpg`, left out `Seated_Floor_Hamstring_Stretch/1.jpg` (the same file twice)
+- Standing Hamstring and Calf Stretch (`fedb-Standing_Hamstring_and_Calf_Stretch`): kept `Standing_Hamstring_and_Calf_Stretch/0.jpg`, left out `Standing_Hamstring_and_Calf_Stretch/1.jpg` (the same file twice)
+- The Straddle (`fedb-The_Straddle`): kept `The_Straddle/0.jpg`, left out `The_Straddle/1.jpg` (the same file twice)
+- Dumbbell Goblet Squat (`wger-203`): kept `203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg`, left out `203/2ab30113-4e08-4d39-9d23-d901ce2c0971.jpeg` (the same file twice)
+- Pistol Squat (`wger-456`): kept `456/3b681e59-377b-40db-9113-ca5873ce084b.jpg`, left out `456/93716d06-c378-49b8-820a-8bf3e1d7e45c.jpg` (the same file twice)
 
 ## Duplicates
 

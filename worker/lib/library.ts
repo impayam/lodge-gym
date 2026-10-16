@@ -396,6 +396,36 @@ export function librarySql(rows: LibraryRow[], seedUpdates: SeedUpdate[]): strin
   return out;
 }
 
+/** seed/library/duplicate-images.json: exercises whose two images are the same picture (Payam, 2026-10-16). */
+export interface DuplicateImage {
+  id: string;
+  name: string;
+  keep: string;
+  drop: string;
+  reason: string;
+}
+
+/** Leaves out the second copy of a picture: the listed image is dropped from that exercise's media. */
+export function dropDuplicateImages<T extends { id: string; media: Media[] }>(rows: readonly T[], list: readonly DuplicateImage[]): T[] {
+  const drop = new Map(list.map((d) => [d.id, d.drop]));
+  return rows.map((r) => (drop.has(r.id) ? { ...r, media: r.media.filter((m) => m.r2_key !== drop.get(r.id)) } : r));
+}
+
+/** Entries that do not describe two images of one exercise the import writes (the list is reviewed by hand). */
+export function duplicateImageErrors(list: readonly DuplicateImage[], rows: readonly { id: string; media: Media[] }[]): string[] {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const errors: string[] = [];
+  for (const d of list) {
+    const r = byId.get(d.id);
+    const keys = new Set(r?.media.map((m) => m.r2_key) ?? []);
+    if (!r) errors.push(`${d.id}: not in the library`);
+    else if (d.keep === d.drop || !keys.has(d.keep) || !keys.has(d.drop)) errors.push(`${d.id}: keep and drop must be two of its images`);
+    if (!d.reason?.trim()) errors.push(`${d.id}: a reason is required`);
+  }
+  if (new Set(list.map((d) => d.id)).size !== list.length) errors.push("an exercise is listed twice");
+  return errors;
+}
+
 /** R2 keys of every image the library rows and the seed updates reference. */
 export function imageKeys(rows: LibraryRow[], seedUpdates: SeedUpdate[]): string[] {
   const keys = new Set<string>();

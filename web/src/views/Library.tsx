@@ -248,7 +248,8 @@ export function ExerciseList({
       </div>
       {more ? (
         <div id={`${testId ?? "list"}-filters`} class="l-col l-gap-8">
-          <div class="l-grid-3 l-gap-8">
+          {/* One under another: three side by side cut their labels at iPhone width ("All muscl…"). */}
+          <div class="l-col l-gap-8">
             <Select aria-label="Muscle" value={f.muscle} onChange={(e) => set({ muscle: (e.currentTarget as HTMLSelectElement).value })}>
               <option value="">All muscles</option>
               {CANONICAL_MUSCLES.map((m) => (
@@ -574,7 +575,7 @@ function ExerciseDetail({ ex, onBack, onEdit }: { ex: Exercise; onBack: () => vo
             <div class="media-pair">
               {shown.map((m, i) => (
                 <span class="media-frame well">
-                  <img src={mediaSrc(m)} alt={`${ex.name_en}, ${i === 0 ? "start" : "end"} position`} loading="lazy" onError={() => setBroken((b) => [...b, mediaSrc(m)])} />
+                  <img src={mediaSrc(m)} alt={shown.length === 1 ? ex.name_en : `${ex.name_en}, ${i === 0 ? "start" : "end"} position`} loading="lazy" onError={() => setBroken((b) => [...b, mediaSrc(m)])} />
                 </span>
               ))}
             </div>

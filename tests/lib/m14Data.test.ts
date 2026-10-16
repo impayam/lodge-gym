@@ -9,6 +9,8 @@ import liftosaur from "../../seed/library/m14/liftosaur.json";
 import screeningFile from "../../seed/library/m14/screening.json";
 import wger from "../../seed/library/m14/wger.json";
 import wgerImagesFile from "../../seed/library/m14/wger-images.json";
+import duplicatesFile from "../../seed/library/duplicate-images.json";
+import { duplicateImageErrors, type DuplicateImage } from "../../worker/lib/library";
 import { exactRepeats, regionChecks, sourceRows, validateDecisions, type DecisionFile, type DedupeEntry, type ScreeningFile } from "../../worker/lib/libraryDecisions";
 import { LICENCES, SOURCES, SOURCE_ORDER, sourceExerciseId, type WgerImage } from "../../worker/lib/librarySources";
 import { REGIONS, regionTags, type RegionOverrides, type RegionTag } from "../../worker/lib/regions";
@@ -88,6 +90,25 @@ describe("the committed review", () => {
     for (const r of added) {
       expect(r.instructions_en.length, r.id).toBeGreaterThanOrEqual(2);
       expect(r.instructions_en.length, r.id).toBeLessThanOrEqual(3);
+    }
+  });
+});
+
+describe("the same picture twice (seed/library/duplicate-images.json)", () => {
+  const duplicates = (duplicatesFile as unknown as { exercises: DuplicateImage[] }).exercises;
+
+  it("lists exercises of the library, each once with a reason; a source row's entry names two of its images", () => {
+    const ids = new Set(pool.map((r) => r.id));
+    for (const d of duplicates) expect(ids.has(d.id), d.id).toBe(true);
+    const fromSources = duplicates.filter((d) => added.some((r) => r.id === d.id));
+    expect(fromSources.map((d) => d.id)).toEqual(["wger-203", "wger-456"]);
+    expect(duplicateImageErrors(fromSources, added)).toEqual([]);
+  });
+
+  it("free-exercise-db entries name the two images of that entry", () => {
+    for (const d of duplicates.filter((x) => x.id.startsWith("fedb-"))) {
+      const folder = `library/free-exercise-db/images/${d.id.slice("fedb-".length)}/`;
+      expect([d.keep, d.drop], d.id).toEqual([`${folder}0.jpg`, `${folder}1.jpg`]);
     }
   });
 });

@@ -167,6 +167,26 @@ test("regions (SPEC-v11 M14): chips under a muscle group, regions and licence on
   await expect(row("Barbell Bench Press")).toHaveCount(1);
 });
 
+test("filters: every option of the three dropdowns shows in full at iPhone width", async ({ page }) => {
+  await page.goto("/");
+  await goTo(page, "Library");
+  const list = page.getByTestId("library");
+  await list.getByTestId("library-filters").click();
+  for (const name of ["Muscle", "Equipment", "Pattern"]) {
+    const select = list.getByRole("combobox", { name });
+    await expect(select).toBeVisible();
+    // The widest option, in the dropdown's own font, against the room left of the chevron.
+    const { widest, room } = await select.evaluate((el: HTMLSelectElement) => {
+      const cs = getComputedStyle(el);
+      const ctx = document.createElement("canvas").getContext("2d")!;
+      ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const widest = Math.max(...[...el.options].map((o) => ctx.measureText(o.text).width));
+      return { widest, room: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) };
+    });
+    expect(widest, name).toBeLessThanOrEqual(room);
+  }
+});
+
 test("adding an extra exercise offline syncs exactly once; it can be removed while no set is done", async ({ page, context }) => {
   await page.goto("/");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null || !("serviceWorker" in navigator), null, { timeout: 15_000 }).catch(() => undefined);

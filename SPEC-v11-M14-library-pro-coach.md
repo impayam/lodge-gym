@@ -63,7 +63,12 @@ New table (migration, **STOP**: show SQL):
   muscle wins; reviewed exceptions go to `seed/library/region-overrides.json`. A plain curl tags both biceps heads as
   main focus (the reviewed exception to "one primary region per muscle").
 - The program generator chooses from the whole library, so the new rows can appear in a new program; history and the
-  current program are still preferred.
+  current program are still preferred (approved on review, 2026-10-16, as is leaving out the AI-generated wger images).
+- Review of the PR (Payam, 2026-10-16): presses, push-ups and dips (bench, incline, decline, overhead press, dips…) tag
+  the triceps lateral and medial heads only, never the long head (rule `triceps-press`); the overhead, lying and
+  pushdown extensions keep theirs. When an exercise's two images are the same picture, one is kept
+  (`seed/library/duplicate-images.json`, listed in the import report). The Library's three filter dropdowns sit one under
+  another so their labels show in full on the iPhone.
 
 ### A4. Library UI
 - Region chips under each muscle chip (e.g. Chest → Upper / Middle / Lower).
@@ -83,9 +88,14 @@ New table (migration, **STOP**: show SQL):
 ### B2. Rules added to the Coach prompt — STOP: show the added prompt text
 - Program by **region**, not only by muscle: each muscle's regions covered within the coverage window; Payam's priority muscle (chest) gets every region trained each week.
 - **Shape goals:** when Payam asks to change how a muscle looks (e.g. "fuller upper chest"), translate it into region emphasis + exercise choice + weekly sets, explain the reason and the evidence level, and say plainly what training cannot change (muscle shape set by genetics and insertions).
-- **Variety with a reason:** main lifts stay fixed so progress is measurable; accessory and isolation slots rotate every 3–4 weeks, or earlier when stalled, choosing a different angle / equipment / grip for the same region; prefer some `new_to_me` exercises when they fit. Never change for the sake of change.
+- **Variety with a reason:** main lifts change every 6–8 weeks, so progress stays measurable in between; accessory and isolation slots rotate every 3–4 weeks (Payam, 2026-10-16), or earlier when stalled, choosing a different angle / equipment / grip for the same region; prefer some `new_to_me` exercises when they fit. Never change for the sake of change.
 - Each exercise in a draft gets a one-line reason (region + why this one).
 - All existing rules stay (app progression, no deloads, Payam's groups never criticised, 48 h rule as advice, pull ≥ push, every change needs his tap, numbers only from tools).
+
+### B3. Forearm and neck regions (Payam, 2026-10-16) — STOP: show the rules and evidence levels before building
+- Add regions for the forearms and the neck so their exercises count toward weekly volume (today wrist curls and neck
+  work carry no region, A3). Propose the region keys, the tagging rules and each rule's evidence level, the same way as
+  the A3 table, and wait for Payam's OK before any code or migration.
 
 ---
 
@@ -115,5 +125,5 @@ Default: assessments live in the chat message only (no new table). Alternative: 
 ## CONFIRM before building
 1. Sources: free-exercise-db (check gaps) + wger (licence-checked) + manual list. Any other source he wants checked?
 2. Region list (A3) as proposed?
-3. Accessory rotation every 3–4 weeks, coverage window 3 weeks?
+3. Accessory rotation every 3–4 weeks, coverage window 3 weeks? (Payam, 2026-10-16: main lifts every 6–8 weeks, accessories every 3–4 weeks.)
 4. Photo assessments: chat only, or a table for long-term trends?

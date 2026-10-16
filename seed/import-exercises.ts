@@ -1,8 +1,8 @@
 // Exercise library import (SPEC-v2 §7.1, SPEC-v11 M14 Phase A): free-exercise-db (Unlicense) at a pinned commit, the
 // hand-written gap fill, and the reviewed rows from the M14 sources (wger, everkinetic, ExerciseDB, Liftosaur,
 // exercemus; seed/library/m14/) → D1 rows; every library exercise's region tags → exercise_regions; images copied to
-// the private R2 bucket (free-exercise-db's, and wger's and everkinetic's whose own licence allows it); each source
-// snapshotted in R2. Idempotent and resumable: rows and tags are written only when a value differs, and R2 manifests
+// the private R2 bucket (free-exercise-db's, and wger's and everkinetic's whose own licence allows it; the second copy of
+// a picture is left out, seed/library/duplicate-images.json); each source snapshotted in R2. Idempotent and resumable: rows and tags are written only when a value differs, and R2 manifests
 // list the images and snapshots already stored, so an interrupted run continues where it stopped. Polite to the
 // sources: a few downloads in flight, with a short pause after each. With --time-budget the image copy stops starting
 // new uploads after that many seconds (Workers Builds stops a build at 20 minutes); the next run resumes.
@@ -21,10 +21,13 @@ import {
   FEDB_RAW,
   FEDB_SHA,
   buildLibrary,
+  dropDuplicateImages,
+  duplicateImageErrors,
   imageKeys,
   librarySql,
   reportMarkdown,
   unknownReviewIds,
+  type DuplicateImage,
   type EquipmentReview,
   type FedbExercise,
   type LibraryRow,
@@ -195,22 +198,32 @@ async function main() {
   // As with the equipment review: a --dataset sample lacks most duplicate targets (tests/lib/m14Data.test.ts checks them).
   const decisionErrors = validateDecisions(m14.files, m14.dedupe, t.dataset ? null : new Set(base.map((r) => r.id)));
   if (decisionErrors.length) throw new Error("seed/library/m14 decisions are invalid:\n" + decisionErrors.join("\n"));
-  const added = sourceRows(m14.files, m14.dedupe);
-  const repeats = exactRepeats(added, base);
+  const reviewed = sourceRows(m14.files, m14.dedupe);
+  const repeats = exactRepeats(reviewed, base);
   if (repeats.length) throw new Error("reviewed rows repeat library exercises (decide them in seed/library/m14/dedupe-review.json):\n" + repeats.join("\n"));
-  const rows = [...lib.rows, ...added];
+
+  // The second copy of a picture is left out (seed/library/duplicate-images.json; a --dataset sample lacks most entries).
+  const duplicates = readJson<{ exercises: DuplicateImage[] }>("./library/duplicate-images.json").exercises;
+  const imaged = [...lib.rows, ...lib.seedUpdates, ...reviewed];
+  const present = new Set(imaged.map((r) => r.id));
+  const duplicateErrors = duplicateImageErrors(t.dataset ? duplicates.filter((d) => present.has(d.id)) : duplicates, imaged);
+  if (duplicateErrors.length) throw new Error("seed/library/duplicate-images.json is invalid:\n" + duplicateErrors.join("\n"));
+  const libRows = dropDuplicateImages(lib.rows, duplicates);
+  const seedUpdates = dropDuplicateImages(lib.seedUpdates, duplicates);
+  const added = dropDuplicateImages(reviewed, duplicates);
+  const rows = [...libRows, ...added];
 
   // Region tags (SPEC-v11 A3) of every exercise the import manages: the seeded ones and the library rows.
-  const tags = libraryRegionTags(program.exercises, lib.seedUpdates, rows, m14.overrides);
+  const tags = libraryRegionTags(program.exercises, seedUpdates, rows, m14.overrides);
 
   if (t.mode === "report") {
     writeFileSync(here("./library/IMPORT-REPORT.md"), reportMarkdown(lib.report) + "\n");
     if (!m14.screening) throw new Error("seed/library/m14/screening.json is missing: run seed/library/m14/screen.ts first");
     const seedRows = program.exercises.map((e) => {
-      const s = lib.seedUpdates.find((u) => u.id === e.id);
+      const s = seedUpdates.find((u) => u.id === e.id);
       return { id: e.id, name_en: e.name_en, muscle_primary: e.muscle_primary, category: "strength" as const, source: "seed" as const, muscles_secondary: s?.muscles_secondary ?? [] };
     });
-    writeFileSync(here("./library/m14/IMPORT-REPORT.md"), m14ReportMarkdown({ screening: m14.screening, files: m14.files, dedupe: m14.dedupe, before: [...seedRows, ...lib.rows], added, tags }) + "\n");
+    writeFileSync(here("./library/m14/IMPORT-REPORT.md"), m14ReportMarkdown({ screening: m14.screening, files: m14.files, dedupe: m14.dedupe, before: [...seedRows, ...libRows], added, tags, duplicates }) + "\n");
     console.log(`seed/library/IMPORT-REPORT.md and seed/library/m14/IMPORT-REPORT.md: ${rows.length} library rows (${added.length} from the M14 sources), ${[...tags.values()].reduce((n, x) => n + x.length, 0)} region tags`);
     return;
   }
@@ -219,10 +232,10 @@ async function main() {
   try {
     if (t.only !== "media") {
       const sqlFile = join(dir, "library.sql");
-      writeFileSync(sqlFile, [...librarySql(rows, lib.seedUpdates), ...regionsSql(tags)].join("\n") + "\n");
+      writeFileSync(sqlFile, [...librarySql(rows, seedUpdates), ...regionsSql(tags)].join("\n") + "\n");
       await wrangler(["d1", "execute", "DB", "--file", sqlFile, "--yes"], t);
       console.log(
-        `D1: ${rows.length} library rows (${added.length} from the M14 sources) and ${lib.seedUpdates.length} seeded exercises upserted; region tags for ${tags.size} exercises (unchanged rows and tags are not rewritten)`
+        `D1: ${rows.length} library rows (${added.length} from the M14 sources) and ${seedUpdates.length} seeded exercises upserted; region tags for ${tags.size} exercises (unchanged rows and tags are not rewritten)`
       );
     }
     if (t.only === "d1") return;
@@ -238,7 +251,7 @@ async function main() {
       console.log(`R2: snapshot ${key}`);
     }
     const done = new Set(manifest.images);
-    const todo = imageKeys(lib.rows, lib.seedUpdates).filter((k) => k.startsWith(FEDB_PREFIX) && !done.has(k));
+    const todo = imageKeys(libRows, seedUpdates).filter((k) => k.startsWith(FEDB_PREFIX) && !done.has(k));
     console.log(`R2: ${done.size} free-exercise-db images already copied, ${todo.length} to copy`);
     let since = 0;
     let saving: Promise<void> = Promise.resolve();

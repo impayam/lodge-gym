@@ -7,6 +7,8 @@ import seedMatches from "../../seed/library/seed-matches.json";
 import sample from "../fixtures/library/fedb-sample.json";
 import {
   buildLibrary,
+  dropDuplicateImages,
+  duplicateImageErrors,
   fedbExerciseId,
   imageKeys,
   librarySql,
@@ -180,5 +182,28 @@ describe("library SQL", () => {
     const seedSql = librarySql(lib.rows, lib.seedUpdates).filter((x) => x.startsWith("UPDATE"));
     expect(seedSql).toHaveLength(27);
     for (const x of seedSql) expect(x).not.toContain("category");
+  });
+});
+
+describe("the same picture twice (Payam, 2026-10-16)", () => {
+  const img = (k: string) => ({ kind: "image" as const, r2_key: `library/free-exercise-db/images/${k}` });
+  const rows = [
+    { id: "a", media: [img("A/0.jpg"), img("A/1.jpg")] },
+    { id: "b", media: [img("B/0.jpg"), img("B/1.jpg")] },
+  ];
+  const entry = { id: "a", name: "A", keep: "library/free-exercise-db/images/A/0.jpg", drop: "library/free-exercise-db/images/A/1.jpg", reason: "the same file twice" };
+
+  it("keeps one image of a listed exercise and leaves the others alone", () => {
+    const out = dropDuplicateImages(rows, [entry]);
+    expect(out[0].media).toEqual([img("A/0.jpg")]);
+    expect(out[1]).toBe(rows[1]);
+  });
+
+  it("refuses an entry that is not two images of one exercise, an unknown exercise, no reason, or a repeat", () => {
+    expect(duplicateImageErrors([entry], rows)).toEqual([]);
+    expect(duplicateImageErrors([{ ...entry, drop: entry.keep }], rows)).toEqual(["a: keep and drop must be two of its images"]);
+    expect(duplicateImageErrors([{ ...entry, drop: "library/free-exercise-db/images/B/1.jpg" }], rows)).toEqual(["a: keep and drop must be two of its images"]);
+    expect(duplicateImageErrors([{ ...entry, id: "z" }], rows)).toEqual(["z: not in the library"]);
+    expect(duplicateImageErrors([{ ...entry, reason: " " }, entry], rows)).toEqual(["a: a reason is required", "an exercise is listed twice"]);
   });
 });

@@ -167,7 +167,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Region tags (`exercise_regions`, migration `0013_exercise_regions.sql`): 26 regions under the muscle chips, each tag
   with emphasis (main focus / also trained) and evidence (strong / moderate / weak), from the reviewed rule table in
   `worker/lib/regions.ts`; `seed/library/region-overrides.json` replaces the rules for a named exercise. The import
-  tags every library exercise, a custom exercise is tagged on save. Forearm and neck work have no region.
+  tags every library exercise, a custom exercise is tagged on save. Forearm and neck work have no region (yet).
+- `seed/library/duplicate-images.json` lists exercises whose two images are the same picture; the import keeps one.
 - The import also snapshots each source to R2 (`library/sources/<source>/snapshots/`) and copies the stored images to
   `library/sources/<source>/images/` (manifest `library/sources/manifest.json`), resumable like the free-exercise-db
   copy. `--source-media skip` leaves the source images out (e2e).

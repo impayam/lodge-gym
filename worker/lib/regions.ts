@@ -165,10 +165,14 @@ export const RULES: Readonly<Partial<Record<Muscle, Rule[]>>> = {
     { id: "row", when: always, tags: [["back_upper", "primary", "strong"], ["back_lats", "secondary", "moderate"]] },
   ],
   traps: [{ id: "traps", when: always, tags: [["traps", "primary", "strong"]] }],
+  // Presses, push-ups and dips tag the lateral and medial heads only, not the long head (Payam, 2026-10-16): by their
+  // pattern first, then by name for those without one (the overhead and lying extensions keep their own rules).
   triceps: [
+    { id: "triceps-press", when: (_n, p) => p === "h_push" || p === "v_push", tags: [["triceps_lateral_medial", "primary", "moderate"]] },
     { id: "triceps-overhead", when: all(any("overhead", "french", "behind"), any("extension", "press")), tags: [["triceps_long", "primary", "strong"], ["triceps_lateral_medial", "secondary", "moderate"]] },
     { id: "triceps-lying", when: any("skullcrusher", "lying", "jm", "tate"), tags: [["triceps_long", "primary", "weak"], ["triceps_lateral_medial", "secondary", "moderate"]] },
-    { id: "triceps-pushdown", when: any("pushdown", "kickback", "dip", "press", "pushup", "bench", "extension"), tags: [["triceps_lateral_medial", "primary", "moderate"], ["triceps_long", "secondary", "moderate"]] },
+    { id: "triceps-press", when: any("press", "pushup", "bench", "dip"), tags: [["triceps_lateral_medial", "primary", "moderate"]] },
+    { id: "triceps-pushdown", when: any("pushdown", "kickback", "extension"), tags: [["triceps_lateral_medial", "primary", "moderate"], ["triceps_long", "secondary", "moderate"]] },
     { id: "triceps-default", when: always, tags: [["triceps_lateral_medial", "primary", "weak"]] },
   ],
   biceps: [
