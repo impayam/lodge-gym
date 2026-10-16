@@ -61,7 +61,6 @@ export function backTarget(view: ViewName, tab: TabName): ViewName | null {
     case "newprogram":
       return "settings";
     case "saved":
-      return "history";
     case "report":
     case "plan":
     case "coach":

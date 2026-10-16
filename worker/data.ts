@@ -27,7 +27,7 @@ import {
 } from "./lib/types";
 import { isCategory } from "./lib/category";
 import { readPlans } from "./plans";
-import { queueAfterSession } from "./aiReports";
+import { queueAfterSession, reportsMayBeReady } from "./aiReports";
 import { ID_RE, ulid } from "./lib/ulid";
 
 /* ---------------- reads ---------------- */
@@ -393,8 +393,8 @@ dataRoutes.put("/sessions/:id", async (c) => {
   await rematchAround(c.env, doc.started_at);
   // SPEC-v10 M13: the session marks its day's planned gym session done.
   await linkSession(c.env, doc, new URL(c.req.url).origin);
-  // SPEC-v3 M9a / SPEC-v7 M9d: a session that reaches the server as done gets its AI report, then the training overview
-  // is rewritten, both in the background.
+  // SPEC-v3 M9a, Step 3: a session that reaches the server as done gets its after-session report, written in the
+  // background by its timing rule (worker/aiReports.ts).
   if (doc.status === "done" && doc.source === "app" && existing?.status !== "done")
     c.executionCtx.waitUntil(queueAfterSession(c.env, doc.id).catch((e: unknown) => console.error(`AI queue: ${e instanceof Error ? e.message : String(e)}`)));
   return c.json({ ok: true, applied: true });
@@ -483,6 +483,8 @@ dataRoutes.put("/body-mass/:date", async (c) => {
     )
       .bind(ulid(), date, body.value, body.unit, nowISO())
       .run();
+    // A report waiting for this day's body weight may be ready now (Step 3 timing rule).
+    await reportsMayBeReady(c.env).catch((e: unknown) => console.error(`AI queue: ${e instanceof Error ? e.message : String(e)}`));
   }
   return c.json({ ok: true });
 });

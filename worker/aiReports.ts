@@ -1,6 +1,6 @@
 // AI session report and plan advice endpoints (SPEC-v3 M9a, M9c), behind sign-in:
-//   GET  /api/sessions/:id/report        the latest report row, and whether one is being written
-//   POST /api/sessions/:id/report        write (or rewrite) the report in the background; older rows are kept
+//   GET  /api/sessions/:id/report        the latest report row, whether one is queued, and when it will be written
+//   POST /api/sessions/:id/report        "Write report now": write (or rewrite) it at once in the background; older rows are kept
 //   POST /api/sessions/:id/plan-advice   advice on a saved plan, one model call per tap
 //   GET  /api/ai/usage                   Settings: this month's reports, advice and cost; the key's status
 // Reports are written by the AiJobs Durable Object from an alarm (up to 15 minutes, retried), not by ctx.waitUntil,
@@ -16,9 +16,10 @@ import { fail, nowISO } from "./http";
 import { readPlan } from "./plans";
 import { loadReportData } from "./reports";
 import { ADVICE_SYSTEM, AdviceOutput, buildAdviceInput, validateAdvice, type PlanAdvice } from "./lib/ai/advice";
-import { DAILY_LIMIT, errorCode, keyStatus, monthUsage, usedToday, type AiUsage } from "./lib/ai/cost";
+import { costUsd, DAILY_LIMIT, errorCode, keyStatus, monthUsage, usedToday, type AiUsage } from "./lib/ai/cost";
 import { aiRows, errorText, overLimit } from "./aiLimits";
 import { generateOverview } from "./aiOverview";
+import { buildOverviewInput, whereYouAre } from "./lib/ai/overview";
 import { buildReportInput, normalizeReport, REPORT_SYSTEM, ReportOutput, type ReportView, type SessionReport } from "./lib/ai/report";
 import { addDays, localDate, zonedToUtcISO } from "./lib/time";
 import { monthRange } from "./lib/reports";
@@ -48,6 +49,7 @@ const reportView = (r: ReportRow): ReportView => ({
   report: r.report_json ? (JSON.parse(r.report_json) as SessionReport) : null,
   error_code: errorCode(r.error),
   error: r.error,
+  cost_usd: costUsd(r.model, r.input_tokens, r.output_tokens),
 });
 
 /* ---------------- session report ---------------- */
@@ -65,6 +67,8 @@ export async function generateReport(env: Env, sessionId: string): Promise<Repor
   } else {
     const d = await loadReportData(env);
     const input = buildReportInput(d, sessionId, await readPlan(env, sessionId));
+    // "Where you are" as of the session's date: the overview's consistency and main-lift facts (no plans needed).
+    input.where_you_are = whereYouAre(buildOverviewInput(d, [], input.session.date, null));
     const r: AiOk<ReportOutput> | AiFail = await callModel(env, { system: REPORT_SYSTEM, input, schema: ReportOutput, effort: effortOf(env.REPORT_EFFORT, "low") });
     Object.assign(row, { model: r.model, input_tokens: r.input_tokens, output_tokens: r.output_tokens });
     if (r.ok) Object.assign(row, { status: "ok", report_json: JSON.stringify(normalizeReport(r.data, input)) });
@@ -81,26 +85,49 @@ export async function generateReport(env: Env, sessionId: string): Promise<Repor
   return reportView(row);
 }
 
-/** A queued job: a session's report, or the training overview after a finished session (or a manual Regenerate). */
+/** A queued job: a session's report, or the training overview (a manual Regenerate). */
 interface Job {
   /** Jobs queued before SPEC-v7 have no kind: they are reports. */
   kind?: "report" | "overview";
-  /** report: its session; overview: the finished session that triggered it, or null. */
+  /** report: its session; overview: the session that triggered it, or null. */
   session_id: string | null;
   queued_at: number;
   attempts: number;
+  /** When it may run (ms). A report waits for its timing rule; jobs queued before it have none and run at once. */
+  run_at?: number;
 }
 
 const kindOf = (j: Job) => j.kind ?? "report";
+const runAtOf = (j: Job) => j.run_at ?? j.queued_at;
 const sameJob = (a: Job, b: Job) => kindOf(a) === kindOf(b) && a.session_id === b.session_id && a.queued_at === b.queued_at;
 
 /** Retries of a job whose run threw (D1 or runtime trouble; model errors are stored as rows, not retried here). */
 const JOB_ATTEMPTS = 3;
 
 /**
+ * The after-session report is written once (Payam, 2026-10-16): as soon as that day's body weight and the Apple Health
+ * workout matched to the session are both in, or REPORT_WAIT_MS after the session ends, whichever comes first. "Write
+ * report now" writes it at once.
+ */
+export const REPORT_WAIT_MS = 2 * 3_600_000;
+
+/** That day's body weight (any source) and the watch workout matched to the session are both in. */
+export async function reportReady(env: Env, sessionId: string): Promise<boolean> {
+  const r = await env.DB.prepare(
+    `SELECT EXISTS (SELECT 1 FROM body_metrics b WHERE b.local_date = s.local_date AND b.kind = 'body_mass') AS weight,
+            EXISTS (SELECT 1 FROM health_workouts h WHERE h.matched_session_id = s.id) AS watch
+     FROM workout_sessions s WHERE s.id = ?`
+  )
+    .bind(sessionId)
+    .first<{ weight: number; watch: number }>();
+  return Boolean(r?.weight && r?.watch);
+}
+
+/**
  * The background writer of session reports and the training overview: one object for the single user, a queue in its
- * storage, and an alarm that runs the jobs one by one in order (an alarm may run 15 minutes and is retried by the
- * platform). A finished session queues its report, then the overview, so the overview comes right after the report.
+ * storage, and an alarm that runs the due jobs one by one in queue order (an alarm may run 15 minutes and is retried
+ * by the platform). A job runs from its run_at on; the alarm is set for the earliest one. A finished session queues
+ * its report for its timing rule; the overview is written only on a manual Regenerate.
  */
 export class AiJobs extends DurableObject<Env> {
   /** Chats with an answer being written (one at a time per chat). */
@@ -140,17 +167,46 @@ export class AiJobs extends DurableObject<Env> {
     return (await this.ctx.storage.get<Job[]>("jobs")) ?? [];
   }
 
-  private async wake(): Promise<void> {
-    if ((await this.ctx.storage.getAlarm()) == null) await this.ctx.storage.setAlarm(Date.now());
+  /** The alarm at the earliest job's run_at (never later than one already set for it). */
+  private async wake(jobs?: Job[]): Promise<void> {
+    const list = jobs ?? (await this.jobs());
+    if (!list.length) return;
+    const next = Math.max(Date.now(), Math.min(...list.map(runAtOf)));
+    const set = await this.ctx.storage.getAlarm();
+    if (set == null || set > next) await this.ctx.storage.setAlarm(next);
   }
 
-  async enqueue(sessionId: string): Promise<void> {
+  /** A session's report from `runAt` on (default now); a report already queued keeps the earlier of the two times. */
+  async enqueue(sessionId: string, runAt: number = Date.now()): Promise<void> {
     const jobs = await this.jobs();
-    if (!jobs.some((j) => kindOf(j) === "report" && j.session_id === sessionId)) {
-      jobs.push({ kind: "report", session_id: sessionId, queued_at: Date.now(), attempts: 0 });
+    const job = jobs.find((j) => kindOf(j) === "report" && j.session_id === sessionId);
+    if (job) job.run_at = Math.min(runAtOf(job), runAt);
+    else jobs.push({ kind: "report", session_id: sessionId, queued_at: Date.now(), attempts: 0, run_at: runAt });
+    await this.ctx.storage.put("jobs", jobs);
+    await this.wake(jobs);
+  }
+
+  /** Waiting reports whose body weight and watch workout are now both in run now. */
+  async checkReady(): Promise<number> {
+    const jobs = await this.jobs();
+    const now = Date.now();
+    let moved = 0;
+    for (const j of jobs)
+      if (kindOf(j) === "report" && j.session_id && runAtOf(j) > now && (await reportReady(this.env, j.session_id))) {
+        j.run_at = now;
+        moved++;
+      }
+    if (moved) {
       await this.ctx.storage.put("jobs", jobs);
+      await this.wake(jobs);
     }
-    await this.wake();
+    return moved;
+  }
+
+  /** When a session's queued report will be written (ms), or null when none is queued. */
+  async dueAt(sessionId: string): Promise<number | null> {
+    const job = (await this.jobs()).find((j) => kindOf(j) === "report" && j.session_id === sessionId);
+    return job ? runAtOf(job) : null;
   }
 
   /**
@@ -161,11 +217,7 @@ export class AiJobs extends DurableObject<Env> {
     const jobs = (await this.jobs()).filter((j, i) => !(kindOf(j) === "overview" && i > 0));
     jobs.push({ kind: "overview", session_id: triggerSessionId, queued_at: Date.now(), attempts: 0 });
     await this.ctx.storage.put("jobs", jobs);
-    await this.wake();
-  }
-
-  async pending(sessionId: string): Promise<boolean> {
-    return (await this.jobs()).some((j) => kindOf(j) === "report" && j.session_id === sessionId);
+    await this.wake(jobs);
   }
 
   async overviewPending(): Promise<boolean> {
@@ -173,13 +225,18 @@ export class AiJobs extends DurableObject<Env> {
   }
 
   /** The queue, for tests and diagnostics. */
-  async queued(): Promise<{ kind: "report" | "overview"; session_id: string | null }[]> {
-    return (await this.jobs()).map((j) => ({ kind: kindOf(j), session_id: j.session_id }));
+  async queued(): Promise<{ kind: "report" | "overview"; session_id: string | null; run_at: number }[]> {
+    return (await this.jobs()).map((j) => ({ kind: kindOf(j), session_id: j.session_id, run_at: runAtOf(j) }));
   }
 
   async alarm(): Promise<void> {
-    const [job] = await this.jobs();
-    if (!job) return;
+    const queue = await this.jobs();
+    // The first due job in queue order; none due yet: wait for the earliest.
+    const job = queue.find((j) => runAtOf(j) <= Date.now());
+    if (!job) {
+      await this.wake(queue);
+      return;
+    }
     let done = true;
     try {
       if (kindOf(job) === "overview") await generateOverview(this.env, job.session_id);
@@ -188,24 +245,34 @@ export class AiJobs extends DurableObject<Env> {
       console.error(`${kindOf(job)} ${job.session_id ?? "-"} failed: ${e instanceof Error ? e.message : String(e)}`);
       done = job.attempts + 1 >= JOB_ATTEMPTS;
     }
-    // Re-read: jobs may have been queued while this one ran.
-    const jobs = (await this.jobs()).flatMap((j) => (!sameJob(j, job) ? [j] : done ? [] : [{ ...j, attempts: j.attempts + 1 }]));
+    // Re-read: jobs may have been queued while this one ran. A failed run waits 30 s × attempts; other jobs go on.
+    const jobs = (await this.jobs()).flatMap((j) =>
+      !sameJob(j, job) ? [j] : done ? [] : [{ ...j, attempts: j.attempts + 1, run_at: Date.now() + 30_000 * (job.attempts + 1) }]
+    );
     await this.ctx.storage.put("jobs", jobs);
-    if (jobs.length) await this.ctx.storage.setAlarm(Date.now() + (done ? 0 : 30_000 * (job.attempts + 1)));
+    if (jobs.length) await this.ctx.storage.setAlarm(Math.max(Date.now(), Math.min(...jobs.map(runAtOf))));
   }
 }
 
 const jobs = (env: Env) => env.AI_JOBS.get(env.AI_JOBS.idFromName("owner"));
 
 /**
- * A session that just synced as done: its report (unless it already has one), then the training overview (SPEC-v7
- * M9d: rewritten after every finished session).
+ * A session that just synced as done gets its after-session report (unless it already has one), written by the timing
+ * rule: at once when that day's body weight and its watch workout are in, else REPORT_WAIT_MS after it ended. The
+ * training overview is no longer rewritten after each session (Payam, 2026-10-16).
  */
 export async function queueAfterSession(env: Env, sessionId: string): Promise<void> {
   const has = await env.DB.prepare("SELECT 1 AS x FROM session_reports WHERE session_id = ? LIMIT 1").bind(sessionId).first();
-  const stub = jobs(env);
-  if (!has) await stub.enqueue(sessionId);
-  await stub.enqueueOverview(sessionId);
+  if (has) return;
+  const s = await env.DB.prepare("SELECT started_at, ended_at FROM workout_sessions WHERE id = ?").bind(sessionId).first<{ started_at: string; ended_at: string | null }>();
+  if (!s) return;
+  const due = Date.parse(s.ended_at ?? s.started_at) + REPORT_WAIT_MS;
+  await jobs(env).enqueue(sessionId, (await reportReady(env, sessionId)) ? Date.now() : due);
+}
+
+/** A body weight or a watch workout came in: waiting reports that now have both are written. */
+export async function reportsMayBeReady(env: Env): Promise<void> {
+  await jobs(env).checkReady();
 }
 
 /* ---------------- routes ---------------- */
@@ -218,9 +285,10 @@ aiSessionRoutes.get("/:id/report", async (c) => {
   const s = await c.env.DB.prepare("SELECT status FROM workout_sessions WHERE id = ?").bind(id).first<{ status: string }>();
   if (!s) return fail(c, 404, "not_found", "The session has not reached the server yet.");
   // The queue first: a job leaves it only after its row is written, so "not pending" always comes with that row.
-  const pending = await jobs(c.env).pending(id);
+  const due = await jobs(c.env).dueAt(id);
   const r = await c.env.DB.prepare("SELECT * FROM session_reports WHERE session_id = ? ORDER BY created_at DESC, id DESC LIMIT 1").bind(id).first<ReportRow>();
-  return c.json({ report: r ? reportView(r) : null, pending, session_status: s.status });
+  // due_at: when the queued report will be written (its timing rule), or null when none is queued.
+  return c.json({ report: r ? reportView(r) : null, pending: due != null, due_at: due == null ? null : new Date(due).toISOString(), session_status: s.status });
 });
 
 aiSessionRoutes.post("/:id/report", async (c) => {

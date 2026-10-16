@@ -1,12 +1,14 @@
-// Reports (SPEC §10, SPEC-v8 §6.03). Week / Month / All: the whole page follows the period (Payam, 2026-10-14) — the
-// tiles, the estimated 1RM of the big three, sets vs target (Month: volume vs last month; All: muscle balance), the
-// consistency calendar, then the session reports and the period's details. Report numbers are computed on the server;
-// the last loaded copy is cached on the device for offline viewing. The 1RM chart and the calendar read the sessions
-// on the phone, the same way as the Train tab.
+// Reports (SPEC §10, SPEC-v8 §6.03). On top, the main lifts' estimated 1RM over this week and the previous 4, computed
+// by the app (Step 3: it was the training overview's table). Week / Month / All: the rest of the page follows the period
+// (Payam, 2026-10-14) — the tiles, the estimated 1RM of the big three, sets vs target (Month: volume vs last month; All:
+// muscle balance), the consistency calendar, then the after-session reports and the period's details. Last, the reports
+// timeline: every AI report lives in this tab (Step 3). Report numbers are computed on the server; the last loaded copy
+// is cached on the device for offline viewing. The 1RM table, the chart and the calendar read the sessions on the phone,
+// the same way as the Train tab.
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import { monthKeyOf, monthRange, shiftMonth, type monthlyReport, type progressReport, type weeklyReport } from "../../../worker/lib/reports";
+import { liftTrends, mainLifts, monthKeyOf, monthRange, shiftMonth, trendWindow, type monthlyReport, type progressReport, type weeklyReport } from "../../../worker/lib/reports";
 import { weekRange } from "../../../worker/lib/cycle";
 import { addDays } from "../../../worker/lib/time";
 import type { Photo } from "../../../worker/lib/types";
@@ -25,7 +27,8 @@ import * as ldb from "../localdb";
 import { daysPerWeek } from "../model";
 import { fetchFile, reportCard, shareOrDownload } from "../share";
 import { getState, loadAllHistory, photoSrc, today, useStore } from "../store";
-import { SessionReportsList, TrainingOverviewCard } from "./Overview";
+import { SessionReportsList } from "./Overview";
+import { ReportsTimeline } from "./ReportsTimeline";
 import { poseLabel } from "./Photos";
 
 type Week = ReturnType<typeof weeklyReport>;
@@ -176,6 +179,51 @@ function E1rmCard({ period, end }: { period: Period; end: string }) {
         <Empty>No bench press, squat or deadlift logged in this period.</Empty>
       )}
       {needsOlder && older?.status === "error" ? <LoadError what="Couldn't load sessions older than 60 days." error={older.error} onRetry={() => void loadAllHistory()} /> : null}
+    </Card>
+  );
+}
+
+/**
+ * The main lifts' estimated 1RM over this week and the previous 4, computed by the app (no AI; Step 3): the best set
+ * (Epley) of the latest session with each lift, and the change from the first session with it in these weeks.
+ */
+function MainLiftsCard() {
+  const boot = useStore((s) => s.boot)!;
+  const sessions = useStore((s) => s.sessions);
+  const unit = boot.settings.unit;
+  const w = trendWindow(today(), boot.settings.week_start);
+  const names = new Map(boot.exercises.map((e) => [e.id, e.name_en]));
+  const done = Object.values(sessions)
+    .filter((s) => s.status === "done" && s.local_date >= w.start && s.local_date <= w.end)
+    .sort((a, b) => (a.local_date + a.started_at).localeCompare(b.local_date + b.started_at));
+  const lifts = liftTrends(done, mainLifts({ program: boot.program }), (id) => names.get(id) ?? id, unit);
+  return (
+    <Card title="Main lifts (estimated 1RM)" sub={`${dayMonth(w.start)} – ${dayMonth(w.end)}`} testid="main-lifts">
+      {lifts.length ? (
+        <>
+          <table class="data-table num" data-testid="main-lifts-table">
+            <thead>
+              <tr>
+                <th scope="col">Lift</th>
+                <th scope="col">1RM ({unit})</th>
+                <th scope="col">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lifts.map((l) => (
+                <tr data-lift={l.exercise_id}>
+                  <td>{l.name}</td>
+                  <td>{l.latest_e1rm == null ? "–" : fmtNum(l.latest_e1rm, 1)}</td>
+                  <td class={l.change_pct == null ? "" : l.change_pct > 0 ? "t-violet" : l.change_pct < 0 ? "t-orange" : ""}>{signed(l.change_pct, "%")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <span class="caption">This week and the previous 4. Change: from the first session with the lift in these weeks to the latest.</span>
+        </>
+      ) : (
+        <Empty>No main lift logged this week or in the previous 4.</Empty>
+      )}
     </Card>
   );
 }
@@ -798,10 +846,11 @@ export function Reports() {
           ))}
         </div>
       </header>
-      <TrainingOverviewCard />
+      <MainLiftsCard />
       <div id="period-panel" role="tabpanel" aria-labelledby={`period-${period}`} class="l-col l-gap-12">
         {period === "week" ? <WeekView reports={reports} /> : period === "month" ? <MonthView reports={reports} /> : <AllView reports={reports} />}
       </div>
+      <ReportsTimeline />
     </main>
   );
 }

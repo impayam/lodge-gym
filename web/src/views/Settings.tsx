@@ -258,12 +258,12 @@ export function AiSettings() {
           <Fact
             label="This month"
             testid="ai-cost"
-            value={`${plural(u.month.reports, "report")}, ${plural(u.month.overviews, "overview")}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`}
+            value={`${plural(u.month.reports, "report")}${u.month.overviews ? `, ${plural(u.month.overviews, "overview")}` : ""}${u.month.advice ? `, ${fmtNum(u.month.advice)} plan advice` : ""}, ~$${u.month.cost_usd.toFixed(2)}`}
           />
           <Fact label="Coach this month" testid="ai-coach-cost" value={`${plural(u.coach.messages, "message")}, ~$${u.coach.cost_usd.toFixed(2)}`} />
           <Fact
             label="Today"
-            value={`${fmtNum(u.today.reports)}/${fmtNum(u.limits.report)} reports · ${fmtNum(u.today.overviews)}/${fmtNum(u.limits.overview)} overviews · ${fmtNum(u.today.advice)}/${fmtNum(u.limits.advice)} advice`}
+            value={`${fmtNum(u.today.reports)}/${fmtNum(u.limits.report)} reports · ${fmtNum(u.today.advice)}/${fmtNum(u.limits.advice)} advice`}
           />
           <Fact label="Model" value={u.model} />
         </div>
@@ -273,7 +273,7 @@ export function AiSettings() {
         <Loading label="Loading this month's AI use" heights={[44, 44, 44]} />
       )}
       <p class="caption l-m0">
-        A short Persian report is written after each session, then the training overview in Reports is updated. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
+        One Persian report is written after each session: once that day's body weight and the Apple Health workout are in, or 2 hours after the session ends; Write report now writes it at once. Every report is in Reports, with its cost. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
     </section>
   );

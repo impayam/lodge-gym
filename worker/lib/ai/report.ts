@@ -1,5 +1,8 @@
 // AI session report (SPEC-v3 M9a), the pure part: the input the model reads, built server-side from the training data
 // only (no photos, no personal data beyond training), the system prompt, and the output schema the reply must match.
+// Since 2026-10-16 it is the one "After-session report" (Payam): today on top, then "Where you are" in 2–4 lines from
+// the training overview's consistency and main-lift facts (where_you_are); the overview is no longer written after
+// each session.
 // Weights stay in the session's unit; earlier sessions are converted to it. Volume uses the muscle map's rules: each
 // done set counts 1 for its primary muscle's group and 0.5 for each other group, at most once per group, and only
 // strength work counts (setContribution, countsVolume).
@@ -13,6 +16,8 @@ import { balanceStatus, convertWeight, epley, muscleTargets, programOn, setsPerM
 import { REPORT_GROUPS, isTargetGroup } from "../muscles";
 import { addDays, localHM } from "../time";
 import type { DayExercise, Exercise, ProgramDay, SetEntry, Unit, WorkoutSession } from "../types";
+import { onlySupplied, suppliedNumbers } from "./numbers";
+import type { WhereYouAre } from "./overview";
 
 export const GROUP_NAME: Readonly<Record<string, string>> = {
   chest: "Chest",
@@ -109,6 +114,8 @@ export interface ReportInput {
   week_so_far: { start: string; end: string; sessions_done: number; sessions_planned: number; volume: VolumeIn[] };
   watch: { hr_avg: number | null; hr_max: number | null; active_kcal: number | null } | null;
   body_weight: { unit: Unit; today: number | null; weekly_avg_last_4_weeks: { week_start: string; avg: number | null }[] } | null;
+  /** "Where you are": consistency and main-lift trends up to the session's date; added by the job (worker/aiReports.ts). */
+  where_you_are?: WhereYouAre | null;
 }
 
 const rirText = (r: number | null | undefined) => (r == null ? null : r >= 3 ? "3+" : String(r));
@@ -352,6 +359,9 @@ export const ReportOutput = z.object({
     )
     .describe("A short Persian note per exercise with app_next_time. No weights, reps, seconds or set counts: the app shows its own numbers next to the note."),
   warnings: z.array(fa(400, "Persian")).describe("Only real issues, in Persian: a big drop in performance, pain in the note, very many RIR 0 sets. At most 3; usually empty."),
+  where_fa: z
+    .array(fa(300, "Persian"))
+    .describe("Where you are: 2–4 short Persian lines from where_you_are only (consistency, main-lift trends). No tables, no repeat of today's numbers. Empty when where_you_are is null."),
 });
 export type ReportOutput = z.infer<typeof ReportOutput>;
 
@@ -362,9 +372,13 @@ export type NextTimeRow = NextTime & { exercise_id: string; name: string; note_f
  * The report as stored and shown: the volume table carries the input's own numbers and status, and "Next time" the
  * app's progression, never the model's numbers.
  */
-export type SessionReport = Omit<ReportOutput, "volume" | "next_time"> & {
+export type SessionReport = Omit<ReportOutput, "volume" | "next_time" | "where_fa"> & {
   volume: { group: string; today: number; week: number; target: number | null; status: BalanceStatus }[];
   next_time: NextTimeRow[];
+  /** After-session reports only (2026-10-16); older session reports have none. */
+  where_fa?: string[];
+  /** "Where you are" lines left out because they had a number the app did not supply. */
+  where_dropped?: number;
 };
 
 /** GET /api/sessions/:id/report: the latest row of session_reports. */
@@ -377,17 +391,21 @@ export interface ReportView {
   /** missing | auth | limit | rate | network | api | invalid | refusal (worker/ai.ts). */
   error_code: string | null;
   error: string | null;
+  /** Estimated cost of the call from its token counts (null for a model without a known price). */
+  cost_usd: number | null;
 }
 
 export interface ReportResponse {
   report: ReportView | null;
-  /** A report is being written (queued or running). */
+  /** A report is queued (waiting for its timing rule) or being written. */
   pending: boolean;
+  /** When the queued report will be written (UTC ISO); null when none is queued. */
+  due_at: string | null;
   session_status: string;
 }
 
 /** Items kept per list of the report. */
-export const LIST_MAX = { highlights: 8, warnings: 6 } as const;
+export const LIST_MAX = { highlights: 8, warnings: 6, where: 4 } as const;
 
 /** Latin, Persian and Arabic-Indic digits: a note with any of them is not shown (the numbers are the app's). */
 const DIGITS = /[0-9\u06F0-\u06F9\u0660-\u0669]/;
@@ -398,6 +416,10 @@ const DIGITS = /[0-9\u06F0-\u06F9\u0660-\u0669]/;
  * lists are cut to LIST_MAX.
  */
 export function normalizeReport(out: ReportOutput, input: ReportInput): SessionReport {
+  // "Where you are" uses only where_you_are's numbers (as the overview did); a line with any other number is left out.
+  const supplied = suppliedNumbers(input.where_you_are ?? {});
+  const where = (out.where_fa ?? []).map((t) => t.trim()).filter(Boolean);
+  const whereKept = where.filter((t) => onlySupplied(t, supplied));
   const byName = new Map(input.week_so_far.volume.map((v) => [v.group.toLowerCase(), v]));
   const seen = new Set<string>();
   const volume = out.volume.flatMap((r) => {
@@ -417,20 +439,34 @@ export function normalizeReport(out: ReportOutput, input: ReportInput): SessionR
       }),
     warnings: out.warnings.slice(0, LIST_MAX.warnings),
     volume,
+    where_fa: whereKept.slice(0, LIST_MAX.where),
+    where_dropped: where.length - whereKept.length,
   };
 }
 
-export const REPORT_SYSTEM = `You write a short training report for one finished gym session of Payam, for the GYM time app.
+export const REPORT_SYSTEM = `You write the after-session training report for one finished gym session of Payam, for the GYM time app. It is the only report after a session: first today, then where his training stands.
 
 Rules:
 - Write every text field in Persian (Farsi). Exercise names may stay in English.
 - Be honest and concise. Praise only what the numbers show; say plainly when something went worse.
 - Use only the numbers in the input. Never invent sets, weights, reps, dates, heart rate or body weight. If something is missing, leave it out.
+
+Today:
+- summary_fa: 2–4 sentences on how this session went.
+- highlights: today's records (prs_today) and progress against the previous session of the same day.
 - The volume table: copy the rows of week_so_far.volume for the groups trained today and every group that has a target, with the exact numbers given. Volume counts each set 1 for its primary group and 0.5 for each other group, at most once per group per set; only strength work counts.
 - Exercises with counts_volume false (stretching, plyometrics, cardio, strongman) are listed where relevant but marked as not counted in volume («در حجم شمرده نمی‌شود»).
 - Extra exercises (is_extra true) were added during the session; say what they contributed in extras_note_fa (null if there were none).
 - Missed exercises and sets: say in missed_note_fa what was skipped and what it means for the week's targets (null if nothing was skipped).
 - Next time: the app sets every weight, rep and time for next session with its progression rules (all planned sets at the top of the rep range → +5 lb upper body, +10 lb lower body, +5 lb per dumbbell; kg: +2.5, +5, +2 per dumbbell; RIR 3+ on every planned set → twice that; otherwise the same weight) and shows them itself (app_next_time). In next_time write only a short Persian note per exercise that has app_next_time (keep the weight and aim for every rep, or move up as the app shows), with no numbers at all. Never suggest a weight anywhere in the report. Extra exercises have no progression target.
+- Warnings only for real issues: a big drop in performance, pain in the note, or a very high number of RIR 0 sets. Usually there are none.
+
+Where you are (where_fa):
+- 2–4 short lines on where his training stands, from where_you_are only: consistency (sessions done against sessions planned, week by week in weeks and in totals, which count from totals.since) and the main lifts' estimated 1RM trend (lifts[].change_pct, stalls, drops).
+- One idea per line. No tables, and do not repeat today's numbers: today's part above already has them.
+- Numbers: write only numbers that appear in where_you_are, exactly or rounded (a change_pct of 3.8 may be written as 4%). Prefer words to numbers. The app removes any line with another number.
+- When where_you_are is null, where_fa is an empty list.
+
+Always:
 - No medical advice. If the note mentions pain or injury, suggest rest or seeing a professional, nothing more.
-- Never suggest a deload, a light week or reducing volume, unless Payam's note says he is tired. This is his stated preference.
-- Warnings only for real issues: a big drop in performance, pain in the note, or a very high number of RIR 0 sets. Usually there are none.`;
+- Never suggest a deload, a light week or reducing volume, unless Payam's note says he is tired. This is his stated preference.`;

@@ -1,8 +1,9 @@
-// History → Reports timeline (SPEC-v7 M9d, design approved 2026-10-13). Every saved report on its date: two labeled
-// rows, Session report (●) and Weekly review (□), one column per date with a report, newest on the right. Overviews
-// open from the date's chooser (a session date lists its report and the overview written after it); an overview on a
-// day without a session marks that date with ◆. Shape plus label, never color alone. The List view is the accessible
-// alternative and shows all three types. Every report opens read-only (no Regenerate or Retry).
+// Reports → Reports timeline (SPEC-v7 M9d, design approved 2026-10-13; moved from History in Step 3, where every AI
+// report lives). Every saved report on its date: two labeled rows, After-session report (●) and Weekly review (□), one
+// column per date with a report, newest on the right. Training overviews (no longer written since Step 3; the older
+// ones stay readable) open from the date's chooser; one on a day without a session marks that date with ◆. Shape plus
+// label, never color alone. The List view is the accessible alternative and shows all three types. Every report opens
+// read-only (no Regenerate or Retry).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { timelineDates, type TimelineItem, type TimelineKind } from "../../../worker/lib/ai/timeline";
@@ -16,14 +17,14 @@ import { dateLong, dateShort, dayMonth, hm, instantShort, monthLabel, plural } f
 import * as ldb from "../localdb";
 import type { BootData } from "../localdb";
 import { dayInfo } from "../model";
-import { goBack, navigate, openSaved, setState, useStore } from "../store";
+import { goBack, openSaved, setState, useStore } from "../store";
 import { IconBack, IconChevron } from "../components/PulseIcons";
 import { Empty, isOffline, LoadError } from "../components/States";
 import { OverviewBody } from "./Overview";
 import { WeeklyReviewCard } from "./Review";
-import { ReportBody } from "./SessionReport";
+import { ReportBody, Written as ReportWritten } from "./SessionReport";
 
-const KIND_LABEL: Record<TimelineKind, string> = { session: "Session report", overview: "Training overview", review: "Weekly review" };
+const KIND_LABEL: Record<TimelineKind, string> = { session: "After-session report", overview: "Training overview", review: "Weekly review" };
 const VIEW_KEY = "history:reports-view";
 
 /** The second line of an item: the session's day, what the overview was written after, or the week reviewed. */
@@ -135,7 +136,7 @@ export function ReportsTimeline() {
           <span class="skeleton" style={{ height: "120px" }} aria-label="Loading the reports timeline" />
         )
       ) : !items.length ? (
-        <Empty>No saved reports yet. Session reports, training overviews and weekly reviews show up here.</Empty>
+        <Empty>No saved reports yet. After-session reports and weekly reviews show up here.</Empty>
       ) : mode === "timeline" ? (
         <>
           <div class="timeline">
@@ -175,10 +176,14 @@ export function ReportsTimeline() {
               </div>
             </div>
           </div>
-          <span class="caption l-row l-gap-8">
-            <Marker kind="overview" />
-            <span>Overview on a day without a session. Tap a date to open its report.</span>
-          </span>
+          {items.some((x) => x.kind === "overview") ? (
+            <span class="caption l-row l-gap-8">
+              <Marker kind="overview" />
+              <span>Overview on a day without a session. Tap a date to open its report.</span>
+            </span>
+          ) : (
+            <span class="caption">Tap a date to open its report.</span>
+          )}
           {chosen ? (
             <div class="timeline__chooser" role="group" aria-label={`Reports on ${dateLong(chosen.date)}`} data-testid="rt-chooser">
               <span class="caption num">
@@ -256,18 +261,18 @@ function Status({ load, retry }: { load: Load<unknown>; retry: () => void }) {
       </section>
     );
   if (load.state === "gone")
-    return <Empty action={{ label: "Back to History", onClick: goBack, testId: "saved-gone-back" }}>This report is no longer available.</Empty>;
+    return <Empty action={{ label: "Back to Reports", onClick: goBack, testId: "saved-gone-back" }}>This report is no longer available.</Empty>;
   return load.failure !== null ? <p class="caption l-m0">{isOffline(load.failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null;
 }
 
-/** The screen: one saved report, read-only, opened from the History timeline. */
+/** The screen: one saved report, read-only, opened from the Reports timeline. */
 export function SavedReport({ item }: { item: TimelineItem }) {
   const boot = useStore((s) => s.boot)!;
   const tz = boot.settings.timezone;
   return (
     <main class="page" data-testid="saved-report" data-kind={item.kind}>
       <header class="screen-head">
-        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to History" data-testid="back" onClick={() => navigate("history")}>
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to Reports" data-testid="back" onClick={goBack}>
           <IconBack size={20} />
         </button>
         <div class="l-col l-grow">
@@ -300,8 +305,8 @@ function SavedSession({ id, tz }: { id: string; tz: string }) {
     <>
       <Status load={load} retry={retry} />
       {load.state === "ok" ? (
-        <section class="card l-col l-gap-12" data-testid="saved-body" aria-label="Session report">
-          <Written at={load.data.created_at} model={load.data.model} tz={tz} />
+        <section class="card l-col l-gap-12" data-testid="saved-body" aria-label="After-session report">
+          <ReportWritten view={load.data} tz={tz} />
           <ReportBody view={load.data} />
         </section>
       ) : null}

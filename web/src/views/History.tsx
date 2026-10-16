@@ -1,5 +1,5 @@
-// History (SPEC-v8 §6.04, SPEC-v2 §8.6): the reports timeline, then the sessions as cards by month (grouped by
-// program when there is more than one), then the program timeline with Switch back.
+// History (SPEC-v8 §6.04, SPEC-v2 §8.6): sessions only (Step 3: the AI reports live in Reports; a link goes there),
+// as cards by month (grouped by program when there is more than one), then the program timeline with Switch back.
 
 import { useEffect, useState } from "preact/hooks";
 import { localDate } from "../../../worker/lib/time";
@@ -10,7 +10,7 @@ import { Empty, LoadError, Loading } from "../components/States";
 import { dayMonth, instantShort, monthLabel, plural } from "../format";
 import { activeSession, programName, recentSwitch, sortedSessions, styleLabel } from "../model";
 import { flash, loadAllHistory, navigate, switchProgram, useStore } from "../store";
-import { ReportsTimeline } from "./ReportsTimeline";
+import { IconChevron, IconSpark } from "../components/PulseIcons";
 
 const lastStart = (p: ProgramInfo) => p.activations[p.activations.length - 1]?.started_at ?? "";
 
@@ -53,7 +53,20 @@ export function History() {
           <h1 class="h-page">History</h1>
         </div>
       </header>
-      <ReportsTimeline />
+      <section class="card card--list" aria-label="AI reports">
+        <button type="button" class="list-row press" data-testid="history-reports-link" onClick={() => navigate("reports")}>
+          <span class="well icon-well t-violet">
+            <IconSpark />
+          </span>
+          <span class="list-row__text">
+            <span class="t-title">AI reports</span>
+            <span class="caption">After-session reports and weekly reviews are in Reports.</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+      </section>
       {all.length ? null : older?.status === "error" ? (
         <LoadError what="Couldn't load your sessions." error={older.error} onRetry={() => void loadAllHistory()} />
       ) : older?.status !== "done" ? (

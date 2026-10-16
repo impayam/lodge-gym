@@ -89,7 +89,7 @@ export function App() {
     view.name === "session" && view.sessionId ? (
       <Session key={view.sessionId} id={view.sessionId} />
     ) : view.name === "report" && view.sessionId ? (
-      <SessionReportScreen key={view.sessionId} id={view.sessionId} fresh={!!view.fresh} />
+      <SessionReportScreen key={`${view.sessionId}:${view.fresh ? "fresh" : ""}`} id={view.sessionId} fresh={!!view.fresh} />
     ) : view.name === "plan" && view.planId ? (
       <Planner key={view.planId} id={view.planId} />
     ) : view.name === "history" ? (

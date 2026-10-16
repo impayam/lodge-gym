@@ -7,13 +7,13 @@
 import { z } from "zod";
 import { countsVolume } from "../category";
 import { weekRange } from "../cycle";
-import { toLatinDigits } from "../digits";
 import { liveItems, type SessionPlan } from "../plan";
-import { activeSince, balanceStatus, bestSet, convertWeight, epley, firstActivation, mainLifts, muscleTargets, plannedSessions, programOn, setsPerMuscle, type BalanceStatus, type ReportData } from "../reports";
+import { activeSince, balanceStatus, convertWeight, epley, firstActivation, liftTrends, mainLifts, muscleTargets, plannedSessions, programOn, setsPerMuscle, type BalanceStatus, type LiftTrend, type ReportData } from "../reports";
 import { TARGET_GROUPS } from "../muscles";
 import { addDays } from "../time";
 import type { Exercise, SetEntry, Unit, WorkoutSession } from "../types";
 import { buildMotivation, MOTIVATION_MAX, PRAISE_FA, type MotivationInput, type WeekKey, type WeekPhase } from "./motivation";
+import { numbersIn, onlySupplied, suppliedNumbers, type Supplied } from "./numbers";
 import { GROUP_NAME, sessionDay } from "./report";
 
 /** This week and the previous 4 (approved 2026-10-13). */
@@ -35,16 +35,7 @@ export interface OverviewWeek {
   volume: { group: string; sets: number; target: number; status: BalanceStatus }[];
 }
 
-export interface LiftTrend {
-  exercise_id: string;
-  name: string;
-  /** Best set of each session in the window that had the lift (e1RM, Epley), in the settings unit. */
-  points: { date: string; weight: number; reps: number; e1rm: number }[];
-  first_e1rm: number | null;
-  latest_e1rm: number | null;
-  /** % change from the first to the latest point in the window; null with fewer than two points. */
-  change_pct: number | null;
-}
+export type { LiftTrend } from "../reports";
 
 export interface OverviewInput {
   window: { start: string; end: string; today: string; weeks: number; unit: Unit };
@@ -151,16 +142,7 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
   });
 
   // Main lifts of the program active at the window's end: e1RM per session, and the change over the window.
-  const lifts: LiftTrend[] = mainLifts(programOn(d, end)).flatMap((id) => {
-    const points = inWindow.flatMap((s) => {
-      const b = bestSet(s, id, unit);
-      return b ? [{ date: s.local_date, weight: b.weight, reps: b.reps, e1rm: b.e1rm }] : [];
-    });
-    if (!points.length) return [];
-    const first = points[0].e1rm;
-    const latest = points[points.length - 1].e1rm;
-    return [{ exercise_id: id, name: name(id), points, first_e1rm: first, latest_e1rm: latest, change_pct: points.length >= 2 && first ? round1(((latest - first) / first) * 100) : null }];
-  });
+  const lifts = liftTrends(inWindow, mainLifts(programOn(d, end)), name, unit);
 
   // Stalls and drops of every strength exercise trained in the window, from its whole history.
   const trained = [...new Set(inWindow.flatMap((s) => s.sets.filter((x) => x.done).map((x) => x.exercise_id)))].filter((id) => countsVolume(ex.get(id)?.category));
@@ -218,51 +200,35 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
   };
 }
 
+/**
+ * "Where you are" for the after-session report (Payam, 2026-10-16): the overview's consistency and main-lift facts
+ * only, so the report can say in 2–4 lines where training stands without repeating today's tables.
+ */
+export interface WhereYouAre {
+  /** Sessions done against the program's planned sessions, week by week (this week last, up to the report's date). */
+  weeks: { start: string; this_week: boolean; sessions_done: number; sessions_planned: number }[];
+  totals: OverviewInput["totals"];
+  unit: Unit;
+  /** The program's main lifts over the window: e1RM of the first and latest session with them, and the change. */
+  lifts: { name: string; sessions: number; first_e1rm: number | null; latest_e1rm: number | null; change_pct: number | null }[];
+  stalls: { name: string; exposures: number; best_e1rm: number; last_e1rm: number }[];
+  drops: { name: string; best_e1rm: number; latest_e1rm: number; change_pct: number }[];
+}
+
+export function whereYouAre(ov: OverviewInput): WhereYouAre {
+  return {
+    weeks: ov.weeks.map((w) => ({ start: w.start, this_week: w.this_week, sessions_done: w.sessions_done, sessions_planned: w.sessions_planned })),
+    totals: ov.totals,
+    unit: ov.window.unit,
+    lifts: ov.lifts.map((l) => ({ name: l.name, sessions: l.points.length, first_e1rm: l.first_e1rm, latest_e1rm: l.latest_e1rm, change_pct: l.change_pct })),
+    stalls: ov.stalls.map(({ name, exposures, best_e1rm, last_e1rm }) => ({ name, exposures, best_e1rm, last_e1rm })),
+    drops: ov.drops.map(({ name, best_e1rm, latest_e1rm, change_pct }) => ({ name, best_e1rm, latest_e1rm, change_pct })),
+  };
+}
+
 /* ---------------- numbers ---------------- */
 
-const normal = (text: string) => toLatinDigits(text).replace(/٫/g, ".").replace(/(\d),(?=\d{3}\b)/g, "$1");
-
-/** Every number in a text: Latin, Persian and Arabic-Indic digits, "." or "٫" decimals; signs are ignored. */
-export function numbersIn(text: string): number[] {
-  return [...normal(text).matchAll(/\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
-}
-
-/** The numbers written as a percentage ("4%", "۴٪", "۴ درصد"). */
-export function percentsIn(text: string): number[] {
-  return [...normal(text).matchAll(/(\d+(?:\.\d+)?)\s*(?:%|٪|درصد)/g)].map((m) => Number(m[1]));
-}
-
-export interface Supplied {
-  /** Every number in the input, as given and rounded the ways prose rounds them. */
-  all: Set<number>;
-  /** The percentages the app computed (fields named *_pct). */
-  pct: Set<number>;
-}
-
-/** The numbers the app supplied in the input. */
-export function suppliedNumbers(input: unknown): Supplied {
-  const all = new Set<number>();
-  const pct = new Set<number>();
-  const add = (set: Set<number>, n: number) => {
-    const a = Math.abs(n);
-    set.add(a);
-    set.add(Math.round(a));
-    set.add(round1(a));
-  };
-  const walk = (v: unknown, key: string) => {
-    if (typeof v === "number") {
-      add(all, v);
-      if (key.endsWith("_pct")) add(pct, v);
-    } else if (typeof v === "string") numbersIn(v).forEach((x) => add(all, x));
-    else if (Array.isArray(v)) v.forEach((x) => walk(x, key));
-    else if (v && typeof v === "object") Object.entries(v).forEach(([k, x]) => walk(x, k));
-  };
-  walk(input, "");
-  return { all, pct };
-}
-
-/** Whether every number in `text` is one the app supplied, and every percentage one the app computed. */
-export const onlySupplied = (text: string, s: Supplied) => numbersIn(text).every((n) => s.all.has(n)) && percentsIn(text).every((n) => s.pct.has(n));
+export { numbersIn, onlySupplied, percentsIn, suppliedNumbers, type Supplied } from "./numbers";
 
 /* ---------------- model output ---------------- */
 

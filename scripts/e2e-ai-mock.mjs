@@ -1,6 +1,7 @@
 // Mock of the Claude Messages API for the Playwright tests (SPEC-v3: the real API is never called in tests). The e2e
 // Workers point ANTHROPIC_BASE_URL here. It answers like the model would, from the request's own input:
-//   session report:    a short Persian report that names the extra exercises and copies the volume rows given
+//   session report:    a short Persian report that names the extra exercises and copies the volume rows given, and
+//                      "Where you are" lines from where_you_are plus one with a number the input lacks (the app drops it)
 //   plan advice:       "add" the first candidate not in the plan, at position 2
 //   training overview: Persian prose using only the input's numbers, plus one warning with a number the input lacks
 //                      (the app must drop it), and the weekly motivational line from the motivation block
@@ -50,6 +51,16 @@ export function overviewReply(input) {
   };
 }
 
+/** The report's "Where you are" lines as the prompt asks for them, plus one with a number the input lacks (dropped by the app). */
+export function whereLines(w) {
+  if (!w) return [];
+  const lines = [`در این بازه ${w.totals.sessions_done} جلسه از ${w.totals.sessions_planned} جلسهٔ برنامه انجام شد.`];
+  for (const l of w.lifts.filter((x) => x.change_pct != null).slice(0, 2)) lines.push(`${l.name}: ${l.change_pct}٪ تغییر در 1RM تخمینی.`);
+  if (lines.length < 3) lines.push("روند حرکت‌های اصلی ثابت است؛ با همین برنامه ادامه بده.");
+  lines.push("هفتهٔ بعد ۹۹۹۹ ست بزن.");
+  return lines;
+}
+
 export function startAiMock(port) {
   const mode = { report: "ok", advice: "ok", overview: "ok", coach: "ok" };
   const calls = [];
@@ -81,6 +92,8 @@ export function startAiMock(port) {
       // Notes only, like the real prompt asks; one with a number, which the app must not show.
       next_time: input.exercises.filter((x) => x.app_next_time).map((x, i) => ({ exercise_id: x.exercise_id, note_fa: i === 0 ? "همین مسیر را با فرم درست ادامه بده." : "دفعهٔ بعد ۲۰۰ پوند." })),
       warnings: [],
+      // "Where you are": numbers from where_you_are only, plus one line with a number it lacks (the app drops it).
+      where_fa: whereLines(input.where_you_are),
     };
   };
 

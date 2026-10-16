@@ -140,6 +140,40 @@ export function bestSet(s: WorkoutSession, exerciseId: string, unit: Unit): SetR
   return best;
 }
 
+/** A main lift's estimated 1RM over a window (SPEC-v7 M9d; the Reports tab's table and "Where you are", Step 3). */
+export interface LiftTrend {
+  exercise_id: string;
+  name: string;
+  /** Best set of each session in the window that had the lift (e1RM, Epley), in the settings unit. */
+  points: { date: string; weight: number; reps: number; e1rm: number }[];
+  first_e1rm: number | null;
+  latest_e1rm: number | null;
+  /** % change from the first to the latest point in the window; null with fewer than two points. */
+  change_pct: number | null;
+}
+
+/** Weeks of the main lifts' trend: this week and the previous 4 (approved 2026-10-13). */
+export const TREND_WEEKS = 5;
+
+/** The trend's window up to `today`: the start of the week 4 weeks before this one, to today. */
+export function trendWindow(today: string, weekStart: Settings["week_start"]): { start: string; end: string } {
+  return { start: addDays(weekRange(today, weekStart).start, -7 * (TREND_WEEKS - 1)), end: today };
+}
+
+/** Each lift's best set per session in `sessions` (done ones in the window, oldest first); lifts never done are left out. */
+export function liftTrends(sessions: WorkoutSession[], ids: string[], name: (id: string) => string, unit: Unit): LiftTrend[] {
+  return ids.flatMap((id) => {
+    const points = sessions.flatMap((s) => {
+      const b = bestSet(s, id, unit);
+      return b ? [{ date: s.local_date, weight: b.weight, reps: b.reps, e1rm: b.e1rm }] : [];
+    });
+    if (!points.length) return [];
+    const first = points[0].e1rm;
+    const latest = points[points.length - 1].e1rm;
+    return [{ exercise_id: id, name: name(id), points, first_e1rm: first, latest_e1rm: latest, change_pct: points.length >= 2 && first ? round1(((latest - first) / first) * 100) : null }];
+  });
+}
+
 export function bestIn(sessions: WorkoutSession[], exerciseId: string, unit: Unit): SetResult | null {
   let best: SetResult | null = null;
   for (const s of sessions) {
