@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { currentSlot } from "./slot";
 
 const databases = new Map<string, DatabaseSync>();
@@ -196,6 +196,9 @@ async function step(page: Page, dir: "prev" | "next") {
   await page.getByTestId(dir).click();
   await expect(card(page)).not.toHaveAttribute("data-ex", before!);
 }
+
+/** Waits for an element's transitions (e.g. a sheet sliding up) to end, so a tap lands where it is aimed. */
+export const settled = (loc: Locator) => loc.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)).then(() => undefined));
 
 /** Shows the card that holds an exercise with Prev / Next (one card at a time; a group's members share one). */
 export async function showExercise(page: Page, exerciseId: string) {

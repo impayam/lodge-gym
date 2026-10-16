@@ -1,6 +1,6 @@
 import { effortColor } from "../../web/src/lib/effort";
 import { expect, test, type Page } from "./fixtures";
-import { checkSet, closeMore, openMore, resetWorkouts, signIn, sql } from "./helpers";
+import { checkSet, closeMore, openMore, resetWorkouts, settled, signIn, sql } from "./helpers";
 import { tokenValue } from "./tokens";
 
 // SPEC-v8 §6.02 (Pulse step 4): the active session on its own background, one exercise at a time with Prev / Next and
@@ -28,9 +28,6 @@ async function drag(page: Page, from: { x: number; y: number }, to: { x: number;
   }
   await page.mouse.up();
 }
-
-/** Waits for an element's transitions (e.g. a sheet sliding up) to end. */
-const settled = (loc: ReturnType<Page["getByTestId"]>) => loc.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)).then(() => undefined));
 
 /** Drags the card's title sideways by `dx`. */
 async function swipeCard(page: Page, dx: number, steps = 8) {
@@ -112,6 +109,7 @@ test("active session: effort chip, bar and colour; one card with Prev / Next and
   await expect(page.getByTestId("r-bench-1")).toBeFocused();
   await page.getByTestId("r-bench-1").click();
   await expect(sheet).toHaveAttribute("open", "");
+  await settled(sheet);
   await sheet.getByTestId("sheet-r").getByRole("button", { name: /Increase/ }).click();
   await expect(sheet.getByTestId("sheet-r").locator("input")).toHaveValue("6");
   await page.locator(".scrim").click({ position: { x: 20, y: 20 } });
