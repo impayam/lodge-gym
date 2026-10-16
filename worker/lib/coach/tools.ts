@@ -32,6 +32,7 @@ import { lastHeavyCompound } from "../ai/advice";
 import { GROUP_NAME, sessionDay } from "../ai/report";
 import { PROPOSE_PROGRAM_TOOL, proposeProgram, type ProposeResult } from "./draft";
 import { CALENDAR_TOOLS, plannedThisWeek, runCalendarTool, type CoachCalendar } from "./calendarTools";
+import { PROPOSE_SESSION_ADDITIONS_TOOL, proposeSessionAdditions } from "./sessionTools";
 
 /** Longest date range of one get_sessions, get_volume or get_adherence call (token budget). */
 export const MAX_RANGE_DAYS = 92;
@@ -159,6 +160,7 @@ export const COACH_TOOLS = [
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   ...CALENDAR_TOOLS,
+  PROPOSE_SESSION_ADDITIONS_TOOL,
   PROPOSE_PROGRAM_TOOL,
 ] as const;
 
@@ -572,6 +574,8 @@ export function runTool(d: CoachData, name: string, input: unknown, propose: (dr
       return parse(z.object({}).strict(), () => ({ ok: true, result: getRecovery(d) }));
     case "get_training_pattern":
       return parse(z.object({}).strict(), () => ({ ok: true, result: getTrainingPattern(d) }));
+    case "propose_session_additions":
+      return proposeSessionAdditions(d, input);
     case "propose_program": {
       const r = propose(input);
       return r.ok ? { ok: true, result: r.result } : { ok: false, error: r.error };

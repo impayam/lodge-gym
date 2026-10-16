@@ -163,6 +163,28 @@ export function startAiMock(port) {
     const note = (t) => ({ type: "thinking", thinking: t });
     if (images && !results.length)
       return void stream(res, [{ type: "text", text: persian ? "این یک برآورد دیداری است: شانه‌ها و سینه متعادل دیده می‌شوند. از یک عکس ثابت نمی‌توان فرم را کامل قضاوت کرد." : "This is a visual estimate: shoulders and chest look balanced. One still photo cannot fully judge technique." }], "end_turn", usage);
+    // "Today I'm doing back, add biceps and forearms" (Payam, 2026-10-16): his program for the day, the library for the
+    // two muscles, then propose_session_additions with the day and one exercise of each that the day does not have.
+    if (/add .*(bicep|forearm)|اضافه کن/i.test(text) && /bicep|forearm|جلوبازو|ساعد/i.test(text)) {
+      if (!done.has("get_program")) return void stream(res, [note(persian ? "برنامه‌ی امروزت را می‌خوانم." : "I'll read today's program."), tool("get_program", {})], "tool_use", usage);
+      if (!done.has("get_library")) return void stream(res, [tool("get_library", { muscle: "biceps" }), tool("get_library", { muscle: "forearms" })], "tool_use", usage);
+      if (!done.has("propose_session_additions")) {
+        const parsed = all.filter((b) => b.type === "tool_result").map((b) => JSON.parse(typeof b.content === "string" ? b.content : (b.content?.[0]?.text ?? "{}")));
+        const prog = parsed.find((r) => Array.isArray(r.days));
+        const day = prog?.days.find((x) => /back/i.test(x.name)) ?? prog?.days[0];
+        const inDay = new Set((day?.exercises ?? []).map((x) => x.exercise_id));
+        const libs = parsed.filter((r) => Array.isArray(r.exercises));
+        const pick = (muscle) => libs.flatMap((r) => r.exercises).find((e) => e.primary === muscle && !inDay.has(e.id));
+        const items = [
+          pick("biceps") && { exercise_id: pick("biceps").id, reason_fa: "جلوبازو امروز فقط یک حرکت دارد؛ یک حرکت دیگر حجمش را کامل می‌کند" },
+          pick("forearms") && { exercise_id: pick("forearms").id, reason_fa: "ساعد را آخر جلسه بزن تا گرفتن میله در حرکات پشت ضعیف نشود" },
+        ].filter(Boolean);
+        // "…to my next session" names no day: the app picks the session by date.
+        const named = /next session|جلسه‌ی بعد/i.test(text) ? {} : { program_day_id: day?.day_id };
+        return void stream(res, [tool("propose_session_additions", { ...named, items })], "tool_use", usage);
+      }
+      return void stream(res, [{ type: "text", text: persian ? "این دو حرکت را بعد از حرکات پشت بزن. وزن‌ها را اپ از سابقه‌ات گذاشته؛ اگر خوب است روی Add بزن." : "Do these two after your back work. The app set the weights from your history; tap Add if they look right." }], "end_turn", usage);
+    }
     if (program && !done.has("get_program")) return void stream(res, [note(persian ? "اول برنامه‌ی فعلی‌ات را می‌خوانم." : "First I'll read your current program."), tool("get_program", {})], "tool_use", usage);
     if (program && !done.has("propose_program"))
       return void stream(

@@ -127,6 +127,48 @@ describe("coach answers (SPEC-v9 M12)", () => {
     await env.DB.prepare("DELETE FROM work_shifts").run();
   });
 
+  it("exercises for today: the app's numbers and target on the card, unknown ids dropped and told; nothing saved, program unchanged", async () => {
+    const count = async (sql: string) => (await env.DB.prepare(sql).first<{ n: number }>())!.n;
+    const before = {
+      sessions: await count("SELECT COUNT(*) AS n FROM workout_sessions"),
+      plans: await count("SELECT COUNT(*) AS n FROM planned_sessions"),
+      program: JSON.stringify((await env.DB.prepare("SELECT d.id, x.exercise_id, x.sets, x.reps_min, x.reps_max FROM day_exercises x JOIN program_days d ON d.id = x.day_id ORDER BY d.id, x.position").all()).results),
+    };
+    mock = mockAnthropicStream([
+      {
+        blocks: [
+          {
+            type: "tool_use",
+            id: "toolu_a",
+            name: "propose_session_additions",
+            input: {
+              program_day_id: "D3",
+              items: [
+                { exercise_id: "lateral", reason_fa: "سرشانه‌ی جانبی امروز در برنامه نیست" },
+                { exercise_id: "made_up_curl", reason_fa: "ساختگی" },
+              ],
+            },
+          },
+        ],
+      },
+      { blocks: [{ type: "text", text: "یک حرکت پیشنهاد دادم؛ اگر خوب است روی Add بزن." }] },
+    ]);
+    const ev = await ask(ulid(), "امروز پشت دارم، سرشانه هم اضافه کن");
+    const card = ev.find((e): e is Extract<CoachEvent, { type: "card" }> => e.type === "card" && e.name === "propose_session_additions")!;
+    expect(card.is_error).toBe(false);
+    const r = card.result as { target: { kind: string; day_id: string; label: string }; named_day_id: string; items: { exercise_id: string; sets: number; basis: string }[]; dropped: { exercise_id: string; reason: string }[] };
+    expect(r.target).toMatchObject({ kind: "today", day_id: "D3", label: "today's Day 3 · Back" });
+    expect(r.named_day_id).toBe("D3");
+    expect(r.items).toEqual([expect.objectContaining({ exercise_id: "lateral", basis: "program", sets: 3 })]);
+    expect(r.dropped).toEqual([{ exercise_id: "made_up_curl", reason: "not in the library: use an id from get_library" }]);
+    // The model read what was dropped in the tool result.
+    expect(JSON.stringify((mock.calls[1].body.messages as { content: unknown }[]).at(-1))).toContain("made_up_curl");
+    // Nothing is saved before his tap, and the program never changes.
+    expect(await count("SELECT COUNT(*) AS n FROM workout_sessions")).toBe(before.sessions);
+    expect(await count("SELECT COUNT(*) AS n FROM planned_sessions")).toBe(before.plans);
+    expect(JSON.stringify((await env.DB.prepare("SELECT d.id, x.exercise_id, x.sets, x.reps_min, x.reps_max FROM day_exercises x JOIN program_days d ON d.id = x.day_id ORDER BY d.id, x.position").all()).results)).toBe(before.program);
+  });
+
   it("calls Opus 5.5 the approved way: no tool_choice, progress updates as text, drop_block, cache breakpoints, unchanged replay", async () => {
     mock = mockAnthropicStream(volumeThenAnswer());
     await ask(ulid(), "How was my week?");
@@ -140,7 +182,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
       expect(b.thinking).toEqual({ type: "adaptive", display: "updates", block_binding: { prefix_mismatch_behavior: "drop_block" } });
       expect(b.stream).toBe(true);
       expect(b.system).toEqual([{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }]);
-      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "propose_program"]);
+      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "propose_session_additions", "propose_program"]);
       expect(b.messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
       for (const beta of COACH_BETAS) expect(c.headers["anthropic-beta"]).toContain(beta);
     }

@@ -88,3 +88,22 @@ All numbers are computed by existing app functions (same math as Reports). Each 
 
 ## 10. Report
 Per CLAUDE.md, in Persian: what was built, test totals, screenshots, the real cost of 5 test messages on the deployed preview (text-only and with a photo), bundle size change. **Do not merge, do not deploy** without Payam's OK.
+
+## 11. Change by Payam, 2026-10-16: exercises for a session (`propose_session_additions`)
+
+Use case: at the gym he says "today I'm doing back, add biceps and forearms"; the coach proposes 2–3 exercises.
+
+- **Tool:** `propose_session_additions({ program_day_id?, items: [{ exercise_id, reason_fa }] })`, 1–6 items. The model gives no numbers.
+  - Ids not in the library (or archived), repeats, and exercises already in the target session or day are dropped, and the result says why.
+  - Sets, reps and weight come from the session screen's progression (`lastPerformance` + `suggest`): the active program's entry; else his last session's sets and top reps; else 3 sets with the generator's rep range for the exercise's kind and no weight ("No history with this exercise: enter the weight"). (STOP decisions 1, 2, 4 and 5: approved as built.)
+- **Card:** the target as its heading; the list (exercise, sets × reps, weight, the progression step, the reason in Persian); **Add** and **Change** (picks another target). Nothing changes before Add; the program never changes. After Add the card offers **Open** and stays in the chat.
+- **Target, chosen by date (replaces STOP decision 3):**
+  1. A session open today → "Add to today's session: <day>?" → appended as "Added today" extras (`is_extra`), each set prefilled with the card's reps and weight, unchecked.
+  2. No open session; the day he named, else today's planned gym session's day → "Add to today's <day>" → the exercises go into that day's plan in the planner (as 3); nothing is started: they are in the session when he taps Start at the gym (Payam, 2026-10-16, after the STOP review).
+  3. Nothing today → the nearest planned gym session within 14 days, e.g. "Add to tomorrow 08:00 · Day 4 · Deadlift" → the exercises go into that day's plan in the planner (`planned_sessions`, `origin = 'added'`, the card's sets and reps; no schema change), so they are in the session when it starts. Without any plan: Home's next program day, today (as 2).
+  - Change lists today's open session (or each program day started today) and the planned sessions ahead (at most 6).
+- **Sessions left open from an earlier day close by themselves** (after that day ends, local time; on app start, on refresh and when the app comes back):
+  - with done sets: saved as Finish saves (the server writes the session report and the overview, as a normal Finish), ending at the last done set;
+  - with no done set: deleted (as "Delete session"), never saved empty;
+  - Home shows once: "Your session from <date> was closed automatically."
+- **Prompt:** use the tool for "add exercises for today"; no numbers of its own; match a named day with get_program and ask when unclear; respect his groups; the 48-hour rule is advice only; never say they were added.
