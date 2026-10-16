@@ -17,6 +17,7 @@ export type ViewName =
   | "plan"
   | "report"
   | "saved"
+  | "allreports"
   | "coach"
   | "calendar";
 
@@ -60,7 +61,10 @@ export function backTarget(view: ViewName, tab: TabName): ViewName | null {
     case "watch":
     case "newprogram":
       return "settings";
+    // A saved report opens from All reports, which opens from Reports.
     case "saved":
+      return "allreports";
+    case "allreports":
     case "report":
     case "plan":
     case "coach":
@@ -76,7 +80,7 @@ export function showsTabBar(view: ViewName): boolean {
   return view !== "session" && view !== "coach";
 }
 
-/** The floating Coach button sits on the five tab screens only. */
+/** The Coach button (at the right end of the tab bar) sits on the five tab screens only. */
 export function showsCoachButton(view: ViewName): boolean {
   return isTabRoot(view);
 }

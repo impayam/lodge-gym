@@ -52,7 +52,7 @@ Chart colors passed the colorblind checker (dark mode): series order **orange, v
 
 - **Bottom bar: 5 icon-only tabs**: Train (home), History, Library, Reports, Me. `aria-label` on each. The active tab sits in a pressed-in well that slides (320 ms) to the tapped tab.
 - **Me** holds what used to be separate tabs: Photos, Program, Planner, Settings (plus AI reports and Backup rows). **CONFIRM** (§9.1).
-- **Coach button** (floating, orange icon) on every tab screen; it opens the Coach screen full screen. Hidden during an active session.
+- **Coach button** (orange icon) on every tab screen; it opens the Coach screen full screen. Hidden during an active session. Since 2026-10-16 (Payam) it sits beside the tab bar, at its right end and centred on it, instead of floating above it, so it never covers content; the tab bar is shorter on those screens to make room.
 - **Active session** is full screen: no tab bar.
 - **Gestures (iOS-style):**
   - Swipe from the left edge (first 20 px) on any pushed screen (session report, exercise detail, Coach) = back. The visible back button always exists too.
@@ -69,7 +69,7 @@ Chart colors passed the colorblind checker (dark mode): series order **orange, v
 - **Effort colors:** e = sets done / sets planned this session. 0 → violet, 0.5 → pink, 1 → orange (linear mix). Applied to: background glow, effort chip and bar, check icons, ring, Next/Finish/+30 s text. Labels: Warming up / Working / All in.
 - **CONFIRM** (§9.2–9.3): session background (purple-tinted as in the mockup, or the grey gradient of the other screens) and the effort definition.
 
-**03 Reports.** Week / Month / All segmented. Training overview card (AI text, "Read full overview", "Regenerate"). Three stat tiles (sessions done/planned, bench %, squat %). Estimated 1RM chart, 3 series, legend with last values. Sets vs target bars (violet on target, orange under, white tick = target, chest first). Consistency calendar (5 weeks × 7 days: pink = trained, outline = planned and missed). Session reports list.
+**03 Reports.** Week / Month / All segmented. Training overview card (AI text, "Read full overview", "Regenerate"). Three stat tiles (sessions done/planned, bench %, squat %). Estimated 1RM chart, 3 series, legend with last values. Sets vs target bars (violet on target, orange under, white tick = target, chest first). Consistency calendar (5 weeks × 7 days: pink = trained, outline = planned and missed). Session reports list. *Changed 2026-10-16 (SPEC-v3, "a shorter Reports tab"): no overview card; tiles are sessions, new records and groups on target; one Main lifts card holds the chart and the period's 1RM table; AI reports (latest three, then All reports); details folded.*
 
 **04 History.** Reports timeline (two rows: session dot, weekly-review square; tap a date → its reports below, as approved in M9d). Session cards: day number well, name, date, minutes, sets, top lift, PR badge.
 

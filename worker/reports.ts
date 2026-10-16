@@ -53,7 +53,7 @@ reportRoutes.get("/month", async (c) => {
     const r = monthRange(key);
     return csv(setsCsv(d, r.start, r.end), `gym-time-month-${key}.csv`);
   }
-  return c.json(monthlyReport(d, key));
+  return c.json(monthlyReport(d, key, localDate(d.settings.timezone)));
 });
 
 reportRoutes.get("/progress", async (c) => {

@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, restOfWeek, signedPct } from "../../web/src/lib/reportsView";
+import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, restOfWeek } from "../../web/src/lib/reportsView";
 
 describe("Reports view (SPEC-v8 §6.03)", () => {
-  it("1RM chart window: 8 weeks, 6 months, or since the first session", () => {
+  it("1RM chart window: 8 weeks, 6 months, or since the first date drawn", () => {
     expect(chartFrom("week", "2026-10-18", "2026-08-01")).toBe("2026-08-24");
     expect(chartFrom("month", "2026-10-31", "2026-08-01")).toBe("2026-05-01");
     expect(chartFrom("month", "2026-03-31", null)).toBe("2025-10-01");
     expect(chartFrom("all", "2026-10-18", "2026-08-01")).toBe("2026-08-01");
     expect(chartFrom("all", "2026-10-18", null)).toBe("2026-10-18");
-    expect(chartWindow("week", "Sep 27")).toBe("8 weeks");
-    expect(chartWindow("month", "Sep 27")).toBe("6 months");
-    expect(chartWindow("all", "Sep 27")).toBe("since Sep 27");
+    expect(chartWindow("week", "2026-08-24", "2026-08-01", "Aug 24")).toBe("8 weeks");
+    expect(chartWindow("month", "2026-05-01", "2026-05-01", "May 1")).toBe("6 months");
+    expect(chartWindow("all", "2026-09-27", "2026-09-27", "Sep 27")).toBe("since Sep 27");
+    // Sessions start after the window's start: the label says what the chart shows (Payam, 2026-10-16).
+    expect(chartWindow("month", "2026-05-01", "2026-09-07", "Sep 7")).toBe("since Sep 7");
+    expect(chartWindow("week", "2026-08-24", "2026-09-07", "Sep 7")).toBe("since Sep 7");
+    // No sessions yet: the window itself.
+    expect(chartWindow("week", "2026-08-24", null, "Oct 18")).toBe("8 weeks");
   });
 
   it("consistency weeks: trained days, sessions per week (two on a day count twice), future days", () => {
@@ -28,15 +33,11 @@ describe("Reports view (SPEC-v8 §6.03)", () => {
     expect(calendarStarts("all", "2026-10-12", { start: "2026-09-27", end: "2026-10-14" }, "2026-09-21")).toEqual(["2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"]);
   });
 
-  it("tile changes", () => {
+  it("the month's 1RM change, first to last session", () => {
     expect(changePct(157.5, 166.3)).toBe(5.6);
     expect(changePct(100, 100)).toBe(0);
     expect(changePct(null, 100)).toBeNull();
     expect(changePct(0, 100)).toBeNull();
-    expect(signedPct(5.6)).toBe("+5.6%");
-    expect(signedPct(-2)).toBe("−2%");
-    expect(signedPct(0)).toBe("0%");
-    expect(signedPct(null)).toBe("–");
   });
 
   it("bar scale is 0–20 sets, wider when needed", () => {

@@ -43,10 +43,11 @@ test("five icon tabs: labels for VoiceOver, the indicator follows the tab, the C
     await expect(page.getByTestId("coach-button")).toBeVisible();
   }
 
-  // A screen pushed from Me keeps the Me tab selected and has no Coach button.
+  // A screen pushed from Me keeps the Me tab selected and has no Coach button: the tab bar takes the whole width.
   await page.getByTestId("me-settings").click();
   await expect(tabs(page).getByRole("link", { name: "Me" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("coach-button")).toHaveCount(0);
+  expect(await tabs(page).evaluate((el) => Math.round(window.innerWidth - el.getBoundingClientRect().right))).toBe(16);
 
   // Each tab target is at least 44 × 44 pt.
   for (const box of await links.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))) {
@@ -150,7 +151,7 @@ test("Coach: full screen from the Coach button, an empty chat with the suggested
   await expect(tabs(page).getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
 });
 
-test("the active session is full screen: no tab bar, no Coach button", async ({ page }) => {
+test("the active session is full screen: no tab bar, no Coach button; a rest left running keeps both clear of its pill", async ({ page }) => {
   // Every workout row, reports and plans included (they reference the sessions): another spec may have left some.
   resetWorkouts();
   await page.goto("/");
@@ -158,8 +159,16 @@ test("the active session is full screen: no tab bar, no Coach button", async ({ 
   await expect(page.getByTestId("finish")).toBeVisible();
   await expect(tabs(page)).toHaveCount(0);
   await expect(page.getByTestId("coach-button")).toHaveCount(0);
+  // A rest running when he leaves the session: its pill sits above the tab bar, the Coach button stays beside the bar.
+  await page.getByTestId("check-bench-0").click();
+  await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "true");
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(tabs(page)).toBeVisible();
+  await expect(page.getByTestId("rest-timer")).toHaveAttribute("data-active", "true");
+  await expect(page.getByTestId("coach-button")).toBeVisible();
+  const [pill, fab, bar] = await Promise.all(["rest-timer", "coach-button"].map((id) => page.getByTestId(id).boundingBox()).concat(tabs(page).boundingBox()));
+  expect(pill!.y + pill!.height).toBeLessThanOrEqual(fab!.y);
+  expect(pill!.y + pill!.height).toBeLessThanOrEqual(bar!.y);
   resetWorkouts();
 });
 

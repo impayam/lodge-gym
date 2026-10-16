@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { checkSet, closeMore, enterSet, openMore, resetWorkouts, setOffline, showExercise, signIn, sql, waitForSynced } from "./helpers";
+import { checkSet, closeMore, enterSet, openMore, resetWorkouts, setOffline, settled, showExercise, signIn, sql, waitForSynced } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -48,6 +48,9 @@ test("logs a full session in airplane mode; after reconnecting it is in D1 exact
   await showExercise(page, "incline_db");
   await page.getByTestId("w-incline_db-0").click();
   const sheet = page.getByTestId("set-sheet");
+  // A tap during the slide can miss the button on a busy machine.
+  await expect(sheet).toHaveAttribute("open", "");
+  await settled(sheet);
   await sheet.getByTestId("sheet-w").getByRole("button", { name: /Increase/ }).click();
   await expect(sheet.getByTestId("sheet-w").locator("input")).toHaveValue("5");
   await sheet.getByRole("button", { name: "Done", exact: true }).click();
