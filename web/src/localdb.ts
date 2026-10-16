@@ -1,11 +1,16 @@
-// IndexedDB: offline copy of bootstrap data, sessions and session plans, plus the outbox of pending writes.
+// IndexedDB: offline copy of bootstrap data, sessions, session plans and the training calendar, plus the outbox of
+// pending writes.
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { CalendarSettings, GymPlan, WorkShift } from "../../worker/lib/calendar";
 import type { SessionPlan } from "../../worker/lib/plan";
 import type { Bootstrap, Photo, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 
-/** The cached bootstrap; plans live in their own store (a bootstrap cached before M9c has none). */
-export type BootData = Omit<Bootstrap, "sessions" | "server_time" | "plans">;
+/**
+ * The cached bootstrap; plans, shifts and gym plans live in their own stores. The calendar settings (SPEC-v10 M13) ride
+ * along; a bootstrap cached before M13 has none (the approved defaults apply).
+ */
+export type BootData = Omit<Bootstrap, "sessions" | "server_time" | "plans" | "calendar"> & { calendar_settings?: CalendarSettings };
 
 export type OutboxEntry =
   | { key: string; op: "put_session"; id: string; rev: number; queued_at: string }
@@ -14,20 +19,27 @@ export type OutboxEntry =
   | { key: string; op: "body_mass"; date: string; value: number | null; unit: Unit; rev: number; queued_at: string }
   | { key: string; op: "photo"; photo: Photo; full: Blob; thumb: Blob; rev: number; queued_at: string }
   | { key: string; op: "delete_photo"; id: string; rev: number; queued_at: string }
-  | { key: string; op: "put_plan"; id: string; rev: number; queued_at: string };
+  | { key: string; op: "put_plan"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "put_shift"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "delete_shift"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "put_gymplan"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "delete_gymplan"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "calendar_settings"; patch: Partial<CalendarSettings>; rev: number; queued_at: string };
 
 interface Schema extends DBSchema {
   kv: { key: string; value: unknown };
   sessions: { key: string; value: WorkoutSession };
   outbox: { key: string; value: OutboxEntry };
   plans: { key: string; value: SessionPlan };
+  shifts: { key: string; value: WorkShift };
+  gym_plans: { key: string; value: GymPlan };
 }
 
 let dbp: Promise<IDBPDatabase<Schema>> | null = null;
 
 export function db() {
   if (!dbp) {
-    dbp = openDB<Schema>("lodge-gym", 2, {
+    dbp = openDB<Schema>("lodge-gym", 3, {
       upgrade(d, oldVersion) {
         if (oldVersion < 1) {
           d.createObjectStore("kv");
@@ -36,6 +48,11 @@ export function db() {
         }
         // Version 2 (SPEC-v3 M9c): session plans.
         if (oldVersion < 2) d.createObjectStore("plans", { keyPath: "id" });
+        // Version 3 (SPEC-v10 M13): work shifts and planned gym sessions.
+        if (oldVersion < 3) {
+          d.createObjectStore("shifts", { keyPath: "id" });
+          d.createObjectStore("gym_plans", { keyPath: "id" });
+        }
       },
     });
   }
@@ -75,6 +92,26 @@ export async function putPlan(p: SessionPlan) {
 export async function putPlans(list: SessionPlan[], remove: string[]) {
   const tx = (await db()).transaction("plans", "readwrite");
   await Promise.all([...list.map((p) => tx.store.put(p)), ...remove.map((id) => tx.store.delete(id)), tx.done]);
+}
+
+export async function allShifts(): Promise<WorkShift[]> {
+  return (await db()).getAll("shifts");
+}
+export async function allGymPlans(): Promise<GymPlan[]> {
+  return (await db()).getAll("gym_plans");
+}
+/** Writes and removes shifts and gym plans in one transaction. */
+export async function putCalendar(shifts: WorkShift[], removeShifts: string[], plans: GymPlan[], removePlans: string[]) {
+  const tx = (await db()).transaction(["shifts", "gym_plans"], "readwrite");
+  const sh = tx.objectStore("shifts");
+  const gp = tx.objectStore("gym_plans");
+  await Promise.all([
+    ...shifts.map((x) => sh.put(x)),
+    ...removeShifts.map((id) => sh.delete(id)),
+    ...plans.map((x) => gp.put(x)),
+    ...removePlans.map((id) => gp.delete(id)),
+    tx.done,
+  ]);
 }
 
 export async function outboxAll(): Promise<OutboxEntry[]> {

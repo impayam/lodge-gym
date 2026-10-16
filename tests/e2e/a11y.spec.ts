@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "./fixtures";
-import { goTo, openMore, resetWorkouts, signIn } from "./helpers";
+import { goTo, openMore, resetCalendar, resetWorkouts, signIn, sql } from "./helpers";
 
 // SPEC-v8 §10: an axe contrast check on all screens. Axe cannot judge text drawn over the library's gradients (card,
 // clay and page fills) and reports it as "incomplete", so every screen is also measured as drawn: each run of text
@@ -33,8 +33,29 @@ const KNOWN: { name: string; floor: number; measured: string; match: (r: Run) =>
 
 const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
 
+/**
+ * The training calendar (SPEC-v10 M13) around the current hour, so the week grid opens on a shift, a planned and a missed
+ * session (it opens an hour before now; the hour is kept inside 05:00–20:00 so the blocks stay on the 04:00–24:00 axis).
+ */
+function seedCalendar() {
+  resetCalendar();
+  const now = new Date();
+  const today = denver(now);
+  const day = (n: number) => denver(new Date(now.getTime() + n * 86_400_000));
+  const hour = Math.min(20, Math.max(5, Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Denver", hour: "numeric", hourCycle: "h23" }).format(now))));
+  const at = new Date().toISOString();
+  sql(
+    [
+      `INSERT INTO work_shifts (id, date, start_min, end_min, note, created_at, updated_at) VALUES ('a11y-w', '${today}', ${hour * 60}, ${(hour + 2) * 60}, 'Store', '${at}', '${at}')`,
+      `INSERT INTO gym_plans (id, date, start_min, end_min, program_day_id, source, status, created_at, updated_at) VALUES ('a11y-p', '${day(1)}', ${hour * 60}, ${hour * 60 + 60}, 'D1', 'manual', 'planned', '${at}', '${at}')`,
+      `INSERT INTO gym_plans (id, date, start_min, end_min, program_day_id, source, status, created_at, updated_at) VALUES ('a11y-m', '${day(-1)}', ${hour * 60}, ${hour * 60 + 60}, 'D2', 'manual', 'planned', '${at}', '${at}')`,
+    ].join("; ")
+  );
+}
+
 /** Four weeks of sessions, so lists, charts and calendars have content. */
 async function seed(page: Page, baseURL: string) {
+  seedCalendar();
   const now = Date.now();
   for (let w = 3; w >= 0; w--) {
     for (const [k, day, ex, weight] of [
@@ -104,10 +125,23 @@ const runs = (page: Page) =>
       if (r.width < 2 || r.height < 2 || r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) continue;
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       if (!hit || !(el.contains(hit) || hit.contains(el))) continue;
+      // Text scrolled out of an inner scroller (the Calendar's week grid) is clipped, not drawn; the hit test above can
+      // still land on an ancestor such as the page.
+      let clipped = false;
+      for (let e = el.parentElement; e && !clipped; e = e.parentElement) {
+        const ec = getComputedStyle(e);
+        if (ec.overflowX === "visible" && ec.overflowY === "visible") continue;
+        const b = e.getBoundingClientRect();
+        clipped = r.top < b.top - 0.5 || r.bottom > b.bottom + 0.5 || r.left < b.left - 0.5 || r.right > b.right + 0.5;
+      }
+      if (clipped) continue;
       const under = layers.some((l) => {
         if (l.contains(el)) return false;
         const b = l.getBoundingClientRect();
-        return r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom;
+        if (!(r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom)) return false;
+        // Only a layer painted over the text covers it (a sheet's scrim lies under the sheet's own text).
+        const top = document.elementFromPoint((Math.max(r.left, b.left) + Math.min(r.right, b.right)) / 2, (Math.max(r.top, b.top) + Math.min(r.bottom, b.bottom)) / 2);
+        return top !== null && l.contains(top) && !el.contains(top);
       });
       if (under) continue;
       const badge = el.closest(".badge");
@@ -233,7 +267,10 @@ test.beforeEach(async ({ page, context, baseURL }) => {
   await page.reload();
   await expect(page.getByTestId("next-card")).toBeVisible();
 });
-test.afterAll(() => resetWorkouts());
+test.afterAll(() => {
+  resetWorkouts();
+  resetCalendar();
+});
 
 test("contrast: the five tabs", async ({ page }) => {
   test.setTimeout(300_000);
@@ -274,6 +311,18 @@ test("contrast: pushed screens, the session and the coach", async ({ page }) => 
   await goTo(page, "Train");
   await page.getByTestId("plan-session").click();
   failed.push(...(await contrast(page, "Planner")));
+  await page.getByTestId("back").click();
+  await page.getByTestId("cal-open").click();
+  failed.push(...(await contrast(page, "Calendar")));
+  await page.getByTestId("cal-free").check();
+  failed.push(...(await contrast(page, "Calendar, free times")));
+  await page.getByTestId("cal-view-toggle").click();
+  failed.push(...(await contrast(page, "Calendar, List view")));
+  await page.getByTestId("cal-find-times").click();
+  await expect(page.getByTestId("cal-find-sheet")).toHaveAttribute("open", "");
+  failed.push(...(await contrast(page, "Calendar, Find times")));
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("cal-find-sheet")).toHaveCount(0);
   await page.getByTestId("back").click();
   await page.getByRole("button", { name: "Ask the coach" }).click();
   failed.push(...(await contrast(page, "Coach")));

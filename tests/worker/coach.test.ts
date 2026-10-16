@@ -5,6 +5,7 @@ import { COACH_SYSTEM } from "../../worker/lib/coach/prompt";
 import { COACH_BETAS, MAX_TOOL_CALLS } from "../../worker/coachTurn";
 import type { CoachEvent } from "../../worker/lib/coach/events";
 import { ulid } from "../../worker/lib/ulid";
+import { addDays, localDate } from "../../worker/lib/time";
 import { fakeJpeg } from "../fixtures/jpeg";
 import { mockAnthropicStream, type StreamReply } from "../fixtures/anthropic-mock";
 import { Client, resetAuth, setupOwner } from "./helpers";
@@ -86,6 +87,46 @@ describe("coach answers (SPEC-v9 M12)", () => {
     expect(thread).toEqual({ title: "How was my week?", archived: 0 });
   });
 
+  it("a gym schedule uses only the finder's times: an invented one is dropped and reported; nothing is saved before the tap (SPEC-v10 §6)", async () => {
+    const tz = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'timezone'").first<{ value: string }>())?.value ?? "America/Denver";
+    const day = addDays(localDate(tz), 7);
+    const at = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO work_shifts (id, date, start_min, end_min, note, created_at, updated_at) VALUES ('coach-w1', ?, 720, 1200, '', ?, ?)").bind(day, at, at).run();
+    mock = mockAnthropicStream([
+      { blocks: [{ type: "tool_use", id: "toolu_f", name: "find_free_slots", input: { week_start: day } }] },
+      {
+        blocks: [
+          {
+            type: "tool_use",
+            id: "toolu_s",
+            name: "propose_schedule",
+            input: {
+              sessions: [
+                { date: day, start: "08:00", reason_fa: "قبل از شیفت طولانی" },
+                { date: addDays(day, 1), start: "03:10", reason_fa: "ساعت ساختگی" },
+              ],
+            },
+          },
+        ],
+      },
+      { blocks: [{ type: "text", text: "دو جلسه پیشنهاد دادم." }] },
+    ]);
+    const ev = await ask(ulid(), "این هفته کِی برم باشگاه؟");
+    const cards = ev.filter((e): e is Extract<CoachEvent, { type: "card" }> => e.type === "card");
+    const slots = cards.find((c) => c.name === "find_free_slots")!.result as { slots: { date: string; start: string; before_shift_at: string | null }[] };
+    expect(slots.slots.find((x) => x.date === day)).toMatchObject({ start: "08:00", before_shift_at: "12:00" });
+    const schedule = cards.find((c) => c.name === "propose_schedule")!;
+    expect(schedule.is_error).toBe(false);
+    const r = schedule.result as { sessions: { date: string; start: string; reason_fa: string }[]; dropped: { date: string; start: string; reason: string }[] };
+    expect(r.sessions).toEqual([expect.objectContaining({ date: day, start: "08:00", reason_fa: "قبل از شیفت طولانی" })]);
+    expect(r.dropped).toEqual([{ date: addDays(day, 1), start: "03:10", reason: "not a find_free_slots time for that week" }]);
+    // The model was told what was dropped (in the tool result it reads next).
+    const toolResult = JSON.stringify((mock.calls[2].body.messages as { content: unknown }[]).at(-1));
+    expect(toolResult).toContain("not a find_free_slots time for that week");
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM gym_plans").first<{ n: number }>()).toEqual({ n: 0 });
+    await env.DB.prepare("DELETE FROM work_shifts").run();
+  });
+
   it("calls Opus 5.5 the approved way: no tool_choice, progress updates as text, drop_block, cache breakpoints, unchanged replay", async () => {
     mock = mockAnthropicStream(volumeThenAnswer());
     await ask(ulid(), "How was my week?");
@@ -99,7 +140,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
       expect(b.thinking).toEqual({ type: "adaptive", display: "updates", block_binding: { prefix_mismatch_behavior: "drop_block" } });
       expect(b.stream).toBe(true);
       expect(b.system).toEqual([{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }]);
-      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "propose_program"]);
+      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "propose_program"]);
       expect(b.messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
       for (const beta of COACH_BETAS) expect(c.headers["anthropic-beta"]).toContain(beta);
     }

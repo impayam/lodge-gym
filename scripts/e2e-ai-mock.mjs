@@ -182,6 +182,20 @@ export function startAiMock(port) {
         usage
       );
     if (program) return void stream(res, [{ type: "text", text: persian ? "پیش‌نویس سینه را دو بار در هفته می‌گذارد. اگر خوب است به برنامه‌ریز اضافه کن." : "The draft trains chest twice a week. Add it to the Planner if it looks right." }], "end_turn", usage);
+    // "When should I go to the gym this week?" (SPEC-v10 §6): the finder's times, then a schedule made of them.
+    if (/when should i go|کِی برم|کی برم/i.test(text)) {
+      const today = /Today: \w+ (\d{4}-\d{2}-\d{2})/.exec(question.map((b) => b.text ?? "").join("\n"))?.[1] ?? "2026-10-15";
+      // "next week": the same day a week on (a plain date add on YYYY-MM-DD at noon UTC).
+      const next = /next week|هفته‌ی بعد|هفته بعد/i.test(text) ? new Date(Date.parse(`${today}T12:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10) : today;
+      if (!done.has("find_free_slots")) return void stream(res, [note(persian ? "وقت‌های آزاد را پیدا می‌کنم." : "I'll find the free times."), tool("find_free_slots", { week_start: next })], "tool_use", usage);
+      if (!done.has("propose_schedule")) {
+        const found = results.map((r) => JSON.parse(r.content)).find((r) => Array.isArray(r.slots));
+        const picks = (found?.slots ?? []).filter((x) => x.selected).slice(0, 3);
+        const reason = (x) => (x.before_shift_at ? `قبل از شیفت ساعت ${x.before_shift_at}، با وقت کافی برای استراحت` : "روزهای تمرین را از هم دور نگه می‌دارد");
+        return void stream(res, [tool("propose_schedule", { sessions: picks.map((x) => ({ date: x.date, start: x.start, reason_fa: reason(x) })) })], "tool_use", usage);
+      }
+      return void stream(res, [{ type: "text", text: persian ? "این زمان‌ها با شیفت‌هایت جور است. اگر خوب است، روی Add to calendar بزن." : "These times fit your shifts. Tap Add to calendar if they look right." }], "end_turn", usage);
+    }
     // "Which days do I usually train?": the training pattern, then an answer from it (or a question when unclear).
     if (/which days|training days|روزهای تمرین/i.test(text)) {
       if (!done.has("get_training_pattern")) return void stream(res, [note(persian ? "روزهای تمرینت را می‌خوانم." : "I'll read your training days."), tool("get_training_pattern", {})], "tool_use", usage);

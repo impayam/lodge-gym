@@ -20,7 +20,8 @@ import { mapExercise } from "./data";
 import type { ReportData } from "./lib/reports";
 import { callCostUsd, type CallTokens } from "./lib/ai/cost";
 import { COACH_SYSTEM } from "./lib/coach/prompt";
-import { COACH_TOOLS, runTool, type CoachData } from "./lib/coach/tools";
+import { COACH_TOOLS, plannedPositions, runTool, type CoachData } from "./lib/coach/tools";
+import { readCalendarSettings, readGymPlans, readShifts } from "./calendar";
 import { proposeProgram } from "./lib/coach/draft";
 import { contextWindow, DEFAULT_CONTEXT_TOKENS, nextStamp, type StoredBlock, type StoredMessage } from "./lib/coach/context";
 import { localDate } from "./lib/time";
@@ -172,7 +173,9 @@ export async function runCoachTurn(env: Env, threadId: string, emit: (e: CoachEv
     .reduce<number | null>((a, r) => (r.role === "assistant" && r.cost_usd != null ? (a ?? 0) + r.cost_usd : a), null);
 
   const report = await loadCoachData(env);
-  const data: CoachData = { ...report, today: localDate(report.settings.timezone), now: new Date().toISOString() };
+  // The calendar (SPEC-v10 M13): every shift and plan (one person's: a small table) and the settings.
+  const [shifts, plans, calSettings] = await Promise.all([readShifts(env, "0000-01-01"), readGymPlans(env, "0000-01-01"), readCalendarSettings(env)]);
+  const data: CoachData = { ...report, today: localDate(report.settings.timezone), now: new Date().toISOString(), calendar: { shifts, plans, settings: calSettings } };
   const client = new Anthropic({
     apiKey: key,
     baseURL: env.ANTHROPIC_BASE_URL?.trim() || undefined,
@@ -238,7 +241,7 @@ export async function runCoachTurn(env: Env, threadId: string, emit: (e: CoachEv
         if (toolCalls > MAX_TOOL_CALLS) {
           return { type: "tool_result", tool_use_id: call.id, content: JSON.stringify({ error: `Tool limit reached (${MAX_TOOL_CALLS} calls for one answer). Answer now with what you have.` }), is_error: true };
         }
-        const out = runTool(data, call.name, call.input, (input) => proposeProgram(data, input, ulid(), data.today));
+        const out = runTool(data, call.name, call.input, (input) => proposeProgram(data, input, ulid(), data.today, plannedPositions(data)));
         const body = out.ok ? out.result : { error: out.error };
         cards.push({ type: "card", message_id: answer.id, tool_use_id: call.id, name: call.name, input: call.input, result: body, is_error: !out.ok });
         return out.ok ? { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(out.result) } : { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(body), is_error: true };

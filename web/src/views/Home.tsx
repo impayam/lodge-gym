@@ -1,9 +1,11 @@
-// Train tab (SPEC-v8 §6.01): the next session as the hero card (Exercise / Last / Today, the progression targets in
-// orange, one main action), the estimated 1RM of the big three, then this week, the other days and recent sessions.
+// Train tab (SPEC-v8 §6.01): the calendar week strip (SPEC-v10 M13), the next session as the hero card (Exercise /
+// Last / Today, the progression targets in orange, one main action), the estimated 1RM of the big three, then this
+// week, the other days and recent sessions.
 
 import { useState } from "preact/hooks";
+import { hm as hmMin, toMin } from "../../../worker/lib/calendar";
 import { liveItems, planMinutes, itemAsDayExercise } from "../../../worker/lib/plan";
-import { addDays, daysBetween } from "../../../worker/lib/time";
+import { addDays, daysBetween, localHM } from "../../../worker/lib/time";
 import type { DayExercise, ProgramDay } from "../../../worker/lib/types";
 import { SessionCard } from "../components/SessionCard";
 import { Empty } from "../components/States";
@@ -11,10 +13,12 @@ import { SyncStatus } from "../components/SyncStatus";
 import { TimeChart, type Pick } from "../components/TimeChart";
 import { dateShort, dayMonth, fmtNum, hm, plural } from "../format";
 import { BIG_THREE, dayTitle } from "../lib/lifts";
+import { todayPlan } from "../lib/calendarView";
 import { nextRows } from "../lib/next";
 import { e1rmPoints } from "../lib/records";
 import { activeProgramInfo, activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession, openPlanFor, plannedLabel, programName } from "../model";
-import { navigate, openPlan, saveSession, today, useStore } from "../store";
+import { calendarSettings, navigate, openPlan, saveSession, today, useStore } from "../store";
+import { CalendarStrip } from "./Calendar";
 import { planDay } from "./Planner";
 
 const longDate = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
@@ -62,10 +66,23 @@ function NextTable({ exercises }: { exercises: DayExercise[] }) {
   );
 }
 
+/** Today's planned gym time (SPEC-v10 §2): the hero card shows it. */
+function useTodayGym() {
+  const boot = useStore((s) => s.boot)!;
+  const sessions = useStore((s) => s.sessions);
+  const shifts = useStore((s) => s.shifts);
+  const gymPlans = useStore((s) => s.gymPlans);
+  const tz = boot.settings.timezone;
+  const now = new Date().toISOString();
+  const src = { shifts: Object.values(shifts), plans: Object.values(gymPlans), sessions: Object.values(sessions), settings: calendarSettings(boot), tz, today: today(), now };
+  return todayPlan(src, toMin(localHM(tz, now)));
+}
+
 function Hero() {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
   const plans = useStore((s) => s.plans);
+  const gym = useTodayGym();
   const [glow] = useState(() => {
     const first = !glowed;
     glowed = true;
@@ -137,8 +154,19 @@ function Hero() {
           <span class="caption">{plural(items.length, "exercise")}</span>
         </div>
       </div>
+      {gym ? (
+        <p class="t-title l-m0 num" data-testid="hero-gym-time">
+          Planned today at {hmMin(gym.start_min)}
+          {gym.program_day_id !== next.id ? ` · ${dayInfo(boot, gym.program_day_id).name_en}` : ""}
+        </p>
+      ) : null}
       <p class="caption l-m0">{why}</p>
-      {m.rest ? <p class="caption l-m0 t-orange">Rest is better today. You trained yesterday and the day before; the program allows at most two training days in a row.</p> : null}
+      {/* Advice only (Payam, 2026-10-15): nothing blocks training on any day. */}
+      {m.rest ? (
+        <p class="caption l-m0" data-testid="rest-advice">
+          You trained yesterday and the day before: a rest day may help today.
+        </p>
+      ) : null}
       {/* A program day always has exercises; an open plan can have none yet ("Open plan" below adds them). */}
       {items.length ? <NextTable exercises={items} /> : <Empty>No exercises in this plan yet.</Empty>}
       {nextPlan ? (
@@ -267,6 +295,7 @@ export function Home() {
         <SyncStatus />
       </header>
 
+      <CalendarStrip />
       <Hero />
       <OneRepMax />
 

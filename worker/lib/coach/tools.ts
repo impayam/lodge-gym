@@ -31,6 +31,7 @@ import type { Exercise, Pose, ProgramVersion, WorkoutSession } from "../types";
 import { lastHeavyCompound } from "../ai/advice";
 import { GROUP_NAME, sessionDay } from "../ai/report";
 import { PROPOSE_PROGRAM_TOOL, proposeProgram, type ProposeResult } from "./draft";
+import { CALENDAR_TOOLS, plannedThisWeek, runCalendarTool, type CoachCalendar } from "./calendarTools";
 
 /** Longest date range of one get_sessions, get_volume or get_adherence call (token budget). */
 export const MAX_RANGE_DAYS = 92;
@@ -41,10 +42,11 @@ export const PHOTO_LIMIT = 100;
 /** get_prs without an exercise: the latest records over all exercises. */
 export const RECORD_LIMIT = 30;
 
-/** The app's data the tools read: the Reports data plus local today and the current instant. */
+/** The app's data the tools read: the Reports data plus local today, the current instant and the calendar (M13). */
 export interface CoachData extends ReportData {
   today: string;
   now: string;
+  calendar?: CoachCalendar;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -153,9 +155,10 @@ export const COACH_TOOLS = [
   {
     name: "get_training_pattern",
     description:
-      "His usual training weekdays and times from the last 4 weeks of logged sessions (a weekday counts when he trained on it in at least 2 of the 4 weeks), the most days he trained in a row, and the weekday each program day usually falls on. Use it when you talk about recovery or spacing between days. When clear is false there is no clear pattern: ask him which days he trains instead of guessing.",
+      "His usual training weekdays and times from the last 4 weeks of logged sessions (a weekday counts when he trained on it in at least 2 of the 4 weeks), the most days he trained in a row, and the weekday each program day usually falls on; and this week's planned gym sessions from his calendar. Use it when you talk about recovery or spacing between days. When planned_this_week has sessions, use those real dates. Otherwise, when clear is false there is no clear pattern: ask him which days he trains instead of guessing.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
+  ...CALENDAR_TOOLS,
   PROPOSE_PROGRAM_TOOL,
 ] as const;
 
@@ -509,6 +512,9 @@ export function getTrainingPattern(d: CoachData) {
   });
 
   const names = usual.map((w) => WEEKDAY[w]).join(", ");
+  // SPEC-v10 §10: planned dates replace the pattern for spacing when this week has any.
+  const planned = plannedThisWeek(d);
+  const plannedLine = planned.length ? `Planned this week: ${planned.map((p) => `${p.weekday} ${p.start} ${p.day}`).join(", ")}` : "";
   return {
     from,
     to: d.today,
@@ -519,8 +525,15 @@ export function getTrainingPattern(d: CoachData) {
     max_days_in_a_row: maxRun,
     program_days: programDays,
     clear,
-    summary: clear ? `${names}, ${usualTime ? `usually ${usualTime.from}–${usualTime.to}` : "at varying times"}` : `No clear pattern in the last 4 weeks (${list.length} ${list.length === 1 ? "session" : "sessions"}).`,
+    planned_this_week: planned.map(({ position: _p, ...rest }) => rest),
+    source: planned.length ? "calendar" : "pattern",
+    summary: plannedLine || (clear ? `${names}, ${usualTime ? `usually ${usualTime.from}–${usualTime.to}` : "at varying times"}` : `No clear pattern in the last 4 weeks (${list.length} ${list.length === 1 ? "session" : "sessions"}).`),
   };
+}
+
+/** This week's planned dates by program day position (Day 1 = 1), for the draft's spacing advice (SPEC-v10 §10). */
+export function plannedPositions(d: CoachData): Map<number, string> {
+  return new Map(plannedThisWeek(d).flatMap((p) => (p.position ? [[p.position, p.date] as [number, string]] : [])));
 }
 
 /* ---------------- dispatch ---------------- */
@@ -531,7 +544,7 @@ const weeksInput = (key: "weeks") => z.object({ [key]: weeks.optional() }).stric
  * Runs one tool call. `propose` handles propose_program (it needs ids from the caller); every other tool is read-only.
  * Never throws for a bad input: the model gets the problem back as an error result.
  */
-export function runTool(d: CoachData, name: string, input: unknown, propose: (draftInput: unknown) => ProposeResult = (i) => proposeProgram(d, i, "")): ToolOutcome {
+export function runTool(d: CoachData, name: string, input: unknown, propose: (draftInput: unknown) => ProposeResult = (i) => proposeProgram(d, i, "", undefined, plannedPositions(d))): ToolOutcome {
   const parse = <T>(schema: z.ZodType<T>, f: (v: T) => ToolOutcome): ToolOutcome => {
     const r = schema.safeParse(input ?? {});
     return r.success ? f(r.data) : { ok: false, error: zodError(r.error) };
@@ -564,6 +577,6 @@ export function runTool(d: CoachData, name: string, input: unknown, propose: (dr
       return r.ok ? { ok: true, result: r.result } : { ok: false, error: r.error };
     }
     default:
-      return { ok: false, error: `Unknown tool "${name}".` };
+      return runCalendarTool(d, name, input) ?? { ok: false, error: `Unknown tool "${name}".` };
   }
 }

@@ -1,3 +1,4 @@
+import { CalendarSettingsCard } from "../components/CalendarSettings";
 import { ProgramDrafts } from "../components/ProgramDrafts";
 import { useEffect, useState } from "preact/hooks";
 import { isValidTimeZone } from "../../../worker/lib/time";
@@ -92,6 +93,9 @@ export function Settings() {
 
       <h2 class="section-label">Program</h2>
       <ProgramSettings />
+
+      <h2 class="section-label">Calendar</h2>
+      <CalendarSettingsCard />
 
       <h2 class="section-label">Connections</h2>
       <section class="card card--list" aria-label="Connections">

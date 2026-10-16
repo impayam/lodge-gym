@@ -1,15 +1,17 @@
 import { expect, test, type Page } from "./fixtures";
-import { aiCalls, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo, enterSet } from "./helpers";
+import { aiCalls, aiJobsIdle, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo, enterSet } from "./helpers";
 
 // SPEC-v7 M9d: the training overview in Reports, rewritten after every finished session right after its report, and
 // the Session reports list. The model is mocked (scripts/e2e-ai-mock.mjs): the real Anthropic API is never called.
 test.describe.configure({ mode: "serial" });
 
 test.beforeEach(async ({ context, baseURL }) => {
+  await signIn(context, baseURL!);
+  // An overview queued by an earlier spec's session would be written after the reset.
+  await aiJobsIdle(context, baseURL!);
   resetWorkouts();
   resetPrograms();
   await aiMode({ report: "ok", advice: "ok", overview: "ok" });
-  await signIn(context, baseURL!);
 });
 test.afterAll(async () => {
   resetWorkouts();

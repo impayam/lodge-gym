@@ -12,6 +12,7 @@ import { groupOf, isTargetGroup, setContribution, TARGET_GROUPS } from "../muscl
 import { countsVolume } from "../category";
 import { muscleTargets, programOn, type ReportData } from "../reports";
 import { GROUP_NAME } from "../ai/report";
+import { daysBetween, weekday } from "../time";
 
 const GROUP_LETTERS = ["A", "B", "C", "D", "E", "F"] as const;
 
@@ -182,11 +183,13 @@ function draftChecks(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>
 }
 
 /**
- * The generator's spacing rules on the draft's day order, as conditional advice (Payam, 2026-10-15). A draft has no
- * weekdays; his days run Day 1 → 2 → 3 → 4 and again, at most two training days in a row, so two adjacent days (and
- * the last day and Day 1) may fall on consecutive calendar days. Planned dates (calendar, M13) will replace this.
+ * The generator's spacing rules on the draft's day order, as advice only (Payam, 2026-10-15). A draft has no weekdays;
+ * his days run Day 1 → 2 → 3 → 4 and again, so two adjacent days (and the last day and Day 1) may fall on consecutive
+ * calendar days: the warning is conditional. When this week has planned gym sessions (calendar, SPEC-v10 §10), their
+ * real dates replace that guess: `planned` maps a day's position (Day 1 = 1) to its planned date, a pair planned on
+ * consecutive days gets a plain warning and a pair planned apart none.
  */
-export function draftSpacing(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>): string[] {
+export function draftSpacing(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>, planned: ReadonlyMap<number, string> = new Map()): string[] {
   const groupOfEx = (id: string) => {
     const g = groupOf(ex.get(id)?.muscle_primary);
     return g && isTargetGroup(g) ? (g as TargetGroup) : null;
@@ -195,8 +198,11 @@ export function draftSpacing(days: CleanDraft["days"], ex: ReadonlyMap<string, E
   const pairs: [number, number][] = days.slice(1).map((_, i) => [i, i + 1]);
   if (days.length >= 3) pairs.push([days.length - 1, 0]);
   const out: string[] = [];
+  const weekdayOf = (date: string) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][weekday(date)];
   for (const [a, b] of pairs) {
-    const lead = `If you train Day ${a + 1} and Day ${b + 1} back to back,`;
+    const [da, db] = [planned.get(a + 1), planned.get(b + 1)];
+    if (da && db && Math.abs(daysBetween(da, db)) !== 1) continue;
+    const lead = da && db ? `Day ${a + 1} (${weekdayOf(da)}) and Day ${b + 1} (${weekdayOf(db)}) are planned on consecutive days:` : `If you train Day ${a + 1} and Day ${b + 1} back to back,`;
     const mains = (i: number) => new Set(days[i].exercises.filter((x) => x.is_main).map((x) => groupOfEx(x.exercise_id)).filter((g): g is TargetGroup => g !== null));
     const direct = (i: number) => new Set(days[i].exercises.map((x) => groupOfEx(x.exercise_id)).filter((g): g is TargetGroup => g !== null));
     const hinge = (i: number) => days[i].exercises.some((x) => {
@@ -216,7 +222,7 @@ export function draftSpacing(days: CleanDraft["days"], ex: ReadonlyMap<string, E
  * Validates a draft, drops exercises that are not in the library (or archived), re-checks groups that lost a member,
  * and computes its weekly sets against the current targets. `draftId` becomes the program id on Add to Planner.
  */
-export function proposeProgram(d: Pick<ReportData, "exercises" | "program" | "programs" | "settings">, input: unknown, draftId: string, today?: string): ProposeResult {
+export function proposeProgram(d: Pick<ReportData, "exercises" | "program" | "programs" | "settings">, input: unknown, draftId: string, today?: string, plannedDates?: ReadonlyMap<number, string>): ProposeResult {
   const parsed = draftSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message)).join("; ") };
   const ex = new Map(d.exercises.map((e) => [e.id, e]));
@@ -253,7 +259,7 @@ export function proposeProgram(d: Pick<ReportData, "exercises" | "program" | "pr
       exercises: days.reduce((a, x) => a + x.exercises.length, 0),
       names: Object.fromEntries(days.flatMap((day) => day.exercises.map((x) => [x.exercise_id, ex.get(x.exercise_id)!.name_en]))),
       day_minutes: days.map((day) => dayMinutes({ exercises: day.exercises })),
-      warnings: [...draftChecks(days, ex, targets), ...draftSpacing(days, ex)],
+      warnings: [...draftChecks(days, ex, targets), ...draftSpacing(days, ex, plannedDates)],
       dropped,
       weekly_sets: TARGET_GROUPS.map((g) => ({ group: g, name: GROUP_NAME[g], planned: round1(planned[g]), current_target: round1(targets[g] ?? 0) })),
     },

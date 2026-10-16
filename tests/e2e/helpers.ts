@@ -74,7 +74,31 @@ export async function signIn(context: BrowserContext, baseURL: string) {
 }
 
 export function resetWorkouts() {
-  sql("DELETE FROM training_overviews; DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions");
+  sql(
+    "DELETE FROM gym_plans; DELETE FROM training_overviews; DELETE FROM plan_advice; DELETE FROM session_reports; DELETE FROM session_plan_items; DELETE FROM planned_sessions; DELETE FROM set_entries; DELETE FROM workout_sessions"
+  );
+}
+
+/** The training calendar (SPEC-v10 M13) empty again: no shifts, no gym plans, the calendar settings at their defaults. */
+export function resetCalendar() {
+  sql(
+    "DELETE FROM gym_plans; DELETE FROM work_shifts; DELETE FROM settings WHERE key IN ('gym_hours', 'travel_buffer_min', 'after_shift_gap_min', 'preferred_windows', 'reminder_minutes')"
+  );
+}
+
+/**
+ * Waits until no training overview is queued (SPEC-v7 M9d). A session finished by an earlier spec queues its report and
+ * then the overview in the AI jobs Durable Object, which a database reset does not touch: on a busy machine that
+ * overview is still waiting, or is written after the reset, when the next spec starts.
+ */
+export async function aiJobsIdle(context: BrowserContext, baseURL: string, timeout = 90_000) {
+  const until = Date.now() + timeout;
+  for (;;) {
+    const r = await context.request.get(`${baseURL}/api/overview`);
+    if (r.ok() && !((await r.json()) as { pending: boolean }).pending) return;
+    if (Date.now() > until) throw new Error(`AI jobs still queued after ${timeout} ms`);
+    await new Promise((done) => setTimeout(done, 500));
+  }
 }
 
 /** The seed program active again; versions made by the generator (M8) or by Apply to program (M9c) go. */
