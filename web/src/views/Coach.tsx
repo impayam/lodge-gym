@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { errorText } from "../api";
+import { errorText, NetworkError } from "../api";
 import {
   addDraft,
   archiveThread,
@@ -128,6 +128,21 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
   // The chat on screen. A load or an answer that finishes after Payam has moved to another chat leaves the screen alone.
   const shown = useRef<string>(draftThread.current);
   const isShown = (id: string) => shown.current === id;
+  // Loads of the chat on screen can overlap (the reload after an answer, and Payam reopening the chat, say offline):
+  // the server's copy is the newest (of two, the later load's); the copy saved on the phone shows only from the latest
+  // load and only if no server copy came in since that load started; the latest load says whether it is the offline copy.
+  const loads = useRef(0);
+  const served = useRef({ load: 0, started: 0 });
+  const took = (id: string, load: number, r: { data: CoachThreadData; offline: boolean }) => {
+    if (!isShown(id)) return;
+    const take = r.offline ? load === loads.current && served.current.started < load : load > served.current.load;
+    if (take) {
+      setData(r.data);
+      setLoadFailure(null);
+      if (!r.offline) served.current = { load, started: loads.current };
+    }
+    if (load === loads.current) setOffline(r.offline);
+  };
 
   useEffect(() => {
     void loadAllHistory();
@@ -150,13 +165,14 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
     setThreadId(id);
     setMode("chat");
     setLoadFailure(null);
+    const load = ++loads.current;
     try {
-      const r = await loadThread(id);
-      if (!isShown(id)) return;
-      setData(r.data);
-      setOffline(r.offline);
+      took(id, load, await loadThread(id));
     } catch (e) {
-      if (isShown(id)) setLoadFailure(e);
+      if (!isShown(id) || load !== loads.current) return;
+      setLoadFailure(e);
+      // Offline before this chat was saved on the phone: a reload still on its way shows as the offline copy.
+      if (e instanceof NetworkError) setOffline(true);
     }
   };
   const newChat = () => {
@@ -186,11 +202,9 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
   };
   const finish = async (id: string) => {
     if (!isShown(id)) return;
+    const load = ++loads.current;
     try {
-      const r = await loadThread(id);
-      if (!isShown(id)) return;
-      setData(r.data);
-      setOffline(r.offline);
+      took(id, load, await loadThread(id));
     } catch {
       /* the streamed answer stays on screen */
     }
@@ -283,7 +297,7 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
 
   const chat = (
     <div class="l-col l-gap-14" data-testid="coach-chat" ref={root}>
-      {offline ? <p class="caption l-m0" data-testid="coach-offline">Offline: this is the copy saved on your phone.</p> : null}
+      {offline && data ? <p class="caption l-m0" data-testid="coach-offline">Offline: this is the copy saved on your phone.</p> : null}
       {data?.omitted ? (
         <p class="caption l-m0" data-testid="coach-omitted">
           {plural(data.omitted, "older message")} in this chat {data.omitted === 1 ? "is" : "are"} kept but no longer sent to the coach.
