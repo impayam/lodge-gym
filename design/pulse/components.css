@@ -195,7 +195,7 @@
 .skeleton--line { height: 12px; border-radius: var(--r-pill); }
 
 /* ---------- Coach composer and dock (chat screen) ---------- */
-.composer__input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-size: 15px; outline: none; }
+.composer__input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-size: 16px; outline: none; }   /* 16 px: iOS does not zoom the page on focus */
 .composer__input::placeholder { color: var(--ink-3); }
 .composer[aria-disabled="true"] { opacity: .4; }
 .composer[aria-disabled="true"] .clay:disabled { opacity: 1; }      /* dimmed once, by the composer */

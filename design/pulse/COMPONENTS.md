@@ -156,7 +156,7 @@ Built from existing tokens only; each is in `components.css` under "Additions".
 - Session buttons use the purple clay of `.set-check` (same values) on the session background and in the rest pill.
 - `.segmented > button[aria-pressed]` is the toggle form of the segmented control (RIR, unit).
 - `.rest` is hidden from touch and screen readers when closed (`visibility` after the slide); `data-over` is the visual cue when rest is over.
-- `.input` text is 16 px so iOS does not zoom on focus.
+- `.input`, `.search-field__input` and `.composer__input` text is 16 px so iOS does not zoom on focus (a 15 px Coach message field zoomed the whole Coach page wider than the screen on iPhone, 2026-10-16). Any new text field: 16 px or more.
 
 ### Reports (plan step 5)
 
