@@ -304,6 +304,14 @@ Every list and chart uses `web/src/components/States.tsx` (no new classes):
   `--missed`: grey outline, "Missed"; `--free`: violet dotted.
 - List view (the accessible alternative, like Table view on charts): `.card--list` with a `.card__title` per day and
   `.list-row`s whose mark sits in `.cal-mark`. The key under the grid is a `.chart-legend` of the same marks.
+- Writing (M13b): shift, plan and free blocks are buttons (`.cal-block` keeps its look; orange focus ring). A plan
+  drags (`touch-action: none`; `data-dragging="true"` while it moves: pink outline). A tap on an empty time opens a sheet
+  with "Plan gym here" / "Add shift here". Sheets pick days with `.cal-strip.cal-strip--pick` (a pressed day is a well
+  with pink text), times with `.input` (`type="time"`), deletes confirm inside the sheet in a `.callout`.
+- Find times: `.list-row`s with `.plan-select` (the tick), the time as `t-title num`, the program day and reason as
+  `.list-row__note`, a neutral `caption` for a third training day in a row, Add as `btn-sm t-pink`; Add all is
+  `btn-lg t-pink` under the list. The coach's schedule card is a `.card` of the same rows (reason in Persian, `.fa`,
+  `dir="rtl"`) with "Add to calendar" (`t-pink`) / "Change" (`t-muted`).
 
 ## Contrast
 

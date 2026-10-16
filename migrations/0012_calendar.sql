@@ -1,10 +1,12 @@
 -- 0012_calendar.sql: SPEC-v10 M13 training calendar (work shifts and planned gym sessions).
 -- Two new, empty tables; nothing existing changes. Times are local: a local date (YYYY-MM-DD, the settings time zone)
 -- and minutes from midnight, same-day only. Shifts and plans are plans, not history: deleting one is a real delete.
--- The calendar settings (gym_hours, travel_buffer_min, after_shift_gap_min, preferred_windows, reminder_minutes) are
--- rows of the existing settings table, written only when Payam changes them; until then the code uses the approved
--- defaults (Mon–Fri 04:00–24:00, Sat 05:00–22:00, Sun 07:00–16:00; 20 min travel each way; 30 min after a shift;
--- reminder 60 min before), so this migration inserts nothing.
+-- The calendar settings (gym_hours, travel_buffer_min, wake_time_min, earliest_start_min, before_shift_gap_min,
+-- after_shift_gap_min, long_shift_gap_min, long_shift_min, preferred_windows, reminder_minutes) are rows of the existing
+-- settings table, written only when Payam changes them; until then the code uses his defaults (Mon–Fri 04:00–24:00,
+-- Sat 05:00–22:00, Sun 07:00–16:00; 20 min travel each way; wake 07:00, earliest start 08:00; the session ends 60 min
+-- before a shift; 30 min rest after a shift, 90 min after one of 8 h or more; reminder 60 min before), so this migration
+-- inserts nothing.
 
 CREATE TABLE work_shifts (
   id TEXT PRIMARY KEY,                                -- client ULID (created offline through the outbox)

@@ -92,3 +92,29 @@ Per CLAUDE.md, in Persian, with screenshots and test totals. No merge, no deploy
 ## 10. Also in this milestone (small, from M12)
 - `get_training_pattern` (M12) and the Coach spacing checks switch from the 4-week pattern to real calendar dates when plans exist for that week (M12 note 2c).
 - Full e2e suite on the final commit before merge (no exceptions); D1 restore point before the migration; production check report in Persian.
+
+---
+
+## Change by Payam, 2026-10-15 (after the M13a STOP review; replaces §3 rule 4 and the free-time default question)
+
+Goal: he only enters his shifts. The app suggests the best gym time by itself, with no setup. Settings are optional,
+only if he wants to change something.
+
+1. **Nothing ever blocks him.** He can plan, move or delete a session on any day and time (7 days in a row is fine).
+   The "two days in a row" rule is **not a filter**: a slot is never hidden because of it. It only affects ranking
+   (spread-out slots first) and may show a small neutral note. Same for the Coach: advice only. No "not allowed"
+   messages anywhere.
+2. **Built-in defaults** (editable in Settings, but they must work well untouched):
+   - wake_time = 07:00; earliest suggested start = 08:00.
+   - The gym session ends at least 60 min before a shift starts.
+   - Rest after a shift: 30 min; after a long shift (>= 8 h) 90 min.
+   - On long-shift days, a slot before the shift ranks first when one fits.
+   - Within gym hours, as already built.
+3. **Find times** shows one best suggestion per day (best first), pre-selects the best ones for the week, and he just
+   taps **Add** / **Add all**.
+
+Unit test example: shift 12:00–20:00 → suggested 08:00–09:00.
+
+Settings rows (written only when changed): `gym_hours`, `travel_buffer_min`, `wake_time_min`, `earliest_start_min`,
+`before_shift_gap_min`, `after_shift_gap_min`, `long_shift_gap_min`, `long_shift_min`, `preferred_windows`,
+`reminder_minutes`.

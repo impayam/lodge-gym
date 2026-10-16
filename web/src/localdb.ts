@@ -19,7 +19,12 @@ export type OutboxEntry =
   | { key: string; op: "body_mass"; date: string; value: number | null; unit: Unit; rev: number; queued_at: string }
   | { key: string; op: "photo"; photo: Photo; full: Blob; thumb: Blob; rev: number; queued_at: string }
   | { key: string; op: "delete_photo"; id: string; rev: number; queued_at: string }
-  | { key: string; op: "put_plan"; id: string; rev: number; queued_at: string };
+  | { key: string; op: "put_plan"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "put_shift"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "delete_shift"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "put_gymplan"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "delete_gymplan"; id: string; rev: number; queued_at: string }
+  | { key: string; op: "calendar_settings"; patch: Partial<CalendarSettings>; rev: number; queued_at: string };
 
 interface Schema extends DBSchema {
   kv: { key: string; value: unknown };

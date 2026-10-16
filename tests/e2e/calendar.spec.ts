@@ -1,10 +1,13 @@
 import { expect, test, type Page } from "./fixtures";
-import { resetCalendar, resetWorkouts, signIn, sql } from "./helpers";
+import { aiMode, goTo, resetCalendar, resetWorkouts, setOffline, signIn, sql } from "./helpers";
+import { hm } from "../../worker/lib/calendar";
 import { addDays, daysBetween, localDate, localHM, weekday, zonedToUtcISO } from "../../worker/lib/time";
 import { monthDates, weekLabel } from "../../web/src/lib/calendarView";
 
-// SPEC-v10 M13: the week strip at the top of Home and the Calendar it opens: the month strip, the week grid with work
-// shifts and planned / done / missed gym sessions, free times from the shared finder, and the List view.
+// SPEC-v10 M13 (with Payam's change of 2026-10-15: he enters his shifts, the app suggests the time, nothing blocks): the
+// week strip at the top of Home and the Calendar it opens: the month strip, the week grid with work shifts and planned /
+// done / missed gym sessions, free times from the shared finder, the List view; adding shifts (Copy last week), Find
+// times (Add all), plan by tap, drag and edit, reminders, a session marking its plan done, offline, Settings, the Coach.
 test.describe.configure({ mode: "serial" });
 
 const TZ = "America/Denver";
@@ -45,6 +48,10 @@ async function toThisWeek(page: Page) {
   if (await button.count()) await button.click();
   await expect(page.getByTestId("cal-week-label")).toHaveText(weekLabel(monday(today()), today()));
 }
+
+/** A block on the grid by the start of its accessible name (plans and shifts are buttons, done sessions images). */
+const block = (page: Page, name: string) => page.getByTestId("cal-week").locator(`[aria-label^="${name}"]`);
+const count = (q: string) => (sql(q)[0] as { n: number }).n;
 
 async function openCalendar(page: Page) {
   await page.goto("/");
@@ -98,7 +105,9 @@ test("Home: with nothing planned the strip offers Find times; a plan later today
   await page.goto("/");
   await expect(page.getByTestId("cal-next")).toHaveText("No gym time planned this week");
   await page.getByTestId("cal-find").click();
-  await expect(page.getByTestId("cal-free")).toBeChecked();
+  await expect(page.getByTestId("cal-find-sheet")).toHaveAttribute("open", "");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("cal-find-sheet")).toHaveCount(0);
   await page.getByTestId("back").click();
 
   // 23:00–24:00 today has not ended yet at any time of the day.
@@ -122,7 +131,7 @@ test("week grid: work, done, missed and planned blocks with their names; 44 px h
   await expect(page.getByTestId("cal-week-label")).toHaveText(weekLabel(monday(t), t));
   await expect(page.locator(".cal-week__head[data-today='true']")).toHaveCount(1);
   const grid = page.getByTestId("cal-week");
-  await expect(grid.getByRole("img", { name: `Work, ${weekdayLong(t)} 07:00–15:30, Store` })).toBeVisible();
+  await expect(block(page, `Work, ${weekdayLong(t)} 07:00–15:30, Store`)).toHaveCount(1);
   const cell = (await grid.locator(".cal-cell").first().boundingBox())!;
   expect(cell.height).toBe(44);
   // An hour of context above the current time (both read within the same minute or so: one row of slack).
@@ -133,10 +142,10 @@ test("week grid: work, done, missed and planned blocks with their names; 44 px h
   await showWeekOf(page, yesterday);
   await expect(grid.getByRole("img", { name: `Done: Day 1 · Chest, ${weekdayLong(yesterday)} 12:00–13:00` })).toHaveAttribute("data-kind", "done");
   await showWeekOf(page, before);
-  await expect(grid.getByRole("img", { name: `Missed: Day 2 · Legs, ${weekdayLong(before)} 17:00–18:00` })).toHaveAttribute("data-kind", "missed");
+  await expect(block(page, `Missed: Day 2 · Legs, ${weekdayLong(before)} 17:00–18:00`)).toHaveAttribute("data-kind", "missed");
   await toThisWeek(page);
   await showWeekOf(page, tomorrow);
-  await expect(grid.getByRole("img", { name: `Planned: Day 3 · Back, ${weekdayLong(tomorrow)} 17:30–18:30` })).toHaveAttribute("data-kind", "plan");
+  await expect(block(page, `Planned: Day 3 · Back, ${weekdayLong(tomorrow)} 17:30–18:30`)).toHaveAttribute("data-kind", "plan");
 
   // The List view: the same week day by day.
   await toThisWeek(page);
@@ -152,18 +161,16 @@ test("week grid: work, done, missed and planned blocks with their names; 44 px h
   await expect(page.getByTestId("cal-week")).toBeVisible();
 });
 
-test("free times: the shared finder's slots on a free week (gym hours by weekday), off again with the switch", async ({ page }) => {
+test("free times: the shared finder's suggestion for each day of a free week (08:00, the earliest start), off again with the switch", async ({ page }) => {
   await openCalendar(page);
   const next = addDays(monday(today()), 7);
   await showWeekOf(page, next);
   const grid = page.getByTestId("cal-week");
   await expect(grid.locator(".cal-block--free")).toHaveCount(0);
   await page.getByTestId("cal-free").check();
-  // Day 1 is next (60 min); the earliest time of each day: Mon–Fri 04:00, Sat 05:00, Sun 07:00.
-  const expected = [0, 1, 2, 3, 4].map((i) => `Free time, ${weekdayLong(addDays(next, i))} 04:00–05:00`);
-  expected.push(`Free time, ${weekdayLong(addDays(next, 5))} 05:00–06:00`, `Free time, ${weekdayLong(addDays(next, 6))} 07:00–08:00`);
+  // Day 1 is next (60 min); no shifts: every day's suggestion is the earliest start, 08:00 (the gym opens earlier).
   await expect(grid.locator(".cal-block--free")).toHaveCount(7);
-  for (const name of expected) await expect(grid.getByRole("img", { name })).toBeVisible();
+  for (let i = 0; i < 7; i++) await expect(grid.getByRole("button", { name: `Free time, ${weekdayLong(addDays(next, i))} 08:00–09:00. Plan gym here` })).toHaveCount(1);
   await expect(page.locator(".chart-legend")).toContainText("Free");
   await page.getByTestId("cal-free").uncheck();
   await expect(grid.locator(".cal-block--free")).toHaveCount(0);
@@ -195,4 +202,179 @@ test("month strip: dots for training, the days of the week shown pressed in; a d
   await expect(page.getByTestId("cal-day-sheet").getByText("Nothing on this day.")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("cal-week-label")).toHaveText(weekLabel(monday(other), today()));
+});
+
+test("§8: add shifts, Copy last week, Find times → Add all with reminders; a session that day marks its plan done", async ({ page }) => {
+  test.setTimeout(180_000);
+  const t = today();
+  const w1 = addDays(monday(t), 7);
+  const w2 = addDays(w1, 7);
+  await openCalendar(page);
+  await page.getByTestId("cal-next-week").click();
+  await expect(page.getByTestId("cal-week-label")).toHaveText(weekLabel(w1, t));
+  // Empty week: Add shift; nothing to copy (this week has no shifts).
+  await expect(page.getByTestId("cal-empty")).toContainText("No shifts this week.");
+  await expect(page.getByTestId("cal-copy")).toHaveCount(0);
+  await page.getByTestId("cal-empty-add").click();
+  const shiftSheet = page.getByTestId("cal-shift-sheet");
+  await expect(shiftSheet).toHaveAttribute("open", "");
+  await shiftSheet.locator(`.cal-day[data-date="${w1}"]`).click();
+  await shiftSheet.locator(`.cal-day[data-date="${addDays(w1, 1)}"]`).click();
+  await shiftSheet.locator("#shift-start").fill("12:00");
+  await shiftSheet.locator("#shift-end").fill("20:00");
+  await expect(shiftSheet.getByTestId("shift-save")).toHaveText("Add 2 shifts");
+  await shiftSheet.getByTestId("shift-save").click();
+  await expect(page.getByTestId("toast")).toHaveText("2 shifts added.");
+  await expect(block(page, `Work, ${weekdayLong(w1)} 12:00–20:00`)).toHaveCount(1);
+  await expect(block(page, `Work, ${weekdayLong(addDays(w1, 1))} 12:00–20:00`)).toHaveCount(1);
+
+  // The week after: Copy last week.
+  await page.getByTestId("cal-next-week").click();
+  await expect(page.getByTestId("cal-week-label")).toHaveText(weekLabel(w2, t));
+  await page.getByTestId("cal-copy").click();
+  await expect(page.getByTestId("toast")).toHaveText("Copied 2 shifts from last week.");
+  await expect(page.getByTestId("cal-week").locator(".cal-block--work")).toHaveCount(2);
+  await expect(page.getByTestId("cal-empty")).toHaveCount(0);
+
+  // Find times: one suggestion a day, best first, the best four ticked; Monday's 12:00–20:00 shift → 08:00 before it.
+  await page.getByTestId("cal-find-times").click();
+  const find = page.getByTestId("cal-find-sheet");
+  await expect(find).toHaveAttribute("open", "");
+  await expect(find.getByTestId("find-row")).toHaveCount(7);
+  const mon = find.locator(`[data-testid="find-row"][data-date="${w2}"]`);
+  await expect(mon).toHaveAttribute("data-start", "08:00");
+  await expect(mon).toContainText("Before your 12:00 shift");
+  await expect(find.getByTestId("find-need")).toHaveText("0 of 4 sessions this week are done or planned; the best 4 times are ticked.");
+  await expect(find.locator('input[type="checkbox"]:checked')).toHaveCount(4);
+  await expect(find.getByTestId("find-add-all")).toHaveText("Add all (4)");
+  await find.getByTestId("find-add-all").click();
+  await expect(page.getByTestId("toast")).toHaveText("Added 4 gym sessions.");
+  await expect(page.getByTestId("cal-week").locator(".cal-block--plan")).toHaveCount(4);
+
+  // On the server, each with its reminder an hour before (the push is queued at that time).
+  await expect.poll(() => count("SELECT COUNT(*) AS n FROM gym_plans WHERE source = 'finder' AND reminder_at IS NOT NULL"), { timeout: 20_000 }).toBe(4);
+  for (const r of sql("SELECT date, start_min, reminder_at FROM gym_plans") as { date: string; start_min: number; reminder_at: string }[])
+    expect(Date.parse(r.reminder_at)).toBe(Date.parse(zonedToUtcISO(r.date, hm(r.start_min), TZ)) - 3_600_000);
+
+  // A plan today (any time: nothing blocks), then the session: the plan is done.
+  await page.getByTestId("cal-today").click();
+  await page.getByTestId("cal-plan").click();
+  const planSheet = page.getByTestId("cal-plan-sheet");
+  await expect(planSheet).toHaveAttribute("open", "");
+  await planSheet.locator(`.cal-day[data-date="${t}"]`).click();
+  await planSheet.locator("#plan-start").fill("23:00");
+  await planSheet.getByTestId("plan-save").click();
+  await expect(page.getByTestId("toast")).toContainText(`Planned ${weekdayShort(t)} 23:00`);
+  await expect(page.locator(`.cal-col[data-date="${t}"] .cal-block--plan`)).toHaveCount(1);
+  await page.getByTestId("back").click();
+  await expect(page.getByTestId("hero-gym-time")).toContainText("Planned today at 23:00");
+  await page.getByTestId("start").click();
+  await expect(page.getByTestId("finish")).toBeVisible();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByTestId("cal-open").click();
+  await expect(page.locator(`.cal-col[data-date="${t}"] .cal-block--plan`)).toHaveCount(0);
+  await expect(page.locator(`.cal-col[data-date="${t}"] .cal-block--done`)).toHaveCount(1);
+  await expect.poll(() => sql(`SELECT status, session_id IS NOT NULL AS linked FROM gym_plans WHERE date = '${t}'`)[0], { timeout: 20_000 }).toEqual({ status: "done", linked: 1 });
+});
+
+test("offline: a shift added offline shows at once and reaches the server when back online", async ({ page, context }) => {
+  await openCalendar(page);
+  await setOffline(context, page, true);
+  await page.getByTestId("cal-add-shift").click();
+  const sheet = page.getByTestId("cal-shift-sheet");
+  await sheet.locator(`.cal-day[data-date="${today()}"]`).click();
+  await sheet.locator("#shift-start").fill("06:00");
+  await sheet.locator("#shift-end").fill("07:00");
+  await sheet.getByTestId("shift-save").click();
+  await expect(page.getByTestId("cal-week").locator(".cal-block--work")).toHaveCount(1);
+  expect(count("SELECT COUNT(*) AS n FROM work_shifts")).toBe(0);
+  await setOffline(context, page, false);
+  await expect.poll(() => sql("SELECT start_min, end_min FROM work_shifts")[0], { timeout: 20_000 }).toEqual({ start_min: 360, end_min: 420 });
+});
+
+test("plan by tap on an empty time; drag the plan to another day and time; edit it; delete it", async ({ page }) => {
+  const wed = addDays(monday(today()), 9);
+  await openCalendar(page);
+  await page.getByTestId("cal-next-week").click();
+  // Tap Wednesday at 08:00, with the grid at its top (04:00) and its card at the top of the screen (clear of the tab bar).
+  await page.locator(".cal-scroll").evaluate((el) => (el.scrollTop = 0));
+  await page.getByTestId("cal-week").evaluate((el) => el.scrollIntoView({ block: "start" }));
+  const col = page.locator(`.cal-col[data-date="${wed}"]`);
+  const box = (await col.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + 4 * 44 + 10);
+  const tap = page.getByTestId("cal-tap-sheet");
+  await expect(tap).toHaveAttribute("open", "");
+  await expect(tap.getByRole("heading")).toHaveText(`${dateShort(wed)} · 08:00`);
+  await tap.getByTestId("cal-plan-here").click();
+  const onWed = page.locator(`.cal-col[data-date="${wed}"] .cal-block--plan`);
+  await expect(onWed).toHaveAttribute("data-start", "08:00");
+  await expect(tap).toHaveCount(0);
+
+  // Drag one column right and one hour down: Thursday 09:00.
+  const b = (await onWed.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 12, b.y + 20, { steps: 4 });
+  await page.mouse.move(b.x + b.width / 2 + box.width, b.y + 8 + 44, { steps: 6 });
+  await page.mouse.up();
+  const thu = addDays(wed, 1);
+  await expect(page.getByTestId("toast")).toHaveText(`Moved to ${weekdayShort(thu)} 09:00.`);
+  const onThu = page.locator(`.cal-col[data-date="${thu}"] .cal-block--plan`);
+  await expect(onThu).toHaveAttribute("data-start", "09:00");
+  await expect(onWed).toHaveCount(0);
+  await expect.poll(() => sql("SELECT date, start_min FROM gym_plans")[0], { timeout: 20_000 }).toEqual({ date: thu, start_min: 540 });
+
+  // Edit: 18:00. Delete, with its confirm.
+  await onThu.click();
+  const sheet = page.getByTestId("cal-plan-sheet");
+  await expect(sheet).toHaveAttribute("open", "");
+  await sheet.locator("#plan-start").fill("18:00");
+  await sheet.getByTestId("plan-save").click();
+  await expect(onThu).toHaveAttribute("data-start", "18:00");
+  await onThu.click();
+  await expect(sheet).toHaveAttribute("open", "");
+  await sheet.getByTestId("plan-delete").click();
+  await sheet.getByTestId("plan-delete-confirm").click();
+  await expect(page.locator(".cal-block--plan")).toHaveCount(0);
+  await expect.poll(() => count("SELECT COUNT(*) AS n FROM gym_plans"), { timeout: 20_000 }).toBe(0);
+});
+
+test("Settings: the defaults work untouched; a changed reminder time and a closed day are saved and synced", async ({ page }) => {
+  await page.goto("/");
+  await goTo(page, "Settings");
+  const card = page.getByTestId("calendar-settings");
+  await expect(card.locator("#cal-wake")).toHaveValue("07:00");
+  await expect(card.locator("#cal-earliest")).toHaveValue("08:00");
+  await expect(card.locator("#cal-before")).toHaveValue("60");
+  await expect(card.locator("#cal-after")).toHaveValue("30");
+  await expect(card.locator("#cal-after-long")).toHaveValue("90");
+  await expect(card.locator("#cal-reminder")).toHaveValue("60");
+  await card.locator("#cal-reminder").selectOption("30");
+  await expect.poll(() => sql("SELECT value FROM settings WHERE key = 'reminder_minutes'")[0], { timeout: 20_000 }).toEqual({ value: "30" });
+  await card.getByTestId("hours-sun").getByRole("checkbox", { name: "Closed" }).check();
+  await expect.poll(() => JSON.parse((sql("SELECT value FROM settings WHERE key = 'gym_hours'")[0] as { value?: string } | undefined)?.value ?? "{}").sun, { timeout: 20_000 }).toBeNull();
+});
+
+test("Coach: 'when should I go' → a schedule of the finder's times → Add to calendar", async ({ page }) => {
+  await aiMode({ coach: "ok" });
+  sql("DELETE FROM coach_attachments; DELETE FROM coach_messages; DELETE FROM coach_threads");
+  const next = addDays(monday(today()), 7);
+  shift("cw1", next, "12:00", "20:00");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask the coach" }).click();
+  await page.getByTestId("coach-input").fill("When should I go to the gym next week?");
+  await page.getByTestId("coach-send").click();
+  const card = page.getByTestId("coach-schedule");
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  const rows = card.getByTestId("coach-schedule-row");
+  await expect(rows).toHaveCount(3);
+  await expect(card.locator(`[data-date="${next}"]`)).toContainText("08:00");
+  await expect(card.locator(`[data-date="${next}"] [lang="fa"]`)).toContainText("قبل از شیفت ساعت 12:00");
+  // Nothing on the calendar before the tap.
+  expect(count("SELECT COUNT(*) AS n FROM gym_plans")).toBe(0);
+  await card.getByTestId("coach-add-schedule").click();
+  await expect(page.getByTestId("toast")).toHaveText("Added 3 gym sessions to the calendar.");
+  await expect(card.getByTestId("coach-schedule-added")).toBeVisible();
+  await expect.poll(() => count("SELECT COUNT(*) AS n FROM gym_plans WHERE source = 'coach'"), { timeout: 20_000 }).toBe(3);
+  sql("DELETE FROM coach_attachments; DELETE FROM coach_messages; DELETE FROM coach_threads");
 });

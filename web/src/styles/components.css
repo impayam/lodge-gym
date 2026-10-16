@@ -548,6 +548,11 @@ fieldset.form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .cal-block--done { background: var(--pink); color: var(--bg-solid); }
 .cal-block--missed { background: var(--card-top); box-shadow: inset 0 0 0 1.5px var(--ink-decor); color: var(--ink-3); }
 .cal-block--free { background: none; border: 1.5px dotted var(--violet); color: var(--violet-ink); }
+.cal-block--plan, .cal-block--missed { touch-action: none; }                           /* a plan drags (15 min steps, whole days) */
+.cal-block[data-dragging="true"] { z-index: 2; outline: 2px solid var(--pink); outline-offset: 1px; }
+.cal-block:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+.cal-strip--pick .cal-day[aria-pressed="true"] { background: var(--well); box-shadow: var(--sh-well); color: var(--pink); }   /* day chips in a sheet */
+.cal-strip--pick .cal-day[aria-pressed="true"] > b { color: var(--pink); }
 
 @media (prefers-reduced-motion: reduce) {
   .press, .tabbar__indicator, .sheet, .rest, .scrim, .pushed, .swipe, .rest__arc { transition: none; }

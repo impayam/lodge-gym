@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CALENDAR_SETTINGS, hm, toMin, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
+import { DEFAULT_CALENDAR_SETTINGS, hm, toMin, type FreeSlot, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
 import type { WorkoutSession } from "../../worker/lib/types";
 import {
+  assignDays,
   blockLabel,
+  copyLastWeek,
+  dragTarget,
+  minuteAt,
+  newGymPlan,
+  slotReason,
+  streakNote,
+  timeInput,
+  timeValue,
   calendarWeek,
   dayChips,
   gridPlace,
@@ -131,16 +140,17 @@ describe("week grid", () => {
     expect(days[2].today).toBe(true);
   });
 
-  it("free times come from the shared finder with the days around the week", () => {
+  it("free times are the shared finder's suggestions: one a day, the days around the week counted", () => {
     const s = src({ shifts: [shift("w1", "2026-10-22", "12:00", "20:00")], sessions: [session("s0", "2026-10-18"), session("s1", "2026-10-17")] });
     const { days, finder } = calendarWeek(s, "2026-10-19", { upcoming: upcomingDays(DAYS, "D3"), days_per_week: 4, now_min: toMin("10:00") });
-    // Monday would be the third day in a row after Sat 17 + Sun 18; Tuesday is before today.
+    // Monday and Tuesday are before today.
     expect(days[0].free).toEqual([]);
     expect(days[1].free).toEqual([]);
     // Today from 10:00 + 20 min travel, rounded up to 10:30.
     expect(days[2].free.map((x) => hm(x.start_min))).toEqual(["10:30"]);
-    // Thursday: before the 12:00 shift (back by 12:00) and after it (20:00 + 30 min + 20 min = 20:50, rounded to 21:00).
-    expect(days[3].free.map((x) => hm(x.start_min))).toEqual(["04:00", "21:00"]);
+    // Thursday's 12:00–20:00 shift: 08:00, before it.
+    expect(days[3].free.map((x) => [hm(x.start_min), hm(x.end_min)])).toEqual([["08:00", "09:00"]]);
+    expect(days.every((d) => d.free.length <= 1)).toBe(true);
     expect(finder?.need).toBe(4);
   });
 
@@ -175,5 +185,73 @@ describe("week and month", () => {
     expect(monthDates("2026-10-21")).toHaveLength(31);
     expect(monthDates("2026-02-10")).toHaveLength(28);
     expect(monthDates("2026-10-21")[0]).toBe("2026-10-01");
+  });
+});
+
+describe("writing the calendar", () => {
+  const slot = (date: string, start: string, more: Partial<FreeSlot> = {}): FreeSlot => ({
+    date,
+    start_min: toMin(start),
+    end_min: toMin(start) + 60,
+    leave_min: toMin(start) - 20,
+    back_min: toMin(start) + 80,
+    preferred: false,
+    before_shift_at: null,
+    after_shift_at: null,
+    long_shift_day: false,
+    streak: 1,
+    selected: true,
+    program_day_id: null,
+    ...more,
+  });
+
+  it("Add all gives the ticked times the next program days in date order", () => {
+    const up = upcomingDays(DAYS, "D3");
+    const out = assignDays([slot("2026-10-23", "08:00"), slot("2026-10-19", "17:00"), slot("2026-10-21", "08:00")], up);
+    expect(out.map((a) => [a.slot.date, a.day.id])).toEqual([
+      ["2026-10-19", "D3"],
+      ["2026-10-21", "D4"],
+      ["2026-10-23", "D1"],
+    ]);
+    expect(assignDays([slot("2026-10-19", "08:00")], [])).toEqual([]);
+  });
+
+  it("a new plan takes the program day's length and stays inside the day", () => {
+    expect(newGymPlan("p", "2026-10-21", toMin("08:00"), { id: "D4", minutes: 75 }, "finder", "t")).toMatchObject({ start_min: 480, end_min: 555, status: "planned", session_id: null, source: "finder" });
+    expect(newGymPlan("p", "2026-10-21", toMin("23:30"), { id: "D1", minutes: 60 }, "manual", "t")).toMatchObject({ start_min: 1380, end_min: 1440 });
+  });
+
+  it("Copy last week fills only this week's days without a shift, at the same weekday and times", () => {
+    let n = 0;
+    const shifts = [shift("a", "2026-10-12", "07:00", "15:30", "Store"), shift("b", "2026-10-14", "12:00", "20:00"), shift("c", "2026-10-21", "06:00", "14:00"), shift("old", "2026-10-05", "09:00", "17:00")];
+    const out = copyLastWeek(shifts, "2026-10-19", () => `n${++n}`, "now");
+    expect(out.map((x) => [x.id, x.date, hm(x.start_min), hm(x.end_min), x.note])).toEqual([["n1", "2026-10-19", "07:00", "15:30", "Store"]]);
+    // Tapped again after the copy: nothing more.
+    expect(copyLastWeek([...shifts, ...out], "2026-10-19", () => "x", "now")).toEqual([]);
+  });
+
+  it("a tap's time is rounded down to 15 minutes; a drag moves by whole days and 15-minute steps, inside the day", () => {
+    expect(hm(minuteAt(0, 240, 44))).toBe("04:00");
+    expect(hm(minuteAt(44 * 13.6, 240, 44))).toBe("17:30");
+    expect(hm(minuteAt(44 * 30, 240, 44))).toBe("23:45");
+    const p = { date: "2026-10-21", start_min: toMin("17:30"), end_min: toMin("18:30") };
+    expect(dragTarget(p, 47, 30, 46, 44, { start: 240, end: 1440 })).toEqual({ date: "2026-10-22", start_min: toMin("18:15"), end_min: toMin("19:15") });
+    expect(dragTarget(p, -100, -2000, 46, 44, { start: 240, end: 1440 })).toEqual({ date: "2026-10-19", start_min: 240, end_min: 300 });
+    expect(dragTarget(p, 0, 5000, 46, 44, { start: 240, end: 1440 })).toMatchObject({ start_min: 1380, end_min: 1440 });
+  });
+
+  it("time inputs: 00:00 as an end is midnight", () => {
+    expect(timeInput("07:30")).toBe(450);
+    expect(timeInput("00:00", true)).toBe(1440);
+    expect(timeInput("00:00")).toBe(0);
+    expect(timeInput("7:30")).toBeNull();
+    expect(timeValue(1440)).toBe("00:00");
+  });
+
+  it("explains a suggestion in a few words; a long run of days is a neutral note", () => {
+    expect(slotReason(slot("2026-10-19", "08:00", { before_shift_at: toMin("12:00") }))).toBe("Before your 12:00 shift");
+    expect(slotReason(slot("2026-10-19", "16:00", { after_shift_at: toMin("14:00"), preferred: true }))).toBe("After your shift (ends 14:00) · preferred time");
+    expect(slotReason(slot("2026-10-19", "08:00"))).toBe("No shift this day");
+    expect([2, 3, 4, 11, 21, 22, 23].map(streakNote)).toEqual(["", "3rd training day in a row", "4th training day in a row", "11th training day in a row", "21st training day in a row", "22nd training day in a row", "23rd training day in a row"]);
   });
 });

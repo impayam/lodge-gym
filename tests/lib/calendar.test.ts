@@ -6,6 +6,7 @@ import {
   planForSession,
   planState,
   planStates,
+  reminderText,
   sessionBlock,
   toMin,
   weekDates,
@@ -14,7 +15,8 @@ import {
   type GymPlan,
 } from "../../worker/lib/calendar";
 
-// SPEC-v10 M13 §3: the free-slot finder and the plan ↔ session rules. The week is Mon 2026-10-19 … Sun 2026-10-25.
+// SPEC-v10 M13 §3 as changed by Payam on 2026-10-15 (he enters his shifts, the app suggests the time; nothing blocks), and
+// the plan ↔ session rules. The week is Mon 2026-10-19 … Sun 2026-10-25.
 const WEEK = weekDates("2026-10-19");
 const UPCOMING = [
   { id: "D3", name: "Day 3 · Back", minutes: 60 },
@@ -36,30 +38,57 @@ const input = (more: Partial<FinderInput> = {}): FinderInput => ({
 });
 const shift = (date: string, from: string, to: string) => ({ date, start_min: toMin(from), end_min: toMin(to) });
 const startsOn = (r: ReturnType<typeof findFreeSlots>, date: string) => r.slots.filter((x) => x.date === date).map((x) => hm(x.start_min));
-const evenings: CalendarSettings = { ...DEFAULT_CALENDAR_SETTINGS, preferred_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start_min: toMin("17:00"), end_min: toMin("21:00") }] };
 
-describe("findFreeSlots: what fits", () => {
-  it("a shift blocks its hours plus the gap after it; travel is added before and after the session", () => {
-    // 07:00–15:30 shift: back from the gym by 07:00 at the latest, leave 30 min after the shift ends (16:00) + 20 min travel.
-    const r = findFreeSlots(input({ shifts: [shift("2026-10-19", "07:00", "15:30")] }));
-    expect(startsOn(r, "2026-10-19")).toEqual(["04:00", "16:30"]);
-    const late = r.slots.find((x) => x.date === "2026-10-19" && x.start_min === toMin("16:30"))!;
-    expect([hm(late.leave_min), hm(late.end_min), hm(late.back_min)]).toEqual(["16:10", "17:30", "17:50"]);
-    // 04:00 still fits before a 05:30 shift (back home 05:20), not before a 05:00 one; after 23:00 nothing fits.
-    expect(startsOn(findFreeSlots(input({ shifts: [shift("2026-10-20", "05:30", "23:00")] })), "2026-10-20")).toEqual(["04:00"]);
-    expect(startsOn(findFreeSlots(input({ shifts: [shift("2026-10-20", "05:00", "23:00")] })), "2026-10-20")).toEqual([]);
+describe("findFreeSlots: what fits (Payam's defaults, untouched)", () => {
+  it("a 12:00–20:00 shift: the suggestion is 08:00–09:00, before the shift", () => {
+    const r = findFreeSlots(input({ shifts: [shift("2026-10-19", "12:00", "20:00")] }));
+    const mon = r.slots.find((x) => x.date === "2026-10-19")!;
+    expect([hm(mon.start_min), hm(mon.end_min)]).toEqual(["08:00", "09:00"]);
+    expect(mon.before_shift_at).toBe(toMin("12:00"));
+    expect(mon.long_shift_day).toBe(true);
   });
 
-  it("fits the gym's hours per weekday, finished with travel before closing (Sat 05:00–22:00, Sun 07:00–16:00)", () => {
+  it("never before the earliest start (08:00) nor wake-up plus travel; a day off starts at 08:00", () => {
+    const r = findFreeSlots(input());
+    expect(r.slots.map((x) => [x.date.slice(8), hm(x.start_min)]).sort()).toEqual([
+      ["19", "08:00"],
+      ["20", "08:00"],
+      ["21", "08:00"],
+      ["22", "08:00"],
+      ["23", "08:00"],
+      ["24", "08:00"],
+      ["25", "08:00"],
+    ]);
+    const early = findFreeSlots(input({ settings: { ...DEFAULT_CALENDAR_SETTINGS, earliest_start_min: toMin("05:00"), wake_time_min: toMin("05:30") } }));
+    // Wake 05:30 + 20 min travel = 05:50, rounded to 06:00; Sunday opens at 07:00.
+    expect(startsOn(early, "2026-10-19")).toEqual(["06:00"]);
+    expect(startsOn(early, "2026-10-25")).toEqual(["07:00"]);
+  });
+
+  it("the session ends at least 60 min before a shift starts", () => {
+    // 08:00–09:00 + 60 min = 10:00: fits a 10:00 shift, not a 09:45 one (then after the shift: 14:00 + 30 + 20 → 15:00).
+    expect(startsOn(findFreeSlots(input({ shifts: [shift("2026-10-20", "10:00", "14:00")] })), "2026-10-20")).toEqual(["08:00"]);
+    expect(startsOn(findFreeSlots(input({ shifts: [shift("2026-10-20", "09:45", "14:00")] })), "2026-10-20")).toEqual(["15:00"]);
+  });
+
+  it("rest after a shift: 30 min, 90 min after a long one (8 h or more), then travel", () => {
+    // 06:00–13:00 (7 h): 13:00 + 30 + 20 = 13:50 → 14:00. 06:00–14:00 (8 h): 14:00 + 90 + 20 = 15:50 → 16:00.
+    expect(startsOn(findFreeSlots(input({ shifts: [shift("2026-10-21", "06:00", "13:00")] })), "2026-10-21")).toEqual(["14:00"]);
+    const long = findFreeSlots(input({ shifts: [shift("2026-10-21", "06:00", "14:00")], days_per_week: 0 }));
+    const wed = long.slots.find((x) => x.date === "2026-10-21")!;
+    expect([hm(wed.leave_min), hm(wed.start_min), hm(wed.end_min), hm(wed.back_min)]).toEqual(["15:40", "16:00", "17:00", "17:20"]);
+    expect(wed.after_shift_at).toBe(toMin("14:00"));
+  });
+
+  it("inside the gym's hours for that weekday, finished with travel before closing", () => {
+    // Saturday closes at 22:00: after a 06:00–20:00 shift (14 h) 20:00 + 90 + 20 → 22:00 is too late.
     const r = findFreeSlots(input({ shifts: [shift("2026-10-24", "06:00", "20:00")] }));
-    // Saturday: 20:00 + 30 + 20 → 21:00; 21:00 + 60 + 20 = 22:20 is after closing.
     expect(startsOn(r, "2026-10-24")).toEqual([]);
-    expect(startsOn(r, "2026-10-25")).toEqual(["07:00"]);
     const closed = findFreeSlots(input({ settings: { ...DEFAULT_CALENDAR_SETTINGS, gym_hours: { ...DEFAULT_CALENDAR_SETTINGS.gym_hours, sun: null } } }));
     expect(startsOn(closed, "2026-10-25")).toEqual([]);
   });
 
-  it("does not overlap a plan or a logged session, and a day that has one gets no slot", () => {
+  it("one suggestion a day; a day that already has a plan or a session gets none", () => {
     const r = findFreeSlots(
       input({
         plans: [{ date: "2026-10-21", start_min: toMin("17:00"), end_min: toMin("18:00"), status: "planned" }],
@@ -68,6 +97,7 @@ describe("findFreeSlots: what fits", () => {
     );
     expect(startsOn(r, "2026-10-19")).toEqual([]);
     expect(startsOn(r, "2026-10-21")).toEqual([]);
+    expect(new Set(r.slots.map((x) => x.date)).size).toBe(r.slots.length);
     expect(r.need).toBe(2);
   });
 
@@ -77,73 +107,129 @@ describe("findFreeSlots: what fits", () => {
     expect(startsOn(r, "2026-10-21")).toEqual(["10:30"]);
   });
 
-  it("keeps at most two training days in a row, also across the week boundary", () => {
+  it("two training days in a row never hide a slot: a third day still gets one, ranked last, with its streak", () => {
     const r = findFreeSlots(
       input({
         sessions: [
           { date: "2026-10-17", start_min: 720, end_min: 780 },
           { date: "2026-10-18", start_min: 720, end_min: 780 },
-          { date: "2026-10-20", start_min: 720, end_min: 780 },
-          { date: "2026-10-21", start_min: 720, end_min: 780 },
         ],
+        days_per_week: 7,
       })
     );
-    // Sat 17 + Sun 18 trained: Monday would be the third in a row; Tue + Wed trained: Mon and Thu would be too.
-    expect(startsOn(r, "2026-10-19")).toEqual([]);
-    expect(startsOn(r, "2026-10-22")).toEqual([]);
-    expect(startsOn(r, "2026-10-23")).not.toEqual([]);
-    for (const x of r.slots.filter((s) => s.selected)) {
-      const trained = new Set(["2026-10-17", "2026-10-18", "2026-10-20", "2026-10-21", ...r.slots.filter((s) => s.selected).map((s) => s.date)]);
-      const d = (n: number) => trained.has(WEEK[Math.max(0, WEEK.indexOf(x.date) + n)]);
-      expect(d(-1) && d(1) && d(-2)).toBe(false);
-    }
+    const mon = r.slots.find((x) => x.date === "2026-10-19")!;
+    expect(hm(mon.start_min)).toBe("08:00");
+    expect(r.slots).toHaveLength(7);
+    // Seven a week: every day is pre-selected, and Monday is the third (and the week the ninth) training day in a row.
+    expect(r.slots.every((x) => x.selected)).toBe(true);
+    expect(mon.streak).toBe(9);
+    expect(r.slots.at(-1)!.date).not.toBe("2026-10-23");
   });
 });
 
 describe("findFreeSlots: ranking and selection", () => {
-  it("selects what is still needed this week: days per week minus sessions done or planned", () => {
+  it("selects what is still needed this week: days per week minus days done or planned", () => {
     const r = findFreeSlots(input({ plans: [{ date: "2026-10-22", start_min: 1020, end_min: 1080, status: "planned" }], sessions: [{ date: "2026-10-19", start_min: 720, end_min: 780 }] }));
     expect(r.need).toBe(2);
     expect(r.slots.filter((x) => x.selected)).toHaveLength(2);
+    // Best first: the pre-selected ones lead the list.
+    expect(r.slots.slice(0, 2).every((x) => x.selected)).toBe(true);
   });
 
-  it("preferred windows first, then spread across the week (one a day), then earlier in the day", () => {
-    const r = findFreeSlots(input({ settings: evenings }));
-    const picked = r.slots.filter((x) => x.selected);
-    // Weekday evenings first, spread Mon / Wed / Fri; Tue or Thu would make three in a row, so the fourth is the
-    // weekend (no preferred window there): Sunday, the farthest from the others, at its earliest time.
-    expect(picked.map((x) => [x.date, hm(x.start_min), x.preferred])).toEqual([
-      ["2026-10-19", "17:00", true],
-      ["2026-10-21", "17:00", true],
-      ["2026-10-23", "17:00", true],
-      ["2026-10-25", "07:00", false],
+  it("spreads the week: the picks stay apart from each other and from the days already trained", () => {
+    const r = findFreeSlots(input());
+    // Four a week, no shifts: Monday, Friday (four days on), Wednesday, Sunday; Tue / Thu / Sat would each be the
+    // middle of three training days in a row, so they come after, with that streak.
+    expect(r.slots.map((x) => x.date.slice(8))).toEqual(["19", "23", "21", "25", "20", "22", "24"]);
+    expect(r.slots.slice(4).map((x) => x.streak)).toEqual([3, 3, 3]);
+    const picked = r.slots.filter((x) => x.selected).sort((a, b) => a.date.localeCompare(b.date));
+    expect(picked.map((x) => [x.date, hm(x.start_min)])).toEqual([
+      ["2026-10-19", "08:00"],
+      ["2026-10-21", "08:00"],
+      ["2026-10-23", "08:00"],
+      ["2026-10-25", "08:00"],
     ]);
-    // Without preferred windows the earliest time of each day wins, spread the same way.
-    expect(findFreeSlots(input()).slots.filter((x) => x.selected).map((x) => [x.date, hm(x.start_min)])).toEqual([
-      ["2026-10-19", "04:00"],
-      ["2026-10-21", "04:00"],
-      ["2026-10-23", "04:00"],
-      ["2026-10-25", "07:00"],
+    expect(picked.every((x) => x.streak === 1)).toBe(true);
+  });
+
+  it("a third training day in a row ranks below a spread-out day, but stays in the list", () => {
+    // Mon + Tue trained, Thu + Fri planned: Wed would be the third in a row (both sides), Sat the third after Thu + Fri.
+    const r = findFreeSlots(
+      input({
+        sessions: [
+          { date: "2026-10-19", start_min: 720, end_min: 780 },
+          { date: "2026-10-20", start_min: 720, end_min: 780 },
+        ],
+        plans: [
+          { date: "2026-10-22", start_min: 720, end_min: 780, status: "planned" },
+          { date: "2026-10-23", start_min: 720, end_min: 780, status: "planned" },
+        ],
+        days_per_week: 5,
+      })
+    );
+    expect(r.need).toBe(1);
+    expect(r.slots.map((x) => x.date)).toEqual(["2026-10-25", "2026-10-21", "2026-10-24"]);
+    expect(r.slots[0].selected).toBe(true);
+    expect(r.slots.find((x) => x.date === "2026-10-21")!.streak).toBe(5);
+  });
+
+  it("on a long-shift day the slot before the shift ranks first, even over a preferred window", () => {
+    const windows: CalendarSettings = { ...DEFAULT_CALENDAR_SETTINGS, preferred_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start_min: toMin("18:00"), end_min: toMin("22:00") }] };
+    const r = findFreeSlots(
+      input({
+        settings: windows,
+        shifts: [shift("2026-10-19", "10:00", "18:00"), shift("2026-10-20", "12:00", "16:00")],
+      })
+    );
+    // Monday (8 h): 08:00 before the shift, not 20:00 in the window (18:00 + 90 + 20 → 20:00).
+    expect(startsOn(r, "2026-10-19")).toEqual(["08:00"]);
+    // Tuesday (4 h): the preferred window wins over 08:00.
+    const tue = r.slots.find((x) => x.date === "2026-10-20")!;
+    expect([hm(tue.start_min), tue.preferred, tue.long_shift_day]).toEqual(["18:00", true, false]);
+  });
+
+  it("preferred windows first across the week", () => {
+    const evenings: CalendarSettings = { ...DEFAULT_CALENDAR_SETTINGS, preferred_windows: [{ days: ["tue", "thu"], start_min: toMin("17:00"), end_min: toMin("21:00") }] };
+    const r = findFreeSlots(input({ settings: evenings, days_per_week: 2 }));
+    expect(r.slots.slice(0, 2).map((x) => [x.date, hm(x.start_min), x.preferred, x.selected])).toEqual([
+      ["2026-10-20", "17:00", true, true],
+      ["2026-10-22", "17:00", true, true],
     ]);
   });
 
   it("gives the selected slots the program days in date order, each with its own length", () => {
-    const r = findFreeSlots(input({ settings: evenings }));
-    const picked = r.slots.filter((x) => x.selected);
+    const r = findFreeSlots(input());
+    const picked = r.slots.filter((x) => x.selected).sort((a, b) => a.date.localeCompare(b.date));
     expect(picked.map((x) => x.program_day_id)).toEqual(["D3", "D4", "D1", "D2"]);
     expect(picked.map((x) => x.end_min - x.start_min)).toEqual([60, 75, 60, 60]);
+    expect(r.slots.filter((x) => !x.selected).every((x) => x.program_day_id === null && x.end_min - x.start_min === 60)).toBe(true);
     expect(r.length_min).toBe(60);
+  });
+
+  it("a longer program day takes that day's best start for its length", () => {
+    // Wednesday: a 10:00 shift leaves room for 60 min before it (08:00–09:00, + 60 = 10:00), not for Day 4's 75; after
+    // it 14:00 + 30 + 20 → 15:00.
+    const r = findFreeSlots(input({ shifts: [shift("2026-10-21", "10:00", "14:00")] }));
+    const wed = r.slots.find((x) => x.date === "2026-10-21")!;
+    expect([wed.program_day_id, hm(wed.start_min), hm(wed.end_min)]).toEqual(["D4", "15:00", "16:15"]);
   });
 
   it("the DST week (US clocks go back on Sun 2026-11-01): seven local dates, slots in local minutes", () => {
     const week = weekDates("2026-10-26");
     expect(week).toEqual(["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"]);
-    const r = findFreeSlots(input({ week, today: "2026-10-26", settings: evenings }));
-    expect(startsOn(r, "2026-11-01")).toEqual(["07:00"]);
+    const r = findFreeSlots(input({ week, today: "2026-10-26" }));
+    expect(startsOn(r, "2026-11-01")).toEqual(["08:00"]);
     // A session at 12:00 local is 18:00Z on Saturday (UTC−6) and 19:00Z on Sunday (UTC−7).
     const at = (started: string, ended: string, date: string) => sessionBlock({ id: "s", local_date: date, started_at: started, ended_at: ended, program_day_id: "D1", status: "done" }, "America/Denver", "2026-11-02T00:00:00.000Z");
     expect(at("2026-10-31T18:00:00.000Z", "2026-10-31T19:00:00.000Z", "2026-10-31")).toMatchObject({ start_min: 720, end_min: 780 });
     expect(at("2026-11-01T19:00:00.000Z", "2026-11-01T20:00:00.000Z", "2026-11-01")).toMatchObject({ start_min: 720, end_min: 780 });
+  });
+
+  it("the reminder text names the time left, the day and the time", () => {
+    expect(reminderText(60, "Day 3 · Back", toMin("17:30"))).toBe("Gym in 1 hour: Day 3 · Back, 17:30");
+    expect(reminderText(30, "Day 1 · Chest", toMin("08:00"))).toBe("Gym in 30 min: Day 1 · Chest, 08:00");
+    expect(reminderText(90, "Day 2 · Legs", toMin("06:15"))).toBe("Gym in 1 h 30 min: Day 2 · Legs, 06:15");
+    expect(reminderText(120, "Day 2 · Legs", toMin("06:15"))).toBe("Gym in 2 hours: Day 2 · Legs, 06:15");
   });
 });
 

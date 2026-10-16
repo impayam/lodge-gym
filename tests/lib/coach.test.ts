@@ -104,8 +104,24 @@ describe("coach tool inputs", () => {
     expect(sessions[1].exercises.find((x) => x.exercise_id === "cs_row")!.sets[0].weight).toBe(55.1);
   });
 
-  it("every tool has a strict object schema; there are 11 read tools and propose_program", () => {
-    expect(COACH_TOOLS.map((t) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "propose_program"]);
+  it("every tool has a strict object schema; there are 13 read tools, propose_schedule and propose_program", () => {
+    expect(COACH_TOOLS.map((t) => t.name)).toEqual([
+      "get_sessions",
+      "get_e1rm_history",
+      "get_volume",
+      "get_adherence",
+      "get_prs",
+      "get_program",
+      "get_library",
+      "get_body_weight",
+      "get_photos",
+      "get_recovery",
+      "get_training_pattern",
+      "get_calendar",
+      "find_free_slots",
+      "propose_schedule",
+      "propose_program",
+    ]);
     for (const t of COACH_TOOLS) expect(t.input_schema).toMatchObject({ type: "object", additionalProperties: false });
   });
 });
@@ -192,7 +208,7 @@ describe("propose_program", () => {
       "If you train Day 1 and Day 2 back to back, Hamstrings & glutes is trained on both days.",
       "If you train Day 4 and Day 1 back to back, Chest is trained on both days.",
     ]);
-    // Day 1 and Day 3 are never adjacent: his program has at most two training days in a row.
+    // Day 1 and Day 3 are never adjacent in the day order.
     expect(spacing.some((w) => w.includes("Day 1 and Day 3"))).toBe(false);
   });
 

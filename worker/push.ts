@@ -1,6 +1,6 @@
-// Rest-timer push (Web Push / VAPID). One Durable Object for the single user: it keeps the VAPID key pair
-// (generated on first use, never leaves the object except the public key), the push subscriptions, and the
-// pending rest end, and sends the push from an alarm at that moment.
+// Push notifications (Web Push / VAPID). One Durable Object for the single user: it keeps the VAPID key pair
+// (generated on first use, never leaves the object except the public key), the push subscriptions, the pending rest end
+// and the gym reminders (SPEC-v10 M13), and sends each push from its one alarm, set to the earliest of them.
 
 import { DurableObject } from "cloudflare:workers";
 import { Hono } from "hono";
@@ -13,6 +13,13 @@ interface Pending {
   id: string;
   endsAt: number;
   label: string;
+}
+
+/** A planned gym session's reminder: when, and what it says. */
+export interface Reminder {
+  at: number;
+  title: string;
+  body: string;
 }
 
 export class RestPush extends DurableObject<Env> {
@@ -53,18 +60,51 @@ export class RestPush extends DurableObject<Env> {
     return (await this.subs()).length;
   }
 
+  private async reminders(): Promise<Record<string, Reminder>> {
+    return (await this.ctx.storage.get<Record<string, Reminder>>("reminders")) ?? {};
+  }
+
+  /** The alarm at the earliest pending push: the rest end or a reminder. */
+  private async rearm(): Promise<void> {
+    const p = await this.ctx.storage.get<Pending>("pending");
+    const times = [...(p ? [p.endsAt] : []), ...Object.values(await this.reminders()).map((r) => r.at)];
+    if (!times.length) {
+      await this.ctx.storage.delete("alarm_at");
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    const at = Math.max(Date.now(), Math.min(...times));
+    // What the alarm was set for: everything up to it is due when it runs.
+    await this.ctx.storage.put("alarm_at", at);
+    await this.ctx.storage.setAlarm(at);
+  }
+
   /** Schedules (or reschedules) the rest-end push. */
   async schedule(p: Pending, origin: string): Promise<void> {
     await this.ctx.storage.put("pending", p);
     await this.ctx.storage.put("origin", origin);
-    await this.ctx.storage.setAlarm(Math.max(Date.now(), p.endsAt));
+    await this.rearm();
   }
 
   async cancel(id?: string): Promise<void> {
     const p = await this.ctx.storage.get<Pending>("pending");
     if (id && p && p.id !== id) return;
     await this.ctx.storage.delete("pending");
-    await this.ctx.storage.deleteAlarm();
+    await this.rearm();
+  }
+
+  /** Sets, moves or (null) cancels a plan's reminder. */
+  async setReminder(planId: string, r: Reminder | null, origin: string): Promise<void> {
+    const list = await this.reminders();
+    if (r) list[planId] = r;
+    else delete list[planId];
+    await this.ctx.storage.put("reminders", list);
+    await this.ctx.storage.put("origin", origin);
+    await this.rearm();
+  }
+
+  async reminderList(): Promise<Record<string, Reminder>> {
+    return this.reminders();
   }
 
   async pending(): Promise<Pending | null> {
@@ -72,7 +112,7 @@ export class RestPush extends DurableObject<Env> {
   }
 
   /** Sends to every subscription; drops subscriptions the push service says are gone. */
-  async sendNow(payload: { title: string; body: string; tag: string }, origin: string): Promise<{ sent: number; failed: number; removed: number }> {
+  async sendNow(payload: { title: string; body: string; tag: string }, origin: string, ttl = 120): Promise<{ sent: number; failed: number; removed: number }> {
     const keys = await this.keys();
     const list = await this.subs();
     let sent = 0;
@@ -80,7 +120,7 @@ export class RestPush extends DurableObject<Env> {
     const keep: PushSubscriptionJSON[] = [];
     for (const s of list) {
       try {
-        const r = await sendPush(s, payload, keys, { subject: origin, ttl: 120, urgency: "high", topic: payload.tag, fetcher: this.pushFetch });
+        const r = await sendPush(s, payload, keys, { subject: origin, ttl, urgency: "high", topic: payload.tag, fetcher: this.pushFetch });
         if (r.ok) sent++;
         else failed++;
         if (r.ok || !r.gone) keep.push(s);
@@ -94,15 +134,29 @@ export class RestPush extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    const p = await this.ctx.storage.get<Pending>("pending");
-    if (!p) return;
-    await this.ctx.storage.delete("pending");
+    const now = Math.max(Date.now() + 1_000, (await this.ctx.storage.get<number>("alarm_at")) ?? 0);
     const origin = (await this.ctx.storage.get<string>("origin")) ?? "https://lodge-gym.workers.dev";
-    await this.sendNow({ title: "Rest is over", body: p.label ? `${p.label} · next set` : "Time for the next set.", tag: "rest" }, origin);
+    const p = await this.ctx.storage.get<Pending>("pending");
+    if (p && p.endsAt <= now) {
+      await this.ctx.storage.delete("pending");
+      await this.sendNow({ title: "Rest is over", body: p.label ? `${p.label} · next set` : "Time for the next set.", tag: "rest" }, origin);
+    }
+    const list = await this.reminders();
+    const due = Object.entries(list).filter(([, r]) => r.at <= now);
+    if (due.length) {
+      for (const [planId] of due) delete list[planId];
+      await this.ctx.storage.put("reminders", list);
+      // A reminder may wait for a phone that is offline for a while: an hour to be delivered.
+      for (const [planId, r] of due) await this.sendNow({ title: r.title, body: r.body, tag: `gym-${planId}` }, origin, 3600);
+    }
+    await this.rearm();
   }
 }
 
 const stub = (env: Env) => env.REST_PUSH.get(env.REST_PUSH.idFromName("owner"));
+
+/** Sets, moves or cancels a planned gym session's reminder push (SPEC-v10 M13). */
+export const setReminder = (env: Env, planId: string, r: Reminder | null, origin: string) => stub(env).setReminder(planId, r, origin);
 
 const subSchema = z.object({
   endpoint: z.string().url().max(2048).refine((u) => u.startsWith("https://"), "https"),

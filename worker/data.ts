@@ -2,7 +2,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { readCalendar } from "./calendar";
+import { linkSession, readCalendar, syncAllReminders, syncReminder, unlinkSessionStmt } from "./calendar";
 import type { AppBindings, Env } from "./env";
 import { rematchAround, readWatchForSessions } from "./health";
 import { fail, nowISO, readJson } from "./http";
@@ -311,6 +311,8 @@ dataRoutes.put("/settings", async (c) => {
     c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(k, String(v))
   );
   if (stmts.length) await c.env.DB.batch(stmts);
+  // Reminders are set in local time: a new time zone moves them.
+  if (body.timezone !== undefined) await syncAllReminders(c.env, new URL(c.req.url).origin);
   return c.json({ ok: true, settings: await readSettings(c.env) });
 });
 
@@ -381,6 +383,8 @@ dataRoutes.put("/sessions/:id", async (c) => {
   await db.batch(stmts);
   // A watch workout may have arrived before this session was synced (SPEC §9.1 matching).
   await rematchAround(c.env, doc.started_at);
+  // SPEC-v10 M13: the session marks its day's planned gym session done.
+  await linkSession(c.env, doc, new URL(c.req.url).origin);
   // SPEC-v3 M9a / SPEC-v7 M9d: a session that reaches the server as done gets its AI report, then the training overview
   // is rewritten, both in the background.
   if (doc.status === "done" && doc.source === "app" && existing?.status !== "done")
@@ -478,7 +482,10 @@ dataRoutes.put("/body-mass/:date", async (c) => {
 dataRoutes.delete("/sessions/:id", async (c) => {
   const sid = c.req.param("id");
   if (!ID_RE.test(sid)) return fail(c, 400, "invalid_input", "The session id is not valid.");
+  const plans = await c.env.DB.prepare("SELECT id FROM gym_plans WHERE session_id = ?").bind(sid).all<{ id: string }>();
   await c.env.DB.batch([
+    // Its planned gym session goes back to planned (SPEC-v10 §4), before the session row goes.
+    unlinkSessionStmt(c.env, sid),
     c.env.DB.prepare("DELETE FROM set_entries WHERE session_id = ?").bind(sid),
     // Its AI reports describe a session that no longer exists (approved with migration 0009).
     c.env.DB.prepare("DELETE FROM session_reports WHERE session_id = ?").bind(sid),
@@ -488,6 +495,7 @@ dataRoutes.delete("/sessions/:id", async (c) => {
     c.env.DB.prepare("UPDATE photos SET session_id = NULL WHERE session_id = ?").bind(sid),
     c.env.DB.prepare("UPDATE health_workouts SET matched_session_id = NULL WHERE matched_session_id = ?").bind(sid),
   ]);
+  for (const { id: planId } of plans.results) await syncReminder(c.env, planId, new URL(c.req.url).origin);
   return c.json({ ok: true });
 });
 

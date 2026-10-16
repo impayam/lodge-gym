@@ -4,9 +4,12 @@
 
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
+import { toMin } from "../../../worker/lib/calendar";
+import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
-import { dayMonth, fmtNum, plural } from "../format";
-import { allExercises, navigate, refresh } from "../store";
+import { dateShort, dayMonth, fmtNum, plural } from "../format";
+import { newGymPlan, streakNote } from "../lib/calendarView";
+import { allExercises, flash, navigate, openCalendar, refresh, saveGymPlan, useStore } from "../store";
 import { Bars } from "./Bars";
 import { Columns } from "./Columns";
 import { TimeChart } from "./TimeChart";
@@ -24,6 +27,9 @@ const TOOL_LABEL: Record<string, string> = {
   get_photos: "Listing your progress photos",
   get_recovery: "Checking your recovery",
   get_training_pattern: "Reading your training days",
+  get_calendar: "Reading your calendar",
+  find_free_slots: "Finding gym times",
+  propose_schedule: "Writing a gym schedule",
   propose_program: "Writing a program draft",
 };
 export const toolLabel = (name: string) => TOOL_LABEL[name] ?? "Working";
@@ -56,7 +62,26 @@ type Library = { total: number; exercises: { id: string; name: string; equipment
 type Body = { unit: string; days: { date: string; value: number }[]; latest: { value: number } | null; change: number | null };
 type Photos = { total: number; photos: { id: string; date: string; pose: string; after_session: string | null }[] };
 type Recovery = { groups: { group: string; date: string; hours_ago: number; exercise: string }[] };
-type Pattern = { from: string; to: string; sessions: number; weekdays: { day: string; weeks: number; sessions: number }[]; max_days_in_a_row: number; program_days: { day: string; usual_weekday: string }[]; clear: boolean; summary: string };
+type Pattern = {
+  from: string;
+  to: string;
+  sessions: number;
+  weekdays: { day: string; weeks: number; sessions: number }[];
+  max_days_in_a_row: number;
+  program_days: { day: string; usual_weekday: string }[];
+  clear: boolean;
+  summary: string;
+  planned_this_week?: { date: string; weekday: string; start: string; day: string }[];
+};
+type CalendarResult = {
+  from: string;
+  to: string;
+  shifts: { date: string; start: string; end: string; note: string }[];
+  plans: { date: string; start: string; end: string; day: string; status: string }[];
+  sessions: { date: string; start: string; end: string; day: string; status: string }[];
+};
+type SlotsResult = { week_start: string; week_end: string; need: number; slots: { date: string; start: string; end: string; day: string | null; selected: boolean; days_in_a_row: number }[] };
+type Schedule = { week_start: string; sessions: { date: string; start: string; end: string; program_day_id: string; day: string; reason_fa: string; days_in_a_row?: number }[]; dropped: { date: string; start: string; reason: string }[] };
 type Draft = { name: string; summary_fa?: string; days: ProgramDay[] };
 type DraftResult = { draft_id: string; names?: Record<string, string>; day_minutes?: number[]; warnings?: string[]; dropped: { exercise_id: string }[]; weekly_sets: { group: string; name: string; planned: number; current_target: number }[] };
 
@@ -151,6 +176,71 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
         </section>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The coach's gym schedule (SPEC-v10 §6): one row per session (day, time, program day, the coach's reason in Persian),
+ * only the finder's times. Add to calendar puts them on the calendar (source coach); Change opens Find times on that
+ * week. Nothing is saved before the tap.
+ */
+function ScheduleCard({ result }: { result: Schedule }) {
+  const plans = useStore((s) => s.gymPlans);
+  const on = (x: Schedule["sessions"][number]) => Object.values(plans).some((p) => p.date === x.date && p.start_min === toMin(x.start));
+  const added = result.sessions.every(on);
+  const add = async () => {
+    const now = new Date().toISOString();
+    const todo = result.sessions.filter((x) => !on(x));
+    for (const x of todo) await saveGymPlan(newGymPlan(ulid(), x.date, toMin(x.start), { id: x.program_day_id, minutes: toMin(x.end) - toMin(x.start) }, "coach", now));
+    flash(`Added ${plural(todo.length, "gym session")} to the calendar.`);
+  };
+  return (
+    <section class="card l-col l-gap-10" data-testid="coach-schedule">
+      <div class="card__head">
+        <h2 class="card__title l-m0">Gym schedule</h2>
+        <span class="caption num">{plural(result.sessions.length, "session")}</span>
+      </div>
+      <ul class="list-plain">
+        {result.sessions.map((x) => (
+          <li class="list-row" data-testid="coach-schedule-row" data-date={x.date}>
+            <span class="cal-mark" aria-hidden="true">
+              <span class="cal-dot" data-kind={on(x) ? "done" : "planned"} />
+            </span>
+            <span class="list-row__text">
+              <span class="t-title num">
+                {dateShort(x.date)} · {x.start}–{x.end}
+              </span>
+              <span class="list-row__note">{x.day}</span>
+              {x.reason_fa ? (
+                <span class="caption fa" dir="rtl" lang="fa">
+                  {x.reason_fa}
+                </span>
+              ) : null}
+              {streakNote(x.days_in_a_row ?? 1) ? <span class="caption">{streakNote(x.days_in_a_row ?? 1)}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {result.dropped.length ? <span class="caption">Left out (not one of the app's free times): {result.dropped.map((x) => `${dateShort(x.date)} ${x.start}`).join(", ")}</span> : null}
+      <span class="caption">Times from the app's free-time finder</span>
+      {added ? (
+        <div class="l-row l-between l-gap-8" data-testid="coach-schedule-added">
+          <span class="caption">On your calendar.</span>
+          <button type="button" class="clay press btn-sm t-pink" onClick={() => openCalendar({ week: result.week_start })}>
+            Open
+          </button>
+        </div>
+      ) : (
+        <div class="l-row l-gap-8">
+          <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-schedule" onClick={() => void add()}>
+            Add to calendar
+          </button>
+          <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-schedule" onClick={() => openCalendar({ week: result.week_start, find: true })}>
+            Change
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -351,11 +441,77 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
           ) : (
             <p class="state l-m0">No sessions in the last 4 weeks.</p>
           )}
-          {r.max_days_in_a_row ? <span class="caption num">At most {plural(r.max_days_in_a_row, "day")} in a row</span> : null}
+          {r.max_days_in_a_row ? <span class="caption num">Longest run: {plural(r.max_days_in_a_row, "day")} in a row</span> : null}
           {r.program_days.length ? <span class="caption">{r.program_days.map((p) => `${p.day}: usually ${p.usual_weekday}`).join(" · ")}</span> : null}
         </DataCard>
       );
     }
+    case "get_calendar": {
+      const r = result as CalendarResult;
+      const dates = [...new Set([...r.shifts, ...r.plans, ...r.sessions].map((x) => x.date))].sort();
+      return (
+        <DataCard title="Calendar" sub={`${dayMonth(r.from)} – ${dayMonth(r.to)}`} testid={name} source={false}>
+          {dates.length ? (
+            <table class="data-table data-table--text num">
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col">Work</th>
+                  <th scope="col">Gym</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dates.map((d) => (
+                  <tr>
+                    <td>{dateShort(d)}</td>
+                    <td>{r.shifts.filter((x) => x.date === d).map((x) => `${x.start}–${x.end}`).join(", ")}</td>
+                    <td>
+                      {[...r.sessions.filter((x) => x.date === d).map((x) => `${x.start} ${x.status === "active" ? "in progress" : "done"}`), ...r.plans.filter((x) => x.date === d && x.status !== "done").map((x) => `${x.start} ${x.status}`)].join(", ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p class="state l-m0">Nothing on the calendar for these days.</p>
+          )}
+        </DataCard>
+      );
+    }
+    case "find_free_slots": {
+      const r = result as SlotsResult;
+      return (
+        <DataCard title="Free times" sub={`${dayMonth(r.week_start)} – ${dayMonth(r.week_end)}`} testid={name} source={false}>
+          {r.slots.length ? (
+            <table class="data-table data-table--text num">
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col">Time</th>
+                  <th scope="col">Session</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.slots.map((x) => (
+                  <tr>
+                    <td>{dateShort(x.date)}</td>
+                    <td>
+                      {x.start}–{x.end}
+                    </td>
+                    <td>{x.selected ? x.day : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p class="state l-m0">No time fits a session this week.</p>
+          )}
+          <span class="caption">Times from the app's free-time finder</span>
+        </DataCard>
+      );
+    }
+    case "propose_schedule":
+      return <ScheduleCard result={result as Schedule} />;
     case "propose_program":
       return <DraftCard input={input as Draft} result={result as DraftResult} messageId={messageId} toolUseId={toolUseId} onChange={onChange} onAdd={onAdd} />;
     default:

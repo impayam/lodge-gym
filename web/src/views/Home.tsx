@@ -161,7 +161,12 @@ function Hero() {
         </p>
       ) : null}
       <p class="caption l-m0">{why}</p>
-      {m.rest ? <p class="caption l-m0 t-orange">Rest is better today. You trained yesterday and the day before; the program allows at most two training days in a row.</p> : null}
+      {/* Advice only (Payam, 2026-10-15): nothing blocks training on any day. */}
+      {m.rest ? (
+        <p class="caption l-m0" data-testid="rest-advice">
+          You trained yesterday and the day before: a rest day may help today.
+        </p>
+      ) : null}
       {/* A program day always has exercises; an open plan can have none yet ("Open plan" below adds them). */}
       {items.length ? <NextTable exercises={items} /> : <Empty>No exercises in this plan yet.</Empty>}
       {nextPlan ? (

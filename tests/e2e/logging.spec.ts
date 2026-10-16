@@ -202,7 +202,7 @@ test("home shows the rest advice after two training days in a row", async ({ pag
     );
   await page.goto("/");
   await expect(page.getByTestId("next-card")).toHaveAttribute("data-day", "Day 3 · Back");
-  await expect(page.getByText("Rest is better today", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("rest-advice")).toHaveText("You trained yesterday and the day before: a rest day may help today.");
   await expect(page.getByTestId("start")).toBeEnabled();
 });
 

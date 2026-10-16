@@ -49,8 +49,8 @@ export interface State {
     saved?: TimelineItem;
     /** Photos: start in compare mode, or with one photo open. */
     photos?: { compare?: boolean; open?: string };
-    /** Calendar: the week shown (its first date) and whether free times are on. */
-    calendar?: { week?: string; free?: boolean };
+    /** Calendar: the week shown (its first date), free times on, Find times open. */
+    calendar?: { week?: string; free?: boolean; find?: boolean };
   };
   /** The selected tab (SPEC-v8 §5); pushed screens keep the tab they were opened from. */
   tab: TabName;
@@ -146,8 +146,8 @@ export function openReport(sessionId: string, fresh = false) {
   window.scrollTo(0, 0);
 }
 
-/** The training calendar (SPEC-v10 M13), on a week (its first date) and with free times on or off. */
-export function openCalendar(opts: { week?: string; free?: boolean } = {}) {
+/** The training calendar (SPEC-v10 M13), on a week (its first date), with free times on or Find times open. */
+export function openCalendar(opts: { week?: string; free?: boolean; find?: boolean } = {}) {
   setState({ view: { name: "calendar", calendar: opts } });
   window.scrollTo(0, 0);
 }
@@ -394,6 +394,7 @@ async function enqueue(entry: Draft) {
   const prev = await ldb.outboxGet(entry.key);
   let e = { ...entry, rev: (prev?.rev ?? 0) + 1, queued_at: new Date().toISOString() } as OutboxEntry;
   if (e.op === "settings" && prev?.op === "settings") e = { ...e, patch: { ...prev.patch, ...e.patch } };
+  if (e.op === "calendar_settings" && prev?.op === "calendar_settings") e = { ...e, patch: { ...prev.patch, ...e.patch } };
   await ldb.outboxPut(e);
   setSync({ pending: (await ldb.outboxAll()).length });
   scheduleSync();
@@ -411,6 +412,65 @@ export async function savePlan(plan: SessionPlan) {
   setState((st) => ({ plans: { ...st.plans, [plan.id]: plan } }));
   await ldb.putPlan(plan);
   await enqueue({ key: "plan:" + plan.id, op: "put_plan", id: plan.id });
+}
+
+/* ---------------- training calendar (SPEC-v10 M13): written offline, sent through the outbox ---------------- */
+
+/** Stores a work shift locally and queues it. */
+export async function saveShift(x: WorkShift) {
+  setState((st) => ({ shifts: { ...st.shifts, [x.id]: x } }));
+  await ldb.putCalendar([x], [], [], []);
+  await enqueue({ key: "shift:" + x.id, op: "put_shift", id: x.id });
+}
+
+/** Deletes a work shift (a real delete: shifts are plans, not history). */
+export async function removeShift(id: string) {
+  setState((st) => {
+    const shifts = { ...st.shifts };
+    delete shifts[id];
+    return { shifts };
+  });
+  await ldb.putCalendar([], [id], [], []);
+  await enqueue({ key: "shift:" + id, op: "delete_shift", id });
+}
+
+/** Stores a planned gym session locally and queues it; the server sets its link, status and reminder. */
+export async function saveGymPlan(p: GymPlan) {
+  setState((st) => ({ gymPlans: { ...st.gymPlans, [p.id]: p } }));
+  await ldb.putCalendar([], [], [p], []);
+  await enqueue({ key: "gymplan:" + p.id, op: "put_gymplan", id: p.id });
+}
+
+/** Deletes a planned gym session and, on the server, its reminder. */
+export async function removeGymPlan(id: string) {
+  setState((st) => {
+    const gymPlans = { ...st.gymPlans };
+    delete gymPlans[id];
+    return { gymPlans };
+  });
+  await ldb.putCalendar([], [], [], [id]);
+  await enqueue({ key: "gymplan:" + id, op: "delete_gymplan", id });
+}
+
+/** Changes calendar settings: at once on this device (the cached bootstrap), then on the server. */
+export async function saveCalendarSettings(patch: Partial<CalendarSettings>) {
+  if (!state.boot) return;
+  const boot: BootData = { ...state.boot, calendar_settings: { ...calendarSettings(), ...patch } };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
+  await enqueue({ key: "calendar_settings", op: "calendar_settings", patch });
+}
+
+/** Takes the server's copy after a write, unless this device changed the item again while it was being sent. */
+async function tookShift(sent: WorkShift, server: WorkShift | null | undefined) {
+  if (!server || state.shifts[sent.id] !== sent) return;
+  setState((st) => ({ shifts: { ...st.shifts, [server.id]: server } }));
+  await ldb.putCalendar([server], [], [], []);
+}
+async function tookGymPlan(sent: GymPlan, server: GymPlan | null | undefined) {
+  if (!server || state.gymPlans[sent.id] !== sent) return;
+  setState((st) => ({ gymPlans: { ...st.gymPlans, [server.id]: server } }));
+  await ldb.putCalendar([], [], [server], []);
 }
 
 /** Start session: the plan becomes the workout session with the same id; the timer starts now, not at planning time. */
@@ -756,6 +816,24 @@ async function syncOnce() {
         await api("DELETE", `/photos/${encodeURIComponent(e.id)}`);
       } else if (e.op === "put_plan") {
         await syncPlan(e.id);
+      } else if (e.op === "put_shift") {
+        const doc = state.shifts[e.id];
+        if (doc) await tookShift(doc, (await api<{ shift?: WorkShift }>("PUT", `/calendar/shifts/${encodeURIComponent(e.id)}`, doc)).shift);
+      } else if (e.op === "delete_shift") {
+        await api("DELETE", `/calendar/shifts/${encodeURIComponent(e.id)}`);
+      } else if (e.op === "put_gymplan") {
+        const doc = state.gymPlans[e.id];
+        if (doc) await tookGymPlan(doc, (await api<{ plan?: GymPlan }>("PUT", `/calendar/plans/${encodeURIComponent(e.id)}`, doc)).plan);
+      } else if (e.op === "delete_gymplan") {
+        await api("DELETE", `/calendar/plans/${encodeURIComponent(e.id)}`);
+      } else if (e.op === "calendar_settings") {
+        const r = await api<{ settings: CalendarSettings }>("PUT", "/calendar/settings", e.patch);
+        // A change made while this one was being sent is queued and wins.
+        if (state.boot && (await ldb.outboxGet(e.key))?.rev === e.rev) {
+          const boot: BootData = { ...state.boot, calendar_settings: r.settings };
+          setState({ boot });
+          await ldb.kvSet("boot", boot);
+        }
       } else {
         await api("PUT", "/settings", e.patch);
       }

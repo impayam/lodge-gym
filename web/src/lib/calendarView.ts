@@ -19,17 +19,13 @@ import {
 } from "../../../worker/lib/calendar";
 import { weekRange } from "../../../worker/lib/cycle";
 import { addDays, daysBetween } from "../../../worker/lib/time";
-import type { ProgramDay, WeekStart, WorkoutSession } from "../../../worker/lib/types";
+import type { WeekStart, WorkoutSession } from "../../../worker/lib/types";
+
+/** The program days the next plans train (shared with the coach). */
+export { upcomingDays, upcomingFor } from "../../../worker/lib/calendar";
 
 /** The first date of the week holding `date`, by the week start in Settings. */
 export const weekStartOf = (date: string, weekStart: WeekStart) => weekRange(date, weekStart).start;
-
-/** The program days from the next one on, in program order (Day 3, Day 4, Day 1, …): what the next plans train. */
-export function upcomingDays(days: readonly Pick<ProgramDay, "id" | "name_en" | "position" | "est_minutes">[], nextId: string): UpcomingDay[] {
-  const order = [...days].sort((a, b) => a.position - b.position);
-  const i = Math.max(0, order.findIndex((d) => d.id === nextId));
-  return [...order.slice(i), ...order.slice(0, i)].map((d) => ({ id: d.id, name: d.name_en, minutes: d.est_minutes }));
-}
 
 export interface CalendarSource {
   shifts: readonly WorkShift[];
@@ -212,21 +208,66 @@ export function monthDates(date: string): string[] {
   return out;
 }
 
-/**
- * The program days the next plans train, in program order: after the last open plan's day when gym sessions are
- * planned from today on (the plans keep the order), else from the next day on Home.
- */
-export function upcomingFor(
-  days: readonly Pick<ProgramDay, "id" | "name_en" | "position" | "est_minutes">[],
-  nextId: string,
-  plans: readonly Pick<GymPlan, "date" | "start_min" | "program_day_id" | "status" | "session_id">[],
-  today: string
-): UpcomingDay[] {
-  const open = plans
-    .filter((p) => p.status === "planned" && !p.session_id && p.date >= today && days.some((d) => d.id === p.program_day_id))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.start_min - b.start_min);
-  const last = open[open.length - 1];
-  if (!last) return upcomingDays(days, nextId);
-  const after = upcomingDays(days, last.program_day_id);
-  return [...after.slice(1), after[0]];
+/* ---------------- writing the calendar (SPEC-v10 M13, Payam's change of 2026-10-15: nothing blocks) ---------------- */
+
+/** Why a suggestion is where it is, in a few words ("Before your 12:00 shift", "After your shift", "Day off"). */
+export function slotReason(x: FreeSlot): string {
+  const where = x.before_shift_at !== null ? `Before your ${hm(x.before_shift_at)} shift` : x.after_shift_at !== null ? `After your shift (ends ${hm(x.after_shift_at)})` : "No shift this day";
+  return x.preferred ? `${where} · preferred time` : where;
 }
+
+/** The neutral note on a third (or later) training day in a row; never a warning, never a block. */
+export const streakNote = (streak: number) => (streak >= 3 ? `${ordinal(streak)} training day in a row` : "");
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th")}`;
+
+/** The checked suggestions in date order with the next program days, as the plans "Add all" creates. */
+export function assignDays(checked: readonly FreeSlot[], upcoming: readonly UpcomingDay[]): { slot: FreeSlot; day: UpcomingDay }[] {
+  if (!upcoming.length) return [];
+  return [...checked].sort((a, b) => a.date.localeCompare(b.date) || a.start_min - b.start_min).map((slot, i) => ({ slot, day: upcoming[i % upcoming.length] }));
+}
+
+/** A new planned gym session (end = start + the program day's minutes, kept on the day). */
+export function newGymPlan(id: string, date: string, startMin: number, day: Pick<UpcomingDay, "id" | "minutes">, source: GymPlan["source"], now: string): GymPlan {
+  const start = Math.max(0, Math.min(startMin, 1440 - day.minutes));
+  return { id, date, start_min: start, end_min: start + day.minutes, program_day_id: day.id, source, session_id: null, status: "planned", reminder_at: null, created_at: now, updated_at: now };
+}
+
+/**
+ * "Copy last week": last week's shifts moved to the same weekdays of the week starting at `start`, for the days of that
+ * week that have no shift yet (so a second tap adds nothing twice).
+ */
+export function copyLastWeek(shifts: readonly WorkShift[], start: string, newId: () => string, now: string): WorkShift[] {
+  const prev = addDays(start, -7);
+  const taken = new Set(shifts.filter((x) => x.date >= start && x.date <= addDays(start, 6)).map((x) => x.date));
+  return shifts
+    .filter((x) => x.date >= prev && x.date < start && !taken.has(addDays(x.date, 7)))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start_min - b.start_min)
+    .map((x) => ({ id: newId(), date: addDays(x.date, 7), start_min: x.start_min, end_min: x.end_min, note: x.note, created_at: now, updated_at: now }));
+}
+
+/** The minute a tap at `y` CSS pixels into a day column stands for, rounded down to 15 minutes. */
+export function minuteAt(y: number, axisStart: number, hourPx: number): number {
+  const m = axisStart + Math.floor(((Math.max(0, y) / hourPx) * 60) / 15) * 15;
+  return Math.min(1440 - 15, m);
+}
+
+/** Where a dragged plan lands: whole days across the columns, 15-minute steps up and down, kept inside the day. */
+export function dragTarget(plan: Pick<GymPlan, "date" | "start_min" | "end_min">, dx: number, dy: number, colPx: number, hourPx: number, axis: { start: number; end: number }): { date: string; start_min: number; end_min: number } {
+  const length = plan.end_min - plan.start_min;
+  const days = colPx > 0 ? Math.round(dx / colPx) : 0;
+  const shift = Math.round(((dy / hourPx) * 60) / 15) * 15;
+  const start = Math.max(axis.start, Math.min(axis.end - length, plan.start_min + shift));
+  return { date: addDays(plan.date, days), start_min: start, end_min: start + length };
+}
+
+/** "HH:MM" from a time input; an end of "00:00" is midnight (24:00). */
+export function timeInput(value: string, isEnd = false): number | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!m) return null;
+  const min = Number(m[1]) * 60 + Number(m[2]);
+  if (min >= 1440) return null;
+  return isEnd && min === 0 ? 1440 : min;
+}
+
+/** A time input's value for minutes (24:00 shows as 00:00). */
+export const timeValue = (min: number) => hm(min % 1440);

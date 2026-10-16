@@ -138,7 +138,10 @@ const runs = (page: Page) =>
       const under = layers.some((l) => {
         if (l.contains(el)) return false;
         const b = l.getBoundingClientRect();
-        return r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom;
+        if (!(r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom)) return false;
+        // Only a layer painted over the text covers it (a sheet's scrim lies under the sheet's own text).
+        const top = document.elementFromPoint((Math.max(r.left, b.left) + Math.min(r.right, b.right)) / 2, (Math.max(r.top, b.top) + Math.min(r.bottom, b.bottom)) / 2);
+        return top !== null && l.contains(top) && !el.contains(top);
       });
       if (under) continue;
       const badge = el.closest(".badge");
@@ -315,6 +318,11 @@ test("contrast: pushed screens, the session and the coach", async ({ page }) => 
   failed.push(...(await contrast(page, "Calendar, free times")));
   await page.getByTestId("cal-view-toggle").click();
   failed.push(...(await contrast(page, "Calendar, List view")));
+  await page.getByTestId("cal-find-times").click();
+  await expect(page.getByTestId("cal-find-sheet")).toHaveAttribute("open", "");
+  failed.push(...(await contrast(page, "Calendar, Find times")));
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("cal-find-sheet")).toHaveCount(0);
   await page.getByTestId("back").click();
   await page.getByRole("button", { name: "Ask the coach" }).click();
   failed.push(...(await contrast(page, "Coach")));
