@@ -107,3 +107,25 @@ Use case: at the gym he says "today I'm doing back, add biceps and forearms"; th
   - with no done set: deleted (as "Delete session"), never saved empty;
   - Home shows once: "Your session from <date> was closed automatically."
 - **Prompt:** use the tool for "add exercises for today"; no numbers of its own; match a named day with get_program and ask when unclear; respect his groups; the 48-hour rule is advice only; never say they were added.
+
+## 12. Change by Payam, 2026-10-16: one more exercise for a day (`propose_exercise`)
+
+From his iPhone test: "on my chest day add one exercise for more chest focus" made the coach write the whole program as a draft and show the full program, three Sets vs target cards, the recovery table, a 60-exercise list and unrelated notes. Plan and mockups approved the same day with these decisions: hidden cards option A, this change before Step 2, the exercise list stays at 60; the reason said once, no explanation under the buttons.
+
+- **Tool:** `propose_exercise({ program_day_id, exercise_id, after_exercise_id?, prefer?: "session" | "program" })`. The model picks the day, one exercise and the exercise it goes after; it gives no numbers and writes no program.
+  - Errors back to the model: a day not in his active program, an id not in the library (or archived), an exercise already in that day, an `after_exercise_id` not in that day.
+  - Place: right after `after_exercise_id`; after a member of a superset or tri-set, after the whole group (never inside his groups); without it, the end of the day.
+  - Numbers: as `propose_session_additions` (§11). Rest, target RIR and per-leg from his program entry when the exercise is in his program; else the generator's scheme for its kind (accessory 90 s, isolation 75 s, core 60 s), with the scheme's RIR target only when his program sets RIR targets.
+- **Card, only the change:** "Day 1 · Chest: + Cable Chest Fly", the exercise with sets × reps "· after Seated Cable Row", the progression step and the weight (nothing on the right when there is no weight; the step line says to enter it). The reason is in the coach's text only (said once); nothing under the buttons.
+  - **Only this session:** the §11 path and rules. A session open today gets it as an extra; otherwise that day's plan gets it, in the same place (after that exercise, never inside a group), and nothing starts before Start. The program does not change.
+  - **Whole program:** the app builds the draft itself: the program version the card was made for, with that one exercise and the card's numbers in that place, named "<program> + <exercise>". Saved by the existing Add to Planner endpoint as an inactive coach draft under Me → Program → Drafts; approving it stays a separate tap.
+  - The button he asked for comes first (`prefer`: "just today" → Only this session, "from now on" → Whole program); when he did not say, Only this session. A done choice becomes a line with Open; the other button stays.
+- **Worth knowing (information only, never blocking):** only what the change causes:
+  - each group's weekly sets the change moves: "Chest: 16 sets a week with this change (now 13; target 13)";
+  - the day's extra minutes: "Day 1 gets about 7 min longer (about 67 min)". One number everywhere (Payam's review): the Planner's rule (`planMinutes`, the day's own estimate moved by what the exercise adds), so the card, that day's plan after Only this session (it gets the card's rest) and the Whole program draft (that day's estimate; the other days keep the program's) all show it;
+  - any note of the program check the new program adds (a note the program already had, with other numbers, is not new; under/over target is said by the sets line);
+  - spacing advice naming only the groups the change adds to two adjacent days.
+- **Sets vs target:** one card per get_volume call. Muscle groups are rows, the weeks are columns (this week marked "*", "so far") and the last column is the latest week's target. Same rows and fractional sets as before.
+- **Cards he did not ask to see:** get_program, get_library and get_recovery take `show`. The model passes `show: true` only when he asks to see that directly ("show me my program"); otherwise the result is read by the model and no card is drawn, older chats included.
+- **Prompt:** one exercise → `propose_exercise` (also when it is only for today), never a whole draft; two or more for a session → `propose_session_additions`; `propose_program` for new programs and bigger changes. After the card, one or two sentences on why this exercise and this place, without repeating the card.
+- **Cost:** no model change. The model no longer writes the whole program (about 1,800 output tokens in his test) and the answer is shorter; estimated about $0.14 instead of $0.20 for the same request.

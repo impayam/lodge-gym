@@ -6,7 +6,7 @@ import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Pho
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import { DEFAULT_CALENDAR_SETTINGS, type CalendarSettings, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
-import { addItem, inPlan, liveItems, planFromDay, removeItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
+import { addItem, inPlan, liveItems, moveAfter, planFromDay, removeItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
 import { additionTargets, type AdditionTarget } from "../../worker/lib/coach/additionTarget";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
@@ -721,6 +721,8 @@ export interface CoachExtra {
   is_time: boolean;
   weight: number | null;
   weight_unit: Unit | null;
+  /** The exercise card's rest (so the plan's "about N min" is the card's); the planner's default without it. */
+  rest_sec?: number;
 }
 
 /** Where the coach's exercises can go, from this device's state (worker/lib/coach/additionTarget.ts). */
@@ -744,9 +746,11 @@ export function coachTargets(named: string | null) {
  * - otherwise (today's day, or a planned session ahead): added to that day's plan in the planner (a new plan copying
  *   the day if it has none). Nothing is started: they are in the session when he taps Start, and the session screen
  *   suggests the weight with the same progression.
- * Exercises already there are skipped. The program never changes.
+ * Exercises already there are skipped. The program never changes. With `after` (the exercise card, one exercise), a
+ * plan gets it right after that exercise, never inside a group; an open session gets it after its exercises, as every
+ * extra.
  */
-export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget): Promise<{ added: number; missing: number; sessionId: string | null; planId: string | null }> {
+export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget, after?: string | null): Promise<{ added: number; missing: number; sessionId: string | null; planId: string | null }> {
   const boot = state.boot!;
   // The coach picks from the whole library; this device may only know the exercises it has used.
   if (items.some((it) => !allExercises().has(it.exercise_id))) await loadLibrary();
@@ -770,7 +774,9 @@ export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget
       const ex = lib.get(it.exercise_id);
       if (!ex || inPlan(plan, ex.id)) continue;
       await rememberExercise(ex);
-      plan = addItem(plan, ex.id, now, ulid(), { sets: it.sets, reps_min: it.reps_min, reps_max: it.reps_max, is_time: it.is_time });
+      const itemId = ulid();
+      plan = addItem(plan, ex.id, now, itemId, { sets: it.sets, reps_min: it.reps_min, reps_max: it.reps_max, is_time: it.is_time, rest_sec: it.rest_sec });
+      if (after) plan = moveAfter(plan, itemId, after, now);
       added++;
     }
     if (added) await savePlan(plan);

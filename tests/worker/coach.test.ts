@@ -8,6 +8,7 @@ import { ulid } from "../../worker/lib/ulid";
 import { addDays, localDate } from "../../worker/lib/time";
 import { fakeJpeg } from "../fixtures/jpeg";
 import { mockAnthropicStream, type StreamReply } from "../fixtures/anthropic-mock";
+import type { ExerciseChange } from "../../worker/lib/coach/exerciseTool";
 import { Client, resetAuth, setupOwner } from "./helpers";
 
 // SPEC-v9 M12 Coach chat on the Worker. The Anthropic API is mocked in every test (streamed replies).
@@ -182,7 +183,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
       expect(b.thinking).toEqual({ type: "adaptive", display: "updates", block_binding: { prefix_mismatch_behavior: "drop_block" } });
       expect(b.stream).toBe(true);
       expect(b.system).toEqual([{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }]);
-      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "propose_session_additions", "propose_program"]);
+      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "propose_exercise", "propose_session_additions", "propose_program"]);
       expect(b.messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
       for (const beta of COACH_BETAS) expect(c.headers["anthropic-beta"]).toContain(beta);
     }
@@ -349,6 +350,70 @@ describe("program drafts", () => {
     expect(await env.DB.prepare("SELECT active FROM programs WHERE id = ?").bind(result.draft_id).first()).toEqual({ active: 1 });
     // Back to the seed program for the other tests.
     await client.post("/api/programs/fullbody4/activate");
+  });
+
+  it("one more exercise: the card has the app's numbers and only the change; Whole program saves his program plus that exercise as a draft; the active program never changes", async () => {
+    const rowsOf = async (programId: string) =>
+      (
+        await env.DB.prepare("SELECT d.position AS day, x.exercise_id, x.sets, x.reps_min, x.reps_max, x.rest_sec, x.superset_tag, x.is_main FROM day_exercises x JOIN program_days d ON d.id = x.day_id WHERE d.program_id = ? ORDER BY d.position, x.position")
+          .bind(programId)
+          .all<{ day: number; exercise_id: string; superset_tag: string | null }>()
+      ).results;
+    const program = await rowsOf("fullbody4");
+    mock = mockAnthropicStream([
+      { blocks: [{ type: "tool_use", id: "toolu_p", name: "get_program", input: {} }] },
+      { blocks: [{ type: "tool_use", id: "toolu_e", name: "propose_exercise", input: { program_day_id: "D1", exercise_id: "fly", after_exercise_id: "lateral", prefer: "program" } }] },
+      { blocks: [{ type: "text", text: "یک حرکت ایزوله بعد از سوپرست سرشانه، سینه را بدون فشار بیشتر روی سرشانه کامل می‌کند." }] },
+    ]);
+    const ev = await ask(ulid(), "از این به بعد روز سینه یک حرکت سینه بیشتر داشته باشم");
+    const card = ev.find((e): e is Extract<CoachEvent, { type: "card" }> => e.type === "card" && e.name === "propose_exercise")!;
+    expect(card.is_error).toBe(false);
+    const r = card.result as ExerciseChange;
+    // After lateral (A1) means after the whole A superset: facepull (A2).
+    expect(r).toMatchObject({ prefer: "program", program_id: "fullbody4", day: { id: "D1", name: "Day 1 · Chest", position: 1 }, after: { exercise_id: "facepull", name: "Face Pull" } });
+    expect(r.exercise).toMatchObject({ exercise_id: "fly", name: "Cable Chest Fly", basis: "program", sets: 3, reps_min: 12, reps_max: 12, rest_sec: 90 });
+    expect(r.notes[0]).toMatch(/^Chest: [\d.]+ sets a week with this change \(now [\d.]+; target [\d.]+\)\.$/);
+    // The model read the result (numbers and notes), not a program it had to write itself.
+    expect(JSON.stringify((mock.calls[2].body.messages as { content: unknown }[]).at(-1))).toContain("sets a week with this change");
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM programs WHERE generated_by = 'coach'").first()).toEqual({ n: 0 });
+
+    // Whole program: the same program with Cable Chest Fly after the A superset of Day 1, as an inactive coach draft.
+    const res = await client.post("/api/coach/drafts", { message_id: card.message_id, tool_use_id: card.tool_use_id });
+    expect(await res.json()).toEqual({ ok: true, program_id: r.draft_id, existed: false });
+    expect(await env.DB.prepare("SELECT name, active, style, days_per_week, generated_by, approved_at FROM programs WHERE id = ?").bind(r.draft_id).first()).toEqual({
+      name: "Full body · 4 days + Cable Chest Fly",
+      active: 0,
+      style: "coach",
+      days_per_week: 4,
+      generated_by: "coach",
+      approved_at: null,
+    });
+    const at = program.findIndex((x) => x.day === 1 && x.exercise_id === "facepull") + 1;
+    const fly = { day: 1, exercise_id: "fly", sets: 3, reps_min: 12, reps_max: 12, rest_sec: 90, superset_tag: null, is_main: 0 };
+    expect(await rowsOf(r.draft_id)).toEqual([...program.slice(0, at), fly, ...program.slice(at)]);
+    // One "about N min": Day 1's estimate in the draft is the card's (the Planner's rule); the other days keep his program's.
+    const minutes = async (programId: string) => (await env.DB.prepare("SELECT est_minutes FROM program_days WHERE program_id = ? ORDER BY position").bind(programId).all<{ est_minutes: number }>()).results.map((x) => x.est_minutes);
+    const [draftDay1, ...draftRest] = await minutes(r.draft_id);
+    const [programDay1, ...programRest] = await minutes("fullbody4");
+    expect(draftRest).toEqual(programRest);
+    expect(r.notes).toContain(`Day 1 gets about ${draftDay1 - programDay1} min longer (about ${draftDay1} min).`);
+    expect(await rowsOf("fullbody4")).toEqual(program);
+    expect(await env.DB.prepare("SELECT id FROM programs WHERE active = 1").all()).toMatchObject({ results: [{ id: "fullbody4" }] });
+    // A second tap returns the same draft.
+    expect(await (await client.post("/api/coach/drafts", { message_id: card.message_id, tool_use_id: card.tool_use_id })).json()).toEqual({ ok: true, program_id: r.draft_id, existed: true });
+  });
+
+  it("propose_exercise errors go back to the model: an exercise already in the day, and a day not in his program", async () => {
+    mock = mockAnthropicStream([
+      { blocks: [{ type: "tool_use", id: "toolu_x", name: "propose_exercise", input: { program_day_id: "D1", exercise_id: "bench" } }, { type: "tool_use", id: "toolu_y", name: "propose_exercise", input: { program_day_id: "D9", exercise_id: "fly" } }] },
+      { blocks: [{ type: "text", text: "Which day do you mean?" }] },
+    ]);
+    const ev = await ask(ulid(), "Add one chest exercise");
+    const cards = ev.filter((e): e is Extract<CoachEvent, { type: "card" }> => e.type === "card");
+    expect(cards.map((c) => c.is_error)).toEqual([true, true]);
+    const told = JSON.stringify((mock.calls[1].body.messages as { content: unknown }[]).at(-1));
+    expect(told).toContain("Barbell Bench Press is already in Day 1 · Chest: pick another exercise.");
+    expect(told).toMatch(/Unknown program_day_id .*D9.*use a day id of his active program/);
   });
 });
 

@@ -22,7 +22,7 @@ export const EXTRA_SETS = 3;
 
 export const PROPOSE_SESSION_ADDITIONS_TOOL = {
   name: "propose_session_additions",
-  description: `Proposes exercises to add to a session, when he asks to add exercises for today or for a session (for example "today is back, add biceps and forearms"). Give exercise ids from get_library or get_program and one short line in Persian for each (reason_fa). Do not give sets, reps or weights: the app fills them from his program and history with its progression rule, and leaves the weight empty when he has no history with the exercise. program_day_id: only when he says which day he trains today (an id from get_program). The app picks where they go by date: a session open today (added to it); else today (the day he named, or today's planned gym session's day); else his nearest planned gym session; else Home's next day. For a session not started yet they go into that day's plan, and they are in the session when he starts it. The result says which ("target"). Ids not in the library, repeats and exercises already in that session or day are dropped, and the result says why. The app shows a card with "Add" and "Change" (another session); nothing is added before he taps it, and his program never changes. At most ${MAX_ADDITIONS} exercises.`,
+  description: `Proposes exercises to add to a session, when he asks to add two or more exercises for today or for a session (for example "today is back, add biceps and forearms"); for one exercise use propose_exercise. Give exercise ids from get_library or get_program and one short line in Persian for each (reason_fa). Do not give sets, reps or weights: the app fills them from his program and history with its progression rule, and leaves the weight empty when he has no history with the exercise. program_day_id: only when he says which day he trains today (an id from get_program). The app picks where they go by date: a session open today (added to it); else today (the day he named, or today's planned gym session's day); else his nearest planned gym session; else Home's next day. For a session not started yet they go into that day's plan, and they are in the session when he starts it. The result says which ("target"). Ids not in the library, repeats and exercises already in that session or day are dropped, and the result says why. The app shows a card with "Add" and "Change" (another session); nothing is added before he taps it, and his program never changes. At most ${MAX_ADDITIONS} exercises.`,
   input_schema: {
     type: "object",
     properties: {
@@ -115,7 +115,7 @@ export function nextProgramDay(d: CoachData): ProgramDay {
 }
 
 /** The first entry of an exercise in the active program (by day, then position). */
-function programEntry(d: CoachData, exerciseId: string): DayExercise | null {
+export function programEntry(d: CoachData, exerciseId: string): DayExercise | null {
   for (const day of [...d.program.days].sort((a, b) => a.position - b.position)) {
     const hit = [...day.exercises].sort((a, b) => a.position - b.position).find((x) => x.exercise_id === exerciseId);
     if (hit) return hit;

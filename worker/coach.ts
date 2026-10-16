@@ -8,7 +8,8 @@
 //   PUT    /api/coach/attachments/:id?thread=…       a photo for the next message (JPEG, metadata stripped again here)
 //   POST   /api/coach/attachments/from-photo         a copy of a progress photo for the next message
 //   GET    /api/coach/attachments/:id                a sent photo (auth only, like progress photos)
-//   POST   /api/coach/drafts                         Add to Planner: saves a draft card as an inactive program (Me → Program → Drafts)
+//   POST   /api/coach/drafts                         Add to Planner (and the exercise card's Whole program): saves the card's draft as
+//                                                    an inactive program (Me → Program → Drafts)
 // The answer itself runs in the AiJobs Durable Object (worker/coachTurn.ts). Nothing here touches training data or
 // progress photos, except Add to Planner, which only adds a draft program.
 
@@ -20,6 +21,7 @@ import { readProgramVersions, readSettings } from "./data";
 import { contextBlock } from "./lib/coach/prompt";
 import { contextWindow, nextStamp, type StoredBlock } from "./lib/coach/context";
 import { draftDayRows, proposeProgram, type CleanDraft } from "./lib/coach/draft";
+import { exerciseDraft, type ExerciseChange } from "./lib/coach/exerciseTool";
 import { coachContextOf, loadCoachData, readThreadRows } from "./coachTurn";
 import { isJpeg, stripJpegMetadata } from "./lib/jpeg";
 import { activeSince, programOn } from "./lib/reports";
@@ -217,23 +219,31 @@ coachRoutes.get("/attachments/:id", async (c) => {
 
 /**
  * Add to Planner: the draft card's draft, cleaned again against today's library, saved as an inactive program with the
- * draft id from the tool result (so a second tap returns the same draft). The active program is never touched.
+ * draft id from the tool result (so a second tap returns the same draft). The exercise card's Whole program
+ * (propose_exercise, Payam 2026-10-16) saves the same way the draft the app built: the program version it was proposed
+ * for with that one exercise, rebuilt from the saved result. The active program is never touched.
  */
 coachRoutes.post("/drafts", async (c) => {
   const body = await readJson(c, z.object({ message_id: id, tool_use_id: z.string().min(1).max(100) }));
   const row = await c.env.DB.prepare("SELECT thread_id, content_json FROM coach_messages WHERE id = ? AND role = 'assistant'").bind(body.message_id).first<{ thread_id: string; content_json: string }>();
-  const call = row ? (JSON.parse(row.content_json) as StoredBlock[]).find((b) => b.type === "tool_use" && b.id === body.tool_use_id && b.name === "propose_program") : null;
+  const call = row ? (JSON.parse(row.content_json) as StoredBlock[]).find((b) => b.type === "tool_use" && b.id === body.tool_use_id && (b.name === "propose_program" || b.name === "propose_exercise")) : null;
   if (!row || !call || call.type !== "tool_use") return fail(c, 404, "not_found", "Draft not found.");
   const rows = await readThreadRows(c.env, row.thread_id);
   const result = rows.flatMap((r) => r.content).find((b) => b.type === "tool_result" && b.tool_use_id === body.tool_use_id);
-  const draftId = result && result.type === "tool_result" && !result.is_error ? (JSON.parse(result.content) as { draft_id?: string }).draft_id : undefined;
+  const saved = result && result.type === "tool_result" && !result.is_error ? (JSON.parse(result.content) as { draft_id?: string }) : null;
+  const draftId = saved?.draft_id;
   if (!draftId || !ID_RE.test(draftId)) return fail(c, 409, "invalid_draft", "This draft was not valid.");
   const known = (await readProgramVersions(c.env, [draftId]))[0];
   if (known) return c.json({ ok: true, program_id: draftId, existed: true });
   const d = await loadCoachData(c.env);
-  const out = proposeProgram(d, call.input, draftId);
-  if (!out.ok) return fail(c, 409, "invalid_draft", "This draft is no longer valid.");
-  await saveDraft(c.env, draftId, out.draft);
+  let draft: CleanDraft | null;
+  if (call.name === "propose_exercise") draft = exerciseDraft(d, saved as ExerciseChange);
+  else {
+    const out = proposeProgram(d, call.input, draftId);
+    draft = out.ok ? out.draft : null;
+  }
+  if (!draft) return fail(c, 409, "invalid_draft", "This draft is no longer valid.");
+  await saveDraft(c.env, draftId, draft);
   return c.json({ ok: true, program_id: draftId, existed: false });
 });
 

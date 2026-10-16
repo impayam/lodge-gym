@@ -241,7 +241,7 @@ export async function runCoachTurn(env: Env, threadId: string, emit: (e: CoachEv
         if (toolCalls > MAX_TOOL_CALLS) {
           return { type: "tool_result", tool_use_id: call.id, content: JSON.stringify({ error: `Tool limit reached (${MAX_TOOL_CALLS} calls for one answer). Answer now with what you have.` }), is_error: true };
         }
-        const out = runTool(data, call.name, call.input, (input) => proposeProgram(data, input, ulid(), data.today, plannedPositions(data)));
+        const out = runTool(data, call.name, call.input, (input) => proposeProgram(data, input, ulid(), data.today, plannedPositions(data)), () => ulid());
         const body = out.ok ? out.result : { error: out.error };
         cards.push({ type: "card", message_id: answer.id, tool_use_id: call.id, name: call.name, input: call.input, result: body, is_error: !out.ok });
         return out.ok ? { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(out.result) } : { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(body), is_error: true };

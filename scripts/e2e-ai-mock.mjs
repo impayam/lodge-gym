@@ -7,8 +7,10 @@
 //   coach (SPEC-v9 M12):  streamed like the real API (server-sent events), with a progress note between tool calls as a
 //                      thinking block (thinking.display "updates"). A question about a program reads get_program, then
 //                      proposes a draft with one id that is not in the library; a message with a photo gets a short
-//                      visual-estimate answer; "which days" reads get_training_pattern; anything else reads
-//                      get_volume for this week, then answers with text.
+//                      visual-estimate answer; "which days" reads get_training_pattern; one more chest exercise on the
+//                      chest day reads get_program and get_library (no cards), then propose_exercise after Seated Cable
+//                      Row; "show me my program" reads get_program with show: true; anything else reads get_volume
+//                      for this week (for the last 3 weeks when asked), then answers with text.
 // Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth&coach=ok|fail|auth|mismatch
 // (mismatch: the "this week" answer names a chest status other than the one its get_volume card shows)
 // and read GET /__calls (the count, the last call and the last call of each kind; coach calls also record the request
@@ -163,6 +165,29 @@ export function startAiMock(port) {
     const note = (t) => ({ type: "thinking", thinking: t });
     if (images && !results.length)
       return void stream(res, [{ type: "text", text: persian ? "این یک برآورد دیداری است: شانه‌ها و سینه متعادل دیده می‌شوند. از یک عکس ثابت نمی‌توان فرم را کامل قضاوت کرد." : "This is a visual estimate: shoulders and chest look balanced. One still photo cannot fully judge technique." }], "end_turn", usage);
+    // "On my chest day add one exercise for more chest" (Payam, 2026-10-16): his program and the chest exercises (read
+    // without cards), then propose_exercise: a chest exercise the day does not have, after Seated Cable Row, with the
+    // button he asked for first ("from now on" → Whole program, "just today" → Only this session).
+    if (/(one|1|۱|یک) (more )?(chest )?(exercise|حرکت)/i.test(text) && /chest|سینه/i.test(text)) {
+      if (!done.has("get_program")) return void stream(res, [note(persian ? "برنامه‌ات را می‌خوانم." : "I'll read your program."), tool("get_program", {})], "tool_use", usage);
+      if (!done.has("get_library")) return void stream(res, [tool("get_library", { muscle: "chest" })], "tool_use", usage);
+      if (!done.has("propose_exercise")) {
+        const parsed = all.filter((b) => b.type === "tool_result").map((b) => JSON.parse(typeof b.content === "string" ? b.content : (b.content?.[0]?.text ?? "{}")));
+        const prog = parsed.find((r) => Array.isArray(r.days));
+        const day = prog?.days.find((x) => /chest/i.test(x.name)) ?? prog?.days[0];
+        const inDay = new Set((day?.exercises ?? []).map((x) => x.exercise_id));
+        const chest = parsed.filter((r) => Array.isArray(r.exercises)).flatMap((r) => r.exercises).filter((e) => e.primary === "chest" && !inDay.has(e.id));
+        const pick = chest.find((e) => e.pattern === "isolation") ?? chest[0];
+        const prefer = /from now on|از این به بعد/i.test(text) ? { prefer: "program" } : /just today|only today|فقط امروز/i.test(text) ? { prefer: "session" } : {};
+        return void stream(res, [tool("propose_exercise", { program_day_id: day?.day_id, exercise_id: pick?.id, after_exercise_id: "cable_row", ...prefer })], "tool_use", usage);
+      }
+      return void stream(res, [{ type: "text", text: persian ? "یک حرکت ایزوله بعد از Seated Cable Row سینه را بدون فشار بیشتر روی سرشانه کامل می‌کند." : "One isolation exercise after Seated Cable Row adds chest volume without more load on your shoulders." }], "end_turn", usage);
+    }
+    // "Show me my program": the program card, shown because he asked to see it.
+    if (/show me my program|برنامه‌ام را نشان بده/i.test(text)) {
+      if (!done.has("get_program")) return void stream(res, [tool("get_program", { show: true })], "tool_use", usage);
+      return void stream(res, [{ type: "text", text: persian ? "این برنامه‌ی فعلی توست." : "This is your current program." }], "end_turn", usage);
+    }
     // "Today I'm doing back, add biceps and forearms" (Payam, 2026-10-16): his program for the day, the library for the
     // two muscles, then propose_session_additions with the day and one exercise of each that the day does not have.
     if (/add .*(bicep|forearm)|اضافه کن/i.test(text) && /bicep|forearm|جلوبازو|ساعد/i.test(text)) {
@@ -227,7 +252,9 @@ export function startAiMock(port) {
     }
     if (!done.has("get_volume")) {
       const today = /Today: \w+ (\d{4}-\d{2}-\d{2})/.exec(question.map((b) => b.text ?? "").join("\n"))?.[1] ?? "2026-10-15";
-      return void stream(res, [note(persian ? "ست‌های این هفته‌ات را می‌شمارم." : "I'll count this week's sets."), tool("get_volume", { from: today, to: today })], "tool_use", usage);
+      // "the last 3 weeks": from two weeks before today (a plain date add on YYYY-MM-DD at noon UTC).
+      const from = /last 3 weeks|سه هفته/i.test(text) ? new Date(Date.parse(`${today}T12:00:00Z`) - 14 * 86_400_000).toISOString().slice(0, 10) : today;
+      return void stream(res, [note(persian ? "ست‌های این هفته‌ات را می‌شمارم." : "I'll count this week's sets."), tool("get_volume", { from, to: today })], "tool_use", usage);
     }
     // The answer says what the get_volume card shows (chest, this week). coach=mismatch says another status on
     // purpose, to test the note under an answer whose text disagrees with its card.

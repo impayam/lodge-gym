@@ -2,8 +2,9 @@
 // request). All read-only
 // and pure: every number comes from the functions the Reports screen, the training overview and the planner advice
 // already use (worker/lib/reports.ts, worker/lib/ai/overview.ts, worker/lib/ai/advice.ts), so the coach states the
-// same numbers the app shows. Each result is also what the chat draws as a data card. A bad input returns an error
-// the model can correct.
+// same numbers the app shows. Each result is also what the chat draws as a data card (get_program, get_library and
+// get_recovery only when the model passes show: true, Payam 2026-10-16). A bad input returns an error the model can
+// correct.
 
 import { z } from "zod";
 import { countsVolume } from "../category";
@@ -33,6 +34,7 @@ import { GROUP_NAME, sessionDay } from "../ai/report";
 import { PROPOSE_PROGRAM_TOOL, proposeProgram, type ProposeResult } from "./draft";
 import { CALENDAR_TOOLS, plannedThisWeek, runCalendarTool, type CoachCalendar } from "./calendarTools";
 import { PROPOSE_SESSION_ADDITIONS_TOOL, proposeSessionAdditions } from "./sessionTools";
+import { PROPOSE_EXERCISE_TOOL, proposeExercise } from "./exerciseTool";
 
 /** Longest date range of one get_sessions, get_volume or get_adherence call (token budget). */
 export const MAX_RANGE_DAYS = 92;
@@ -62,6 +64,13 @@ const range = z
   .refine((r) => r.from <= r.to, "from must not be after to.")
   .refine((r) => r.from > r.to || daysBetween(r.from, r.to) < MAX_RANGE_DAYS, `At most ${MAX_RANGE_DAYS} days per call.`);
 const weeks = z.number().int().min(1).max(104);
+
+/**
+ * The card of get_program, get_library and get_recovery is shown only when he asked to see it (Payam, 2026-10-16):
+ * the model passes show: true then. Without it the result is read by the model and no card is drawn.
+ */
+const SHOW = { type: "boolean", description: 'true only when he asked to see this directly (for example "show me my program"); the app then shows it as a card. Leave it out when you read it for your answer.' } as const;
+const show = { show: z.boolean().optional() };
 
 const RANGE_SCHEMA = {
   type: "object",
@@ -111,7 +120,7 @@ export const COACH_TOOLS = [
   {
     name: "get_program",
     description: "Payam's active program: name, style, days per week, priority muscles, the rules shown on the Program screen, and every day with its exercises, sets, reps, rest, groups and target RIR.",
-    input_schema: { type: "object", properties: {}, additionalProperties: false },
+    input_schema: { type: "object", properties: { show: SHOW }, additionalProperties: false },
   },
   {
     name: "get_library",
@@ -126,6 +135,7 @@ export const COACH_TOOLS = [
         },
         equipment: { type: "string", enum: ["barbell", "dumbbell", "cable", "machine", "bodyweight"] },
         query: { type: "string", minLength: 2, description: 'Words in the English name, e.g. "incline press".' },
+        show: SHOW,
       },
       additionalProperties: false,
     },
@@ -151,7 +161,7 @@ export const COACH_TOOLS = [
   {
     name: "get_recovery",
     description: "Recovery for the 48-hour rule (advice for him, never a reason to refuse or remove an exercise), as the planner advice uses it: for each muscle group, his last heavy compound lift (a compound exercise done with load), its date and how many hours ago that session ended. Most recent first.",
-    input_schema: { type: "object", properties: {}, additionalProperties: false },
+    input_schema: { type: "object", properties: { show: SHOW }, additionalProperties: false },
   },
   {
     name: "get_training_pattern",
@@ -160,6 +170,7 @@ export const COACH_TOOLS = [
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   ...CALENDAR_TOOLS,
+  PROPOSE_EXERCISE_TOOL,
   PROPOSE_SESSION_ADDITIONS_TOOL,
   PROPOSE_PROGRAM_TOOL,
 ] as const;
@@ -378,6 +389,7 @@ const libraryInput = z
     muscle: z.string().refine(isMuscle, "Unknown muscle.").optional(),
     equipment: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]).optional(),
     query: z.string().trim().min(2).optional(),
+    ...show,
   })
   .strict()
   .refine((f) => f.muscle || f.equipment || f.query, "Give at least one filter: muscle, equipment or query.");
@@ -543,10 +555,17 @@ export function plannedPositions(d: CoachData): Map<number, string> {
 const weeksInput = (key: "weeks") => z.object({ [key]: weeks.optional() }).strict();
 
 /**
- * Runs one tool call. `propose` handles propose_program (it needs ids from the caller); every other tool is read-only.
+ * Runs one tool call. `propose` handles propose_program and `draftId` gives propose_exercise its draft id (ids come
+ * from the caller); every other tool is read-only.
  * Never throws for a bad input: the model gets the problem back as an error result.
  */
-export function runTool(d: CoachData, name: string, input: unknown, propose: (draftInput: unknown) => ProposeResult = (i) => proposeProgram(d, i, "", undefined, plannedPositions(d))): ToolOutcome {
+export function runTool(
+  d: CoachData,
+  name: string,
+  input: unknown,
+  propose: (draftInput: unknown) => ProposeResult = (i) => proposeProgram(d, i, "", undefined, plannedPositions(d)),
+  draftId: () => string = () => ""
+): ToolOutcome {
   const parse = <T>(schema: z.ZodType<T>, f: (v: T) => ToolOutcome): ToolOutcome => {
     const r = schema.safeParse(input ?? {});
     return r.success ? f(r.data) : { ok: false, error: zodError(r.error) };
@@ -563,7 +582,7 @@ export function runTool(d: CoachData, name: string, input: unknown, propose: (dr
     case "get_prs":
       return parse(z.object({ exercise_id: z.string().min(1).optional() }).strict(), (r) => getPrs(d, r.exercise_id));
     case "get_program":
-      return parse(z.object({}).strict(), () => ({ ok: true, result: getProgram(d) }));
+      return parse(z.object(show).strict(), () => ({ ok: true, result: getProgram(d) }));
     case "get_library":
       return parse(libraryInput, (f) => ({ ok: true, result: getLibrary(d, f) }));
     case "get_body_weight":
@@ -571,9 +590,11 @@ export function runTool(d: CoachData, name: string, input: unknown, propose: (dr
     case "get_photos":
       return parse(photosInput, (f) => ({ ok: true, result: getPhotos(d, f) }));
     case "get_recovery":
-      return parse(z.object({}).strict(), () => ({ ok: true, result: getRecovery(d) }));
+      return parse(z.object(show).strict(), () => ({ ok: true, result: getRecovery(d) }));
     case "get_training_pattern":
       return parse(z.object({}).strict(), () => ({ ok: true, result: getTrainingPattern(d) }));
+    case "propose_exercise":
+      return proposeExercise(d, input, draftId(), plannedPositions(d));
     case "propose_session_additions":
       return proposeSessionAdditions(d, input);
     case "propose_program": {
