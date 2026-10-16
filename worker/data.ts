@@ -15,6 +15,7 @@ import {
   type Bootstrap,
   type DayExercise,
   type Exercise,
+  type ExerciseRegion,
   type Program,
   type ProgramActivation,
   type ProgramDay,
@@ -26,6 +27,7 @@ import {
   type WorkoutSession,
 } from "./lib/types";
 import { isCategory } from "./lib/category";
+import { REGIONS, isRegion } from "./lib/regions";
 import { readPlans } from "./plans";
 import { queueAfterSession, reportsMayBeReady } from "./aiReports";
 import { ID_RE, ulid } from "./lib/ulid";
@@ -193,7 +195,36 @@ export function mapExercise(r: Record<string, unknown>): Exercise {
     instructions_en: jsonList<string>(r.instructions_en),
     archived_at: (r.archived_at as string | null) ?? null,
     category: isCategory(r.category) ? r.category : null,
+    license: (r.license as string | null | undefined) ?? null,
+    license_author: (r.license_author as string | null | undefined) ?? null,
+    regions: [],
   };
+}
+
+interface RegionRow {
+  exercise_id: string;
+  region_key: string;
+  emphasis: ExerciseRegion["emphasis"];
+  evidence: ExerciseRegion["evidence"];
+}
+
+/** Region tags (SPEC-v11 A3) attached to exercises, primary first, then in the region list's order. */
+export function attachRegions(exercises: Exercise[], rows: RegionRow[]): Exercise[] {
+  const by = new Map<string, ExerciseRegion[]>();
+  for (const r of rows) {
+    if (!isRegion(r.region_key)) continue;
+    const list = by.get(r.exercise_id) ?? [];
+    list.push({ region: r.region_key, emphasis: r.emphasis, evidence: r.evidence });
+    by.set(r.exercise_id, list);
+  }
+  const order = (x: ExerciseRegion) => (x.emphasis === "primary" ? 0 : 100) + REGIONS.indexOf(x.region);
+  return exercises.map((e) => ({ ...e, regions: (by.get(e.id) ?? []).sort((a, b) => order(a) - order(b)) }));
+}
+
+/** Region tags of the exercises a query selects (the SQL returns exercise ids). */
+export async function readRegions(env: Env, idsSql?: string): Promise<RegionRow[]> {
+  const rows = await env.DB.prepare(`SELECT exercise_id, region_key, emphasis, evidence FROM exercise_regions${idsSql ? ` WHERE exercise_id IN (${idsSql})` : ""}`).all<RegionRow>();
+  return rows.results;
 }
 
 /**
@@ -201,12 +232,12 @@ export function mapExercise(r: Record<string, unknown>): Exercise {
  * logged sets (history, reports, extra exercises) and every custom exercise. The full library is GET /api/exercises.
  */
 export async function readExercises(env: Env): Promise<Exercise[]> {
-  const rows = await env.DB.prepare(
-    `SELECT * FROM exercises
-     WHERE id IN (SELECT exercise_id FROM day_exercises) OR id IN (SELECT DISTINCT exercise_id FROM set_entries) OR source IN ('seed', 'custom')
-     ORDER BY id`
-  ).all<Record<string, unknown>>();
-  return rows.results.map(mapExercise);
+  const where = "id IN (SELECT exercise_id FROM day_exercises) OR id IN (SELECT DISTINCT exercise_id FROM set_entries) OR source IN ('seed', 'custom')";
+  const [rows, regions] = await Promise.all([
+    env.DB.prepare(`SELECT * FROM exercises WHERE ${where} ORDER BY id`).all<Record<string, unknown>>(),
+    readRegions(env, `SELECT id FROM exercises WHERE ${where}`),
+  ]);
+  return attachRegions(rows.results.map(mapExercise), regions);
 }
 
 type SessionRow = Omit<WorkoutSession, "sets">;

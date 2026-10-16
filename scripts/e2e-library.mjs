@@ -19,7 +19,9 @@ export function loadLibrary(persistTo) {
         writeFileSync(join(dir, img), PLACEHOLDER_JPEG);
       }
     }
-    execFileSync("npx", ["tsx", "seed/import-exercises.ts", "--local", "--persist-to", persistTo, "--dataset", DATASET, "--images", dir], { stdio: "inherit" });
+    // The M14 sources' rows and region tags come from seed/library/m14 as in production; their images are not copied
+    // (no network in e2e; the detail hides an image that does not load).
+    execFileSync("npx", ["tsx", "seed/import-exercises.ts", "--local", "--persist-to", persistTo, "--dataset", DATASET, "--images", dir, "--source-media", "skip"], { stdio: "inherit" });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

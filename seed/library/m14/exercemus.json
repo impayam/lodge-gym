@@ -1,0 +1,10 @@
+{
+ "source": "exercemus",
+ "sha": "0ee5b742928b0c910883fa1c0c2cfaf26c4ee180",
+ "decisions": [
+  {"sid":"side-lateral-raise","name":"Side Lateral Raise","decision":"duplicate","duplicate_of":"lateral","reason":"Standing dumbbell side lateral raise is the library's Dumbbell Lateral Raise."},
+  {"sid":"standing-military-press","name":"Standing Military Press","decision":"duplicate","duplicate_of":"ohp","reason":"Standing barbell military press is the library's Standing Overhead Press."},
+  {"sid":"triceps-pushdown-rope-attachment","name":"Triceps Pushdown - Rope Attachment","decision":"duplicate","duplicate_of":"rope_pushdown","reason":"Same exercise as Triceps Rope Pushdown."},
+  {"sid":"weighted-bench-dip","name":"Weighted Bench Dip","decision":"duplicate","duplicate_of":"fedb-Weighted_Bench_Dip","reason":"Same exercise as Weighted Bench Dip."}
+ ]
+}

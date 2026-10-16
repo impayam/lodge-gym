@@ -138,7 +138,7 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 ## Exercise library (SPEC-v2 M7)
 
 - Source: [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense), pinned to commit
-  `FEDB_SHA` in `worker/lib/library.ts`. ExerciseDB is not used (its terms forbid storing data or media).
+  `FEDB_SHA` in `worker/lib/library.ts`. The M14 sources (below) add names and facts from other databases.
 - `seed/import-exercises.ts` (`npm run library:import -- --remote|--local …`) upserts the rows into D1 and copies the
   images into the private R2 bucket under `library/free-exercise-db/images/`, with the dataset snapshot at
   `library/free-exercise-db/<date>.json` and a manifest of copied images (resume). Re-running changes nothing.
@@ -150,7 +150,27 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   entry, drafted by `derive-patterns.ts`, unplaced ones left null, plus the reviewed `category` overrides),
   `seed-matches.json` (the seeded exercises' library match, pattern, mechanic and secondary muscles; they keep their
   ids) and `manual.json` (hand-written gap fill, source `manual`, no media).
-- `npm run library:report` writes `seed/library/IMPORT-REPORT.md` for review.
+- `npm run library:report` writes `seed/library/IMPORT-REPORT.md` and `seed/library/m14/IMPORT-REPORT.md` for review.
+
+### More sources and muscle regions (SPEC-v11 M14 Phase A)
+
+- Sources, each pinned to a commit in `worker/lib/librarySources.ts`: wger (licence per record: CC BY-SA 3.0/4.0 or
+  CC0; images only where their own licence allows, AI-generated ones left out), everkinetic (CC BY-SA 4.0, with its
+  images), and ExerciseDB (v1 dataset), Liftosaur and exercemus for names and facts only (no descriptions,
+  instructions or media). Kettlebell, band, ball, foam roller and TRX exercises, plyometrics and strongman are left out.
+  Every added row has our own two or three instruction steps; stretching and cardio count 0 toward volume.
+- `seed/library/m14/screen.ts` (developer tool, not run on deploy) reads the sources, screens them against the library
+  (automatic exclusions, exact duplicates) and writes `screening.json` and `wger-images.json`. The review is committed
+  as one decision file per source (`seed/library/m14/<source>.json`: include with our row, exclude with a reason, or
+  duplicate of an existing id) and `seed/library/m14/dedupe-review.json` (every probable duplicate marked `same` or
+  `different`; change a line there to change the decision). Nothing is merged and existing ids never change.
+- Region tags (`exercise_regions`, migration `0013_exercise_regions.sql`): 26 regions under the muscle chips, each tag
+  with emphasis (main focus / also trained) and evidence (strong / moderate / weak), from the reviewed rule table in
+  `worker/lib/regions.ts`; `seed/library/region-overrides.json` replaces the rules for a named exercise. The import
+  tags every library exercise, a custom exercise is tagged on save. Forearm and neck work have no region.
+- The import also snapshots each source to R2 (`library/sources/<source>/snapshots/`) and copies the stored images to
+  `library/sources/<source>/images/` (manifest `library/sources/manifest.json`), resumable like the free-exercise-db
+  copy. `--source-media skip` leaves the source images out (e2e).
 - Muscle names map to the canonical keys in one table, `worker/lib/muscles.ts`.
 - Every exercise shows a "Watch form video" link: a YouTube search for `name_en + " form"`, built at render time.
 
@@ -377,7 +397,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
   drawn and mirrored in code, so the figures are symmetric by construction. No third-party artwork or icon set is
   used, so no external licence applies.
-- Exercise images: free-exercise-db (Unlicense), copied into the private R2 bucket (see "Exercise library").
+- Exercise images: free-exercise-db (Unlicense), wger (each image's own licence and author, shown under it) and
+  everkinetic (CC BY-SA 4.0), copied into the private R2 bucket (see "Exercise library"); credited in Settings → About.
 - 3D anatomy model of the exercise picker: Body Anatomy 3D Viewer by hpfrei (github.com/hpfrei/body-anatomy-3d-viewer,
   commit 0fc76a9), based on Z-Anatomy, CC BY-SA 4.0, used unmodified (`web/public/models/ANATOMY-SOURCE.md`); credited
   in Settings → About.

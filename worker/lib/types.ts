@@ -3,6 +3,7 @@
 import type { CalendarSettings, GymPlan, WorkShift } from "./calendar";
 import type { Category } from "./category";
 import type { GeneratorInput } from "./generator/model";
+import type { Region } from "./regions";
 import type { SessionPlan } from "./plan";
 
 export type Unit = "lb" | "kg";
@@ -21,7 +22,8 @@ export interface Settings {
   rest_next_exercise_sec: number;
 }
 
-export type ExerciseSource = "seed" | "fedb" | "manual" | "custom";
+/** SPEC-v2 §7.2; the M14 sources (SPEC-v11 A1): wger, everkinetic, exercisedb, liftosaur, exercemus. */
+export type ExerciseSource = "seed" | "fedb" | "manual" | "custom" | "wger" | "everkinetic" | "exercisedb" | "liftosaur" | "exercemus";
 export type Pattern = "squat" | "hinge" | "lunge" | "h_push" | "v_push" | "h_pull" | "v_pull" | "isolation" | "core" | "carry";
 
 /** Image or animation of an exercise; library media lives in the private R2 bucket (served by /api/library/media). */
@@ -29,6 +31,16 @@ export interface ExerciseMedia {
   kind: "image" | "gif";
   r2_key?: string;
   url?: string;
+  /** An image from an open-licence source: its own licence and author (SPEC-v11 A1). */
+  license?: string;
+  author?: string;
+}
+
+/** A region tag (SPEC-v11 A3, exercise_regions): the part of a muscle an exercise emphasises, and the evidence for it. */
+export interface ExerciseRegion {
+  region: Region;
+  emphasis: "primary" | "secondary";
+  evidence: "strong" | "moderate" | "weak";
 }
 
 export interface Exercise {
@@ -53,6 +65,11 @@ export interface Exercise {
   archived_at: string | null;
   /** SPEC-v2 §7.4: only strength, powerlifting and olympic weightlifting count toward muscle volume. */
   category: Category | null;
+  /** Licence of the stored content and who to credit (migration 0013); null when nothing licensed is stored. */
+  license: string | null;
+  license_author: string | null;
+  /** Region tags, primary first (SPEC-v11 A3). */
+  regions: ExerciseRegion[];
 }
 
 export interface DayExercise {

@@ -1,0 +1,3070 @@
+{
+ "fetched": "2026-10-16",
+ "source": "https://wger.de/api/v2/exerciseimage/",
+ "images": [
+  {
+   "exercise": 12,
+   "image": "https://wger.de/media/exercise-images/12/4a42cc6f-648d-40cc-a72a-c49dd47e1667.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 31,
+   "image": "https://wger.de/media/exercise-images/31/92f6451b-f89d-49d6-9531-8970ea420d97.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 41,
+   "image": "https://wger.de/media/exercise-images/41/34b37423-269f-43d4-9d29-d2a90eeaa6b4.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 50,
+   "image": "https://wger.de/media/exercise-images/50/44cf2c72-a78a-4d5e-a8b5-a02c6ea61fb4.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 50,
+   "image": "https://wger.de/media/exercise-images/50/60c68ac5-70c7-4ed6-bfc1-99bed63a472a.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 50,
+   "image": "https://wger.de/media/exercise-images/50/695ced5c-9961-4076-add2-cb250d01089e.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 50,
+   "image": "https://wger.de/media/exercise-images/50/69b519d8-4861-4bb1-b504-3887aa30e7d8.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 51,
+   "image": "https://wger.de/media/exercise-images/51/f1730f56-7aca-4566-8338-3e42b1bee6e1.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 73,
+   "image": "https://wger.de/media/exercise-images/192/Bench-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 73,
+   "image": "https://wger.de/media/exercise-images/192/Bench-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 75,
+   "image": "https://wger.de/media/exercise-images/75/7b700f5d-17fc-41a9-bd41-e98e45c15768.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 75,
+   "image": "https://wger.de/media/exercise-images/97/Dumbbell-bench-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 75,
+   "image": "https://wger.de/media/exercise-images/97/Dumbbell-bench-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 76,
+   "image": "https://wger.de/media/exercise-images/76/9abec4e4-90ba-44f9-9e6e-5e35f7273078.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 76,
+   "image": "https://wger.de/media/exercise-images/88/Narrow-grip-bench-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 76,
+   "image": "https://wger.de/media/exercise-images/88/Narrow-grip-bench-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 79,
+   "image": "https://wger.de/media/exercise-images/79/da58dfbf-748a-461b-891e-3d6bc9cc4be2.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 81,
+   "image": "https://wger.de/media/exercise-images/81/a751a438-ae2d-4751-8d61-cef0e9292174.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 83,
+   "image": "https://wger.de/media/exercise-images/109/Barbell-rear-delt-row-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 83,
+   "image": "https://wger.de/media/exercise-images/109/Barbell-rear-delt-row-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 84,
+   "image": "https://wger.de/media/exercise-images/110/Reverse-grip-bent-over-rows-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 84,
+   "image": "https://wger.de/media/exercise-images/110/Reverse-grip-bent-over-rows-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 91,
+   "image": "https://wger.de/media/exercise-images/74/Bicep-curls-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 91,
+   "image": "https://wger.de/media/exercise-images/74/Bicep-curls-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 92,
+   "image": "https://wger.de/media/exercise-images/81/Biceps-curl-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 92,
+   "image": "https://wger.de/media/exercise-images/81/Biceps-curl-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 94,
+   "image": "https://wger.de/media/exercise-images/94/6dee2f60-aea2-4f2d-9bf6-aef50c4f9483.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 95,
+   "image": "https://wger.de/media/exercise-images/129/Standing-biceps-curl-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 95,
+   "image": "https://wger.de/media/exercise-images/129/Standing-biceps-curl-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 129,
+   "image": "https://wger.de/media/exercise-images/129/b263c968-e067-4750-916a-d8758a7df23e.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "roneydya",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 129,
+   "image": "https://wger.de/media/exercise-images/129/dbad8cd0-5eeb-4de2-8d9e-80c7770735fd.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 135,
+   "image": "https://wger.de/media/exercise-images/98/Butterfly-machine-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 135,
+   "image": "https://wger.de/media/exercise-images/98/Butterfly-machine-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 146,
+   "image": "https://wger.de/media/exercise-images/146/8b284904-d072-4381-a256-4c81d8fd9c1f.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 152,
+   "image": "https://wger.de/media/exercise-images/152/6c1a7459-266d-491a-bd50-7cbaea2bc771.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 152,
+   "image": "https://wger.de/media/exercise-images/152/b2c5a9f9-8beb-41f7-841c-9664d22a427e.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 158,
+   "image": "https://wger.de/media/exercise-images/158/02e8a7c3-dc67-434e-a4bc-77fdecf84b49.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 158,
+   "image": "https://wger.de/media/exercise-images/158/0d51a0f2-622f-434b-beb8-1a003c54712a.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 161,
+   "image": "https://wger.de/media/exercise-images/161/b9b1803e-2817-40bf-8ac7-e398ca86d8b4.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 167,
+   "image": "https://wger.de/media/exercise-images/91/Crunches-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 167,
+   "image": "https://wger.de/media/exercise-images/91/Crunches-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 171,
+   "image": "https://wger.de/media/exercise-images/56/Decline-crunch-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 171,
+   "image": "https://wger.de/media/exercise-images/56/Decline-crunch-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 184,
+   "image": "https://wger.de/media/exercise-images/184/1709c405-620a-4d07-9658-fade2b66a2df.jpeg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 185,
+   "image": "https://wger.de/media/exercise-images/100/Decline-bench-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 185,
+   "image": "https://wger.de/media/exercise-images/100/Decline-bench-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 194,
+   "image": "https://wger.de/media/exercise-images/194/34600351-8b0b-4cb0-8daa-583537be15b0.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 197,
+   "image": "https://wger.de/media/exercise-images/83/Bench-dips-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 197,
+   "image": "https://wger.de/media/exercise-images/83/Bench-dips-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 203,
+   "image": "https://wger.de/media/exercise-images/203/1c052351-2af0-4227-aeb0-244008e4b0a8.jpeg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 203,
+   "image": "https://wger.de/media/exercise-images/203/2ab30113-4e08-4d39-9d23-d901ce2c0971.jpeg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 203,
+   "image": "https://wger.de/media/exercise-images/203/300a44ac-4368-48e2-8b18-beea32ab915d.gif",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 206,
+   "image": "https://wger.de/media/exercise-images/113/Walking-lunges-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 206,
+   "image": "https://wger.de/media/exercise-images/113/Walking-lunges-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 206,
+   "image": "https://wger.de/media/exercise-images/113/Walking-lunges-3.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 206,
+   "image": "https://wger.de/media/exercise-images/113/Walking-lunges-4.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 206,
+   "image": "https://wger.de/media/exercise-images/206/6ec66efd-e74f-4142-bed1-0a0ac74e3294.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 237,
+   "image": "https://wger.de/media/exercise-images/122/Incline-cable-flyes-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 237,
+   "image": "https://wger.de/media/exercise-images/122/Incline-cable-flyes-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 238,
+   "image": "https://wger.de/media/exercise-images/238/2fc242d3-5bdd-4f97-99bd-678adb8c96fc.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 238,
+   "image": "https://wger.de/media/exercise-images/238/c6464fb3-1924-4ff1-adfa-fd36da9b5d13.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 246,
+   "image": "https://wger.de/media/exercise-images/84/Lying-close-grip-triceps-press-to-chin-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 246,
+   "image": "https://wger.de/media/exercise-images/84/Lying-close-grip-triceps-press-to-chin-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 256,
+   "image": "https://wger.de/media/exercise-images/256/b7def5bc-2352-499b-b9e5-fff741003831.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 257,
+   "image": "https://wger.de/media/exercise-images/191/Front-squat-1-857x1024.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 257,
+   "image": "https://wger.de/media/exercise-images/191/Front-squat-2-857x1024.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 265,
+   "image": "https://wger.de/media/exercise-images/265/7528acb4-b2cc-4b75-b6ae-d514cbd4f78b.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 272,
+   "image": "https://wger.de/media/exercise-images/86/Bicep-hammer-curl-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 272,
+   "image": "https://wger.de/media/exercise-images/86/Bicep-hammer-curl-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 275,
+   "image": "https://wger.de/media/exercise-images/138/Hammer-curls-with-rope-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 275,
+   "image": "https://wger.de/media/exercise-images/138/Hammer-curls-with-rope-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 279,
+   "image": "https://wger.de/media/exercise-images/279/36605bc8-d7e1-43e1-87c1-b9cb50db62b2.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 282,
+   "image": "https://wger.de/media/exercise-images/282/f6121ac9-330e-4ed7-8219-91ce246bf871.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 285,
+   "image": "https://wger.de/media/exercise-images/285/4141e8b2-d9f2-4597-8ef0-7768127fd0ec.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 297,
+   "image": "https://wger.de/media/exercise-images/297/b10d3341-baa8-49ab-b462-5b3529389aac.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 301,
+   "image": "https://wger.de/media/exercise-images/128/Hyperextensions-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 301,
+   "image": "https://wger.de/media/exercise-images/128/Hyperextensions-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 301,
+   "image": "https://wger.de/media/exercise-images/301/2d5c2f99-b8ff-4095-b515-4c2a85afde70.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 320,
+   "image": "https://wger.de/media/exercise-images/320/6c9124b6-3551-47a8-9c22-20141c8b9c53.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 320,
+   "image": "https://wger.de/media/exercise-images/320/85a075aa-53ff-4d61-bad3-5f47e14e0f8e.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 323,
+   "image": "https://wger.de/media/exercise-images/71/Cable-crossover-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 323,
+   "image": "https://wger.de/media/exercise-images/71/Cable-crossover-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 348,
+   "image": "https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 348,
+   "image": "https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 349,
+   "image": "https://wger.de/media/exercise-images/349/7359ab6a-72a4-4ed8-b7da-35d57aaa2199.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 349,
+   "image": "https://wger.de/media/exercise-images/349/8dc5ad63-a93a-496f-9473-ac414236e58d.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 349,
+   "image": "https://wger.de/media/exercise-images/349/9d969203-9cb6-4d47-9c31-fef53bfe1de5.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 349,
+   "image": "https://wger.de/media/exercise-images/349/d74d171e-d39a-4c13-bbcd-6821bc94d424.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 364,
+   "image": "https://wger.de/media/exercise-images/364/b318dde9-f5f2-489f-940a-cd864affb9e3.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 365,
+   "image": "https://wger.de/media/exercise-images/154/lying-leg-curl-machine-large-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 365,
+   "image": "https://wger.de/media/exercise-images/154/lying-leg-curl-machine-large-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 366,
+   "image": "https://wger.de/media/exercise-images/117/seated-leg-curl-large-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 366,
+   "image": "https://wger.de/media/exercise-images/117/seated-leg-curl-large-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 367,
+   "image": "https://wger.de/media/exercise-images/118/standing-leg-curls-large-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 367,
+   "image": "https://wger.de/media/exercise-images/118/standing-leg-curls-large-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 369,
+   "image": "https://wger.de/media/exercise-images/369/4d621b17-f6cb-4107-97c0-9f44e9a2dbc6.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 369,
+   "image": "https://wger.de/media/exercise-images/369/78c915d1-e46d-4d30-8124-65d68664c3ef.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 371,
+   "image": "https://wger.de/media/exercise-images/371/d2136f96-3a43-4d4c-9944-1919c4ca1ce1.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 373,
+   "image": "https://wger.de/media/exercise-images/373/60e2aa21-1910-40d3-9fed-babfee06dd48.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 375,
+   "image": "https://wger.de/media/exercise-images/130/Narrow-stance-hack-squats-1-1024x721.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 375,
+   "image": "https://wger.de/media/exercise-images/130/Narrow-stance-hack-squats-2-1024x721.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 377,
+   "image": "https://wger.de/media/exercise-images/125/Leg-raises-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 377,
+   "image": "https://wger.de/media/exercise-images/125/Leg-raises-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 394,
+   "image": "https://wger.de/media/exercise-images/143/Cable-seated-rows-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 394,
+   "image": "https://wger.de/media/exercise-images/143/Cable-seated-rows-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 394,
+   "image": "https://wger.de/media/exercise-images/394/5e0c015f-9e4c-4034-beea-b0afbf15d0bd.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 418,
+   "image": "https://wger.de/media/exercise-images/418/fa2a2207-43cb-4dc0-bc2a-039e32544790.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 427,
+   "image": "https://wger.de/media/exercise-images/93/Decline-crunch-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 427,
+   "image": "https://wger.de/media/exercise-images/93/Decline-crunch-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 454,
+   "image": "https://wger.de/media/exercise-images/454/447f3c17-405f-46e0-b138-65c2a8caaab0.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 456,
+   "image": "https://wger.de/media/exercise-images/456/3b681e59-377b-40db-9113-ca5873ce084b.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "wakanda90",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 456,
+   "image": "https://wger.de/media/exercise-images/456/93716d06-c378-49b8-820a-8bf3e1d7e45c.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "wakanda90",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 456,
+   "image": "https://wger.de/media/exercise-images/456/b8f007b1-d43f-416d-a44b-fb3c15291414.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "wakanda90",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 456,
+   "image": "https://wger.de/media/exercise-images/456/c51d875b-0c07-495e-a7cf-08893a9f125d.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "wakanda90",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/122735cf-f940-4de8-aa30-49a1da148319.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/167db646-9acb-4426-a383-c7e7dc92e3ec.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/2c43d623-5898-4669-b5f8-eb3e1c38cd29.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/902e6836-394e-458b-b94e-101d714294e2.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/b180ce8b-a2c2-40da-924f-998d97aebb63.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/b7bd9c28-9f1d-4647-bd17-ab6a3adf5770.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/bce9a15d-d080-4fb0-bc30-f80778b38793.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/d1ca4a79-f299-4e70-a391-3e9526c3b141.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 458,
+   "image": "https://wger.de/media/exercise-images/458/e13f92a4-69ae-4043-ae1f-70f155a53024.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 465,
+   "image": "https://wger.de/media/exercise-images/193/Preacher-curl-3-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 465,
+   "image": "https://wger.de/media/exercise-images/193/Preacher-curl-3-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 475,
+   "image": "https://wger.de/media/exercise-images/475/b0554016-16fd-4dbe-be47-a2a17d16ae0e.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Imobard",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 478,
+   "image": "https://wger.de/media/exercise-images/478/70a2d72c-a822-45f3-8de2-54ea85951b84.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 484,
+   "image": "https://wger.de/media/exercise-images/161/Dead-lifts-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 484,
+   "image": "https://wger.de/media/exercise-images/161/Dead-lifts-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 487,
+   "image": "https://wger.de/media/exercise-images/487/692c598c-0493-42a5-be8b-b9d2e9adcd00.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 487,
+   "image": "https://wger.de/media/exercise-images/487/ad724e5c-b1ed-49e8-9279-a17545b0dd0b.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 507,
+   "image": "https://wger.de/media/exercise-images/507/13d526ab-12fc-461e-828a-051dd7c13fb1.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 512,
+   "image": "https://wger.de/media/exercise-images/512/b938437e-ff00-4679-9036-acb41bb28bbd.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 513,
+   "image": "https://wger.de/media/exercise-images/106/T-bar-row-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 513,
+   "image": "https://wger.de/media/exercise-images/106/T-bar-row-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 537,
+   "image": "https://wger.de/media/exercise-images/16/Incline-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 537,
+   "image": "https://wger.de/media/exercise-images/16/Incline-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 537,
+   "image": "https://wger.de/media/exercise-images/537/9f3c7817-3e3d-417d-8b08-2c0a1aa5fe03.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "erikocobra",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 537,
+   "image": "https://wger.de/media/exercise-images/537/d44aeb87-d654-4033-ad2a-368946b0a97e.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 538,
+   "image": "https://wger.de/media/exercise-images/41/Incline-bench-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 538,
+   "image": "https://wger.de/media/exercise-images/41/Incline-bench-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 538,
+   "image": "https://wger.de/media/exercise-images/538/a1c23996-c8aa-42e3-9dfc-bed0654d849f.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 539,
+   "image": "https://wger.de/media/exercise-images/61/Close-grip-bench-press-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 539,
+   "image": "https://wger.de/media/exercise-images/61/Close-grip-bench-press-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 543,
+   "image": "https://wger.de/media/exercise-images/53/Shoulder-press-machine-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "wger.de",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 543,
+   "image": "https://wger.de/media/exercise-images/53/Shoulder-press-machine-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "wger.de",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 566,
+   "image": "https://wger.de/media/exercise-images/119/seated-barbell-shoulder-press-large-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 566,
+   "image": "https://wger.de/media/exercise-images/119/seated-barbell-shoulder-press-large-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 567,
+   "image": "https://wger.de/media/exercise-images/123/dumbbell-shoulder-press-large-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 567,
+   "image": "https://wger.de/media/exercise-images/123/dumbbell-shoulder-press-large-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 570,
+   "image": "https://wger.de/media/exercise-images/570/68b4a33f-40f1-4dda-b56c-a2e20ed13903.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 571,
+   "image": "https://wger.de/media/exercise-images/150/Barbell-shrugs-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 571,
+   "image": "https://wger.de/media/exercise-images/150/Barbell-shrugs-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 572,
+   "image": "https://wger.de/media/exercise-images/151/Dumbbell-shrugs-1.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 572,
+   "image": "https://wger.de/media/exercise-images/151/Dumbbell-shrugs-2.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 572,
+   "image": "https://wger.de/media/exercise-images/572/9e730259-1dcd-4b5e-b4cc-9ebc0cfda75c.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 576,
+   "image": "https://wger.de/media/exercise-images/176/Cross-body-crunch-1.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 576,
+   "image": "https://wger.de/media/exercise-images/176/Cross-body-crunch-2.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 622,
+   "image": "https://wger.de/media/exercise-images/622/0705bc22-fadd-4c19-9c94-649a0b1f927f.jpeg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "clafal",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 622,
+   "image": "https://wger.de/media/exercise-images/622/9a429bd0-afd3-4ad0-8043-e9beec901c81.jpeg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "clafal",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 622,
+   "image": "https://wger.de/media/exercise-images/622/d6d57067-97de-462e-a8bb-15228d730323.jpeg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "clafal",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 630,
+   "image": "https://wger.de/media/exercise-images/630/b0f0c7d8-5878-4d9e-b820-21acc013741d.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 659,
+   "image": "https://wger.de/media/exercise-images/659/a60452f1-e2ea-43fe-baa6-c1a2208d060c.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 691,
+   "image": "https://wger.de/media/exercise-images/691/141711a2-58dc-47f7-b30c-968256953198.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "anto.kreegyr",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 691,
+   "image": "https://wger.de/media/exercise-images/691/297d4ce1-7e9e-4adb-8f5c-7d54054be885.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anto.kreegyr",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 691,
+   "image": "https://wger.de/media/exercise-images/691/72bb8231-8994-453f-8a3f-85b061dcffb8.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "anto.kreegyr",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 693,
+   "image": "https://wger.de/media/exercise-images/693/05c91bd2-7814-40b6-b2d1-51ae942b8321.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 694,
+   "image": "https://wger.de/media/exercise-images/694/119e6823-6960-4341-a9e1-aaf78d7fb57c.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 694,
+   "image": "https://wger.de/media/exercise-images/694/2e69c005-b241-4806-8557-fc5a4d5ee44d.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 804,
+   "image": "https://wger.de/media/exercise-images/804/6f4b8bd9-fa05-49de-870b-1f79b595ce89.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 805,
+   "image": "https://wger.de/media/exercise-images/805/7a437824-e2cc-46e1-804a-674f0ea31d25.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 822,
+   "image": "https://wger.de/media/exercise-images/822/6a770e5d-cd62-4754-a18c-eebe2103d7c5.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 822,
+   "image": "https://wger.de/media/exercise-images/822/74affc0d-03b6-4f33-b5f4-a822a2615f68.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 828,
+   "image": "https://wger.de/media/exercise-images/828/2e959dab-f39b-4c7c-9063-eb43064ab5eb.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 828,
+   "image": "https://wger.de/media/exercise-images/828/abfc7700-fadf-4f2d-ac84-e045e590a2fe.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cshep442",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 909,
+   "image": "https://wger.de/media/exercise-images/909/159222d9-c1e4-46ae-89ee-6a2dfaab978d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 912,
+   "image": "https://wger.de/media/exercise-images/912/e10a034f-6370-4dd6-b1c2-416b27844529.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 915,
+   "image": "https://wger.de/media/exercise-images/915/fe8ebece-dff8-4700-b84c-9110e2e074f5.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 916,
+   "image": "https://wger.de/media/exercise-images/916/9bf7555a-fec6-43a9-b343-aae496744e5e.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 925,
+   "image": "https://wger.de/media/exercise-images/925/67dbb1c9-b378-46f9-adb6-1f55b3d3007a.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 926,
+   "image": "https://wger.de/media/exercise-images/926/ae9deb5d-a1e9-4c30-b1e3-c128ba5d4969.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 927,
+   "image": "https://wger.de/media/exercise-images/927/7b392101-9c47-4693-935e-a88b1887eec5.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 957,
+   "image": "https://wger.de/media/exercise-images/957/0fd94587-6021-4763-856e-7227f5fcba2a.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 958,
+   "image": "https://wger.de/media/exercise-images/958/947ac249-475d-44ed-bed3-8dc433374f59.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cynomops",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 958,
+   "image": "https://wger.de/media/exercise-images/958/95f2bbc4-2f95-476d-a9b8-81b333fe2ef5.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cynomops",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 958,
+   "image": "https://wger.de/media/exercise-images/958/dfad24f7-3f6f-497c-8436-7dfd909bca3f.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "cynomops",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 959,
+   "image": "https://wger.de/media/exercise-images/959/53a5e008-bc31-4ee0-9463-69a858c2ec18.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "clafal",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 960,
+   "image": "https://wger.de/media/exercise-images/960/da4d0560-da89-4bb5-b91f-746458fb04ad.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 975,
+   "image": "https://wger.de/media/exercise-images/975/41d9267a-99bc-4e94-b1c4-0e39fe7a968f.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 976,
+   "image": "https://wger.de/media/exercise-images/976/94649ea6-bf58-4fd9-90c1-b2ec96ee20cd.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 977,
+   "image": "https://wger.de/media/exercise-images/977/3124c091-6395-4377-96c5-56048b627ceb.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 978,
+   "image": "https://wger.de/media/exercise-images/978/d3ffe51f-7eb8-4cc9-9eae-105847af3005.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 979,
+   "image": "https://wger.de/media/exercise-images/979/27097a3a-5749-428d-b94c-6082afe390f6.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 981,
+   "image": "https://wger.de/media/exercise-images/981/f9377a7e-eb58-4cca-b805-2d36863aeb03.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 983,
+   "image": "https://wger.de/media/exercise-images/983/16245344-9957-4a24-8d61-f9939ed5f964.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 984,
+   "image": "https://wger.de/media/exercise-images/984/5c7ffe68-e7b2-47f3-a22a-f9cc28640432.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 988,
+   "image": "https://wger.de/media/exercise-images/988/6283b258-a4d7-4833-84f7-a38987022d3d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 990,
+   "image": "https://wger.de/media/exercise-images/990/de20457c-914a-45c9-8cf9-0ad9739759a1.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 999,
+   "image": "https://wger.de/media/exercise-images/999/8548b2d2-004d-48b4-95fd-b1b25f4e53d0.jfif",
+   "is_main": false,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 999,
+   "image": "https://wger.de/media/exercise-images/999/d0931eb3-8db0-4049-bb08-aa4036072056.jfif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1000,
+   "image": "https://wger.de/media/exercise-images/1000/553266a8-a972-48c5-a014-b12afac66f65.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1002,
+   "image": "https://wger.de/media/exercise-images/1002/ddf91765-8045-4087-bece-de17f33332ce.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1003,
+   "image": "https://wger.de/media/exercise-images/1003/772d6e47-3865-4944-9255-7435d0b06782.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1003,
+   "image": "https://wger.de/media/exercise-images/1003/a2b47fa8-79b4-4a21-920b-48765f562bc4.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1007,
+   "image": "https://wger.de/media/exercise-images/1007/757846d3-78e4-4068-bbca-62e567372c94.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1012,
+   "image": "https://wger.de/media/exercise-images/1012/8270fdb8-28f1-4eff-b410-af8642085b3f.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1018,
+   "image": "https://wger.de/media/exercise-images/1018/5bbd3879-b6fc-4aaa-9e8e-33ae9a688112.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1018,
+   "image": "https://wger.de/media/exercise-images/1018/5f84cb9b-2d3a-48ff-87ec-b3d3950841f1.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1022,
+   "image": "https://wger.de/media/exercise-images/1022/eef8fb9d-ae72-4e23-81da-4d62f2734332.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1022,
+   "image": "https://wger.de/media/exercise-images/1022/f74644fa-f43e-46bd-8603-6e3a2ee8ee2d.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1080,
+   "image": "https://wger.de/media/exercise-images/1080/c4bf7ba1-6058-4d14-928f-7187885d5d57.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Imobard",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1084,
+   "image": "https://wger.de/media/exercise-images/1084/91dd5a95-1c45-46f2-a074-de41b6ad599b.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1086,
+   "image": "https://wger.de/media/exercise-images/1086/b2ee8d9b-0480-4992-8494-c223b37c2696.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1087,
+   "image": "https://wger.de/media/exercise-images/1087/d85f4e02-b20c-457c-bdfb-0b00e2d14150.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1088,
+   "image": "https://wger.de/media/exercise-images/1088/9f66b288-ce8f-4154-ba80-78fee267263c.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1089,
+   "image": "https://wger.de/media/exercise-images/1089/49f51716-535d-41dd-aeb5-cff5bb906bc1.jpeg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "clafal",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1091,
+   "image": "https://wger.de/media/exercise-images/1091/50c8912d-54ef-46c9-99d1-633b6196aa1e.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "clafal",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1098,
+   "image": "https://wger.de/media/exercise-images/1098/fa5328a2-64cb-4afb-a283-b3d948ddaf3f.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1100,
+   "image": "https://wger.de/media/exercise-images/1100/ab203e0c-8220-4537-987c-871eb259d687.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "philip",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1105,
+   "image": "https://wger.de/media/exercise-images/1105/36776818-799a-40bf-9eca-aebb3aa5008f.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "utkb",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1109,
+   "image": "https://wger.de/media/exercise-images/1109/00b0a0bf-c14a-4f13-bb14-62c09030a1aa.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1112,
+   "image": "https://wger.de/media/exercise-images/1112/81f40bee-4adf-4317-8476-1a87706e3031.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anon1337",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1117,
+   "image": "https://wger.de/media/exercise-images/1117/2555c4c3-a84d-47db-b83b-cbf721f12e45.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1117,
+   "image": "https://wger.de/media/exercise-images/1117/e74255c0-67a0-4309-b78d-2d79e6ff8c11.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1119,
+   "image": "https://wger.de/media/exercise-images/1119/9b138ad2-5b80-42a8-bfff-93a960444ffe.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1120,
+   "image": "https://wger.de/media/exercise-images/1120/df9a5256-e977-44d0-bc9c-b53253faeb22.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1127,
+   "image": "https://wger.de/media/exercise-images/1127/4942b7c0-6bda-4983-88e5-86547c3d445e.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1131,
+   "image": "https://wger.de/media/exercise-images/1131/3bcf3024-2dcc-4995-9694-55aa2c2e4a9a.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1136,
+   "image": "https://wger.de/media/exercise-images/1136/5778a8e9-c606-4843-89c8-9d9469eeb6e4.PNG",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1137,
+   "image": "https://wger.de/media/exercise-images/1137/42f22229-c0a0-4bfc-aca6-66fe5e1ab10d.PNG",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1138,
+   "image": "https://wger.de/media/exercise-images/1138/6c35fd79-ef35-4cf3-abf5-9c969457b8d4.PNG",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1141,
+   "image": "https://wger.de/media/exercise-images/1141/c7be1cd1-46c5-4a86-a114-5f0fe861c3e0.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cleen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1143,
+   "image": "https://wger.de/media/exercise-images/1143/6e21cb6c-da09-4bcd-b9d2-1ef75237b763.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1185,
+   "image": "https://wger.de/media/exercise-images/1185/c5ca283d-8958-4fd8-9d59-a3f52a3ac66b.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anto.kreegyr",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1186,
+   "image": "https://wger.de/media/exercise-images/1186/1987a039-cf35-437e-bbdc-40c53dd7d053.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anto.kreegyr",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1188,
+   "image": "https://wger.de/media/exercise-images/1188/43e714e4-b736-4f3a-8ab4-97821fdff86a.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1192,
+   "image": "https://wger.de/media/exercise-images/1192/651a4535-8210-4dbd-8f06-61d95fdd9963.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1193,
+   "image": "https://wger.de/media/exercise-images/1193/70ca5d80-3847-4a8c-8882-c6e9e485e29e.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "lion",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1194,
+   "image": "https://wger.de/media/exercise-images/1194/0506cb82-b7d6-4e1a-92c9-cfbcfbcd5776.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1194,
+   "image": "https://wger.de/media/exercise-images/1194/074e1766-4208-4a67-a211-9721772d99b0.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "prevail90",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1194,
+   "image": "https://wger.de/media/exercise-images/1194/34c03421-0803-4859-a2b0-5710f2bd94cd.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1198,
+   "image": "https://wger.de/media/exercise-images/1198/864906ac-4ac7-4e52-a886-c6bb97950a9f.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Gavru",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1217,
+   "image": "https://wger.de/media/exercise-images/1217/590e65db-de60-4727-b7eb-55f80af56043.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1223,
+   "image": "https://wger.de/media/exercise-images/1223/bf20836a-23b0-4f50-8b98-cfdd97684527.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Lynn_McIntyre",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1225,
+   "image": "https://wger.de/media/exercise-images/1225/39a0b7e7-9780-425d-84f5-56d10d1690ac.gif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Lynn_McIntyre",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1226,
+   "image": "https://wger.de/media/exercise-images/1226/a6154dbd-67a0-4a36-8748-0f5af3865e83.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Lynn_McIntyre",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1227,
+   "image": "https://wger.de/media/exercise-images/1227/57415c3c-2963-4130-9f6f-79f6a96113b6.gif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Lynn_McIntyre",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1230,
+   "image": "https://wger.de/media/exercise-images/1230/9fd1e2fd-f2c4-432d-b3ae-5e5f24085777.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anonymous",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1231,
+   "image": "https://wger.de/media/exercise-images/1231/b10457ce-5fa5-4d20-a32f-3c7100c6a9d9.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anonymous",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1232,
+   "image": "https://wger.de/media/exercise-images/1232/2b6de046-5806-49e3-bf36-b6fae16af021.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anonymous",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1233,
+   "image": "https://wger.de/media/exercise-images/1233/d7d6f9e1-7834-4cca-bd3b-f9def33ff44d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "anonymous",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1239,
+   "image": "https://wger.de/media/exercise-images/1239/5026373a-a7b4-4e26-a0aa-c46634205196.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "erikocobra",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1243,
+   "image": "https://wger.de/media/exercise-images/1243/53d4fabe-c994-4907-873f-8d82813a9832.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "erikocobra",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1274,
+   "image": "https://wger.de/media/exercise-images/1274/bcffdf52-3c36-4b0c-b787-fb84f20bf82d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "erikocobra",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1275,
+   "image": "https://wger.de/media/exercise-images/1275/0652d306-93eb-42f0-b564-7c3261ea809a.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "erikocobra",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1283,
+   "image": "https://wger.de/media/exercise-images/1283/e7262f70-7512-408a-8d00-4c499ef632fc.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "carlos3c",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1285,
+   "image": "https://wger.de/media/exercise-images/1285/1ab8005d-41e4-4505-9a7d-5277d59bb3cd.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "painDpice",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1290,
+   "image": "https://wger.de/media/exercise-images/1290/c05818bf-1c81-46df-9f24-42e354265388.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Franpol",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1296,
+   "image": "https://wger.de/media/exercise-images/1296/c42782fe-337a-44f4-9079-7f6dedab4885.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "JackSparrow",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1298,
+   "image": "https://wger.de/media/exercise-images/1298/ec4b83ec-5a8f-4303-9050-99ec4389bc2a.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "JackSparrow",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1307,
+   "image": "https://wger.de/media/exercise-images/1307/321d796a-f394-40b8-a1ea-874bbed6ecee.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1325,
+   "image": "https://wger.de/media/exercise-images/1325/d8372291-6725-452a-9711-6321c061e354.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "cleen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1333,
+   "image": "https://wger.de/media/exercise-images/1333/89f43354-32e3-473a-9bcf-caca51f1a8e3.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1336,
+   "image": "https://wger.de/media/exercise-images/1336/ebf88217-df26-4ef7-94cb-f0c2220c6abe.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1338,
+   "image": "https://wger.de/media/exercise-images/1338/9d157b4d-5af0-43c1-bd34-f52144ba1b54.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1348,
+   "image": "https://wger.de/media/exercise-images/1348/a3769120-2445-49f2-97d3-afc1238bfc2a.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1353,
+   "image": "https://wger.de/media/exercise-images/1353/138cb483-7d4d-4519-b029-63e4269810a6.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1363,
+   "image": "https://wger.de/media/exercise-images/1363/1dba566b-e799-4bde-abb0-c011a3c75e52.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1377,
+   "image": "https://wger.de/media/exercise-images/1377/12e7a231-d36a-4992-bf57-ff7bfe0f3ae4.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "brucem",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1378,
+   "image": "https://wger.de/media/exercise-images/1378/7c1fcf34-fb7e-45e7-a0c1-51f296235315.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "carlos3c",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1387,
+   "image": "https://wger.de/media/exercise-images/1387/a2cf7eda-5540-4105-b30e-1c2f2679a6c7.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "captive0592",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1392,
+   "image": "https://wger.de/media/exercise-images/1392/a02c9c7d-f42d-43e0-9946-1b99b014daee.png",
+   "is_main": true,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1392,
+   "image": "https://wger.de/media/exercise-images/1392/af848376-3db3-4b16-a056-4aa936d49da4.png",
+   "is_main": false,
+   "license": 1,
+   "license_author": "Everkinetic",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1448,
+   "image": "https://wger.de/media/exercise-images/1448/2184e68c-32b5-413f-a7c1-4a2d1bb98c35.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1452,
+   "image": "https://wger.de/media/exercise-images/1452/85a6b9de-4eec-445b-8ebb-f1950b076aba.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1479,
+   "image": "https://wger.de/media/exercise-images/1479/0305d98e-0887-4c0c-8992-7c220814efc2.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1519,
+   "image": "https://wger.de/media/exercise-images/1519/fab7f641-27d4-40b5-8edd-1a0a137bfd94.gif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "benjamin.yildiz@proton.me",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1521,
+   "image": "https://wger.de/media/exercise-images/1521/e4e4aa78-3c96-4b1d-95c0-f9f73a0779d0.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "polloperro",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1551,
+   "image": "https://wger.de/media/exercise-images/1551/a6a9e561-3965-45c6-9f2b-ee671e1a3a45.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Settebello",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1554,
+   "image": "https://wger.de/media/exercise-images/1554/49207a62-8799-4b47-8c0b-7bde02926f3d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Settebello",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1556,
+   "image": "https://wger.de/media/exercise-images/1556/a23c820b-e08b-4911-a6a4-80f16c15d2e0.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Settebello",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1567,
+   "image": "https://wger.de/media/exercise-images/1567/0a8c155c-a48e-47e8-9df3-e39f025c6cad.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Mariano_O",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1572,
+   "image": "https://wger.de/media/exercise-images/1572/3d14e761-a73d-49da-8804-f3016a7573ff.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Settebello",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1573,
+   "image": "https://wger.de/media/exercise-images/1573/662db55d-68d0-4297-8215-3dcf6c21c778.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1573,
+   "image": "https://wger.de/media/exercise-images/1573/a9ab402b-61ef-4d60-b91a-df52bf7f41a9.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1573,
+   "image": "https://wger.de/media/exercise-images/1573/b8efea91-8fcb-4926-82a9-76c62b16925f.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1581,
+   "image": "https://wger.de/media/exercise-images/1581/b71a6710-5798-4639-ac5a-22a2cdae2036.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1582,
+   "image": "https://wger.de/media/exercise-images/1582/5094fe30-eea2-4269-b0de-4b8a20558fd7.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1593,
+   "image": "https://wger.de/media/exercise-images/1593/9815fcd6-cf40-4ddd-9b38-2eac25973de1.gif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1604,
+   "image": "https://wger.de/media/exercise-images/1604/7695428e-bfed-4021-b987-498d93153995.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "RiccaBaro",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1612,
+   "image": "https://wger.de/media/exercise-images/1612/3dc33f57-2786-4305-8b91-e011d7055923.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1612,
+   "image": "https://wger.de/media/exercise-images/1612/e719b872-d122-4e2d-be17-bd2babfe457a.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1613,
+   "image": "https://wger.de/media/exercise-images/1613/a851fe9d-771f-44da-82f0-799e02ae3fd1.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1615,
+   "image": "https://wger.de/media/exercise-images/1615/7792295c-83b6-4ea8-9353-ce02f0ad2559.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1616,
+   "image": "https://wger.de/media/exercise-images/1616/97e6fd98-2ca6-486f-b9b2-f0499fe38044.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1618,
+   "image": "https://wger.de/media/exercise-images/1618/c18baedc-ff98-4fb2-b4f5-38a05c12f637.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1620,
+   "image": "https://wger.de/media/exercise-images/1620/edd40e39-e337-4460-a8dd-6127d40ddd16.jpeg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1621,
+   "image": "https://wger.de/media/exercise-images/1621/1bf3ee54-207c-4b53-b057-15adc1dd6128.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Rottekongen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1621,
+   "image": "https://wger.de/media/exercise-images/1621/ca1bc68d-9c36-4dd3-8ec4-496c57b5c564.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "technofer",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1634,
+   "image": "https://wger.de/media/exercise-images/1634/9a4704d3-1b25-43e3-b244-3885f4d3db87.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Rottekongen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1635,
+   "image": "https://wger.de/media/exercise-images/1635/b8c34e3a-7474-41ea-99e3-8d7fdb1e12d6.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Rottekongen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1637,
+   "image": "https://wger.de/media/exercise-images/1637/a1fbe83a-a3e5-49f6-a2c2-5d5b533c2be8.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Rottekongen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1638,
+   "image": "https://wger.de/media/exercise-images/1638/046c09b0-c35d-48d0-a552-39dd49f956d2.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Rottekongen",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1639,
+   "image": "https://wger.de/media/exercise-images/1639/8927346e-f5ca-4795-bdf1-5ac9309401e7.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1640,
+   "image": "https://wger.de/media/exercise-images/1640/bdea82f1-15ef-4649-8b5a-1303cfc178e7.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1641,
+   "image": "https://wger.de/media/exercise-images/1641/68d9488d-2596-420f-be0f-52aa70732c83.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1642,
+   "image": "https://wger.de/media/exercise-images/1642/a81ad922-caf5-47f8-99b4-640cb0717436.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1648,
+   "image": "https://wger.de/media/exercise-images/1648/63ae02d6-6dd9-4e9e-84da-d4905e78a33c.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1650,
+   "image": "https://wger.de/media/exercise-images/1650/1d7a5336-ec0b-4898-a474-78ba32789bf3.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1651,
+   "image": "https://wger.de/media/exercise-images/1651/04ab2679-a04d-4d05-9c85-0d36e898328c.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1652,
+   "image": "https://wger.de/media/exercise-images/1652/0306c8c0-70cc-45d4-92de-6fa72ceaa834.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1653,
+   "image": "https://wger.de/media/exercise-images/1653/c10c4e17-1e14-4cf9-930b-cc3a614f15dd.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1654,
+   "image": "https://wger.de/media/exercise-images/1654/aa724a58-b3b5-4522-b278-1155416236a5.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "roneydya",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1706,
+   "image": "https://wger.de/media/exercise-images/1706/0c5243cc-2539-4005-aee0-d3a8c5d3a32c.jfif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "AlucardEvil40",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1725,
+   "image": "https://wger.de/media/exercise-images/1725/f0ebd44e-b8e1-400c-b598-ca371f3a07af.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "barry",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1726,
+   "image": "https://wger.de/media/exercise-images/1726/2e7e541b-5f55-405a-ae78-3e71b3f42db4.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "barry",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1732,
+   "image": "https://wger.de/media/exercise-images/1732/d13b9adb-968e-4f73-95e6-b16690bcf616.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "54str",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1733,
+   "image": "https://wger.de/media/exercise-images/1733/4ef77069-beb2-4504-a4f3-b181d5f35212.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Tierrasverdes",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1734,
+   "image": "https://wger.de/media/exercise-images/1734/782e2fbb-1267-476d-a817-14f3b83e0564.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Tierrasverdes",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1735,
+   "image": "https://wger.de/media/exercise-images/1735/43bca7d9-2333-43f3-8554-2d0b39fa2a07.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Tierrasverdes",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1736,
+   "image": "https://wger.de/media/exercise-images/1736/aa724cc5-c485-4f3e-9d2a-0c6ae4baefbe.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Tierrasverdes",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1738,
+   "image": "https://wger.de/media/exercise-images/1738/0529acdf-ede8-42a2-a3e5-8d0c57b7a0e1.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "54str",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1744,
+   "image": "https://wger.de/media/exercise-images/1744/cb9263c4-39fc-4261-8d30-a5d6d57841c1.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1745,
+   "image": "https://wger.de/media/exercise-images/1745/9c92843a-6b90-428b-a868-9af4b11bad38.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1747,
+   "image": "https://wger.de/media/exercise-images/1747/af9647dd-04ec-4adf-9c07-4e33edb77277.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1748,
+   "image": "https://wger.de/media/exercise-images/1748/923a3ff7-c269-49bd-9f03-697151a40f06.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1801,
+   "image": "https://wger.de/media/exercise-images/1801/60043328-1cfb-4289-9865-aaf64d5aaa28.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Workout Guru",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1801,
+   "image": "https://wger.de/media/exercise-images/1801/68720d5e-f422-47ac-81e4-c7b51144d302.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "Workout Guru",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1804,
+   "image": "https://wger.de/media/exercise-images/1804/691c69b8-c3db-4177-8435-dd3a97d88542.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1830,
+   "image": "https://wger.de/media/exercise-images/1830/3b6c547c-ab3d-4472-93cf-561710279eab.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "hans",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1831,
+   "image": "https://wger.de/media/exercise-images/1831/2d9d509f-707b-4132-961e-91a2459ca198.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "hans",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1835,
+   "image": "https://wger.de/media/exercise-images/1835/ca4a0b7e-9fdd-4173-843a-f0392824abe1.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Nick E",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1854,
+   "image": "https://wger.de/media/exercise-images/1854/ccd3c18e-c864-426f-8176-15dce14305e3.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1855,
+   "image": "https://wger.de/media/exercise-images/1855/a6597ed8-1613-4458-ba56-4b63bc946a35.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1856,
+   "image": "https://wger.de/media/exercise-images/1856/19c31c63-4968-4887-b8e6-4127be27fdde.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1857,
+   "image": "https://wger.de/media/exercise-images/1857/92291128-cc7e-4f70-9663-80840c516fc9.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1858,
+   "image": "https://wger.de/media/exercise-images/1858/058b6fdb-8093-4b6d-a504-cbf869f3e3d3.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1859,
+   "image": "https://wger.de/media/exercise-images/1859/2465d5eb-c249-454d-93eb-58aa13bdc080.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1860,
+   "image": "https://wger.de/media/exercise-images/1860/f0410e66-28d5-455f-90f3-d078e0988460.avif",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1861,
+   "image": "https://wger.de/media/exercise-images/1861/0ffe4e99-71ad-47fb-b98c-1f243faa0499.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1862,
+   "image": "https://wger.de/media/exercise-images/1862/93d993f8-1d8c-4e21-99c6-08b2fe424a17.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1863,
+   "image": "https://wger.de/media/exercise-images/1863/5f29959d-0fd1-46d2-98b7-0c2cb5d9ee13.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1864,
+   "image": "https://wger.de/media/exercise-images/1864/5970cdd8-0123-4eba-a921-2157fb6adacf.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1865,
+   "image": "https://wger.de/media/exercise-images/1865/c2c9848e-5094-4ed9-bd81-0831b6551483.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1867,
+   "image": "https://wger.de/media/exercise-images/1867/767631e5-10d2-46b8-b03f-cc298f96963b.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1868,
+   "image": "https://wger.de/media/exercise-images/1868/446e7065-215d-4a91-9da7-9416101442bb.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1869,
+   "image": "https://wger.de/media/exercise-images/1869/c49187bd-9f90-4a7a-b25e-1d50e857a104.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1870,
+   "image": "https://wger.de/media/exercise-images/1870/7465bbcf-3b86-42a6-8d2f-12a3d1f60a15.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1872,
+   "image": "https://wger.de/media/exercise-images/1872/df982df1-512a-4eb9-acd9-68cc1c265df6.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1873,
+   "image": "https://wger.de/media/exercise-images/1873/c0ed299b-6d87-4d90-885d-bb3b5d85f1eb.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1874,
+   "image": "https://wger.de/media/exercise-images/1874/66fca8a5-41e8-42d1-8776-5e46a4902650.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1875,
+   "image": "https://wger.de/media/exercise-images/1875/e1128391-4b73-43a9-ab27-657d8bb43083.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1876,
+   "image": "https://wger.de/media/exercise-images/1876/ca7b3fe7-5908-4ec2-9d85-7fa1b80bb105.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Davidgj32",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1889,
+   "image": "https://wger.de/media/exercise-images/1889/bc51ef67-0c12-4340-a36c-42ef722778dd.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1893,
+   "image": "https://wger.de/media/exercise-images/1893/7dbad19e-0616-41fd-9d7d-3e21649c0eea.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1900,
+   "image": "https://wger.de/media/exercise-images/1900/a8243245-8f8f-4e2b-93ca-694d416cb11d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1901,
+   "image": "https://wger.de/media/exercise-images/1901/046f0f42-0ed5-48c5-a9ee-41de25e3b6a0.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1902,
+   "image": "https://wger.de/media/exercise-images/1902/d0c3f170-543c-4be4-bc70-5c6dc606406c.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "nishant0712",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1916,
+   "image": "https://wger.de/media/exercise-images/1916/e7d97b4b-9fe4-4378-aea3-5a9d93b6eb8d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "ISSACS",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1922,
+   "image": "https://wger.de/media/exercise-images/1922/eb750ee5-3220-4128-aef1-5e2f1ccff40a.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "shushu",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1947,
+   "image": "https://wger.de/media/exercise-images/1947/4201a9c0-f9e4-48ca-80f1-b46c7ffe5640.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 1962,
+   "image": "https://wger.de/media/exercise-images/1962/74041371-1019-4f89-9ebe-cec792484a46.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1963,
+   "image": "https://wger.de/media/exercise-images/1963/db285682-1ab3-4be0-ae00-5117ecce1ee6.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1965,
+   "image": "https://wger.de/media/exercise-images/1965/03c08a42-dedb-4a46-8d15-acaf497a35a2.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1968,
+   "image": "https://wger.de/media/exercise-images/1968/cd92e973-a0d9-4e5f-9011-5369012598d3.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 1971,
+   "image": "https://wger.de/media/exercise-images/1971/729af526-19a0-4d3d-a258-196c7575d139.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Athlean-X",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2452,
+   "image": "https://wger.de/media/exercise-images/2452/f6262118-1e01-4a98-b8aa-1cc69d383311.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 2494,
+   "image": "https://wger.de/media/exercise-images/2494/02f1ae86-d374-4b5a-b314-a76c487ea1e9.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Knickers1833",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2494,
+   "image": "https://wger.de/media/exercise-images/2494/2213ff47-94e8-4884-919f-5af8a2fe9c0f.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "Knickers1833",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2529,
+   "image": "https://wger.de/media/exercise-images/2529/e97b7a36-3414-4c4f-9d66-fe37182e829b.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "ege",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2530,
+   "image": "https://wger.de/media/exercise-images/2530/c39eccd5-c7a5-47cd-85c2-76cac547ad7c.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "ege",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2618,
+   "image": "https://wger.de/media/exercise-images/2618/e0a5c993-37a8-4271-9056-7cdf1ad677be.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2619,
+   "image": "https://wger.de/media/exercise-images/2619/32c68e76-6456-4c29-b24d-89d5a5b12d02.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2620,
+   "image": "https://wger.de/media/exercise-images/2620/561eb05a-b0e4-4cde-a338-5855a30dffd4.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2673,
+   "image": "https://wger.de/media/exercise-images/2673/71e1dd6a-c407-45bd-a082-e0e6f5226eb6.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "Khp412",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2673,
+   "image": "https://wger.de/media/exercise-images/2673/e947b431-e4c4-48fa-bb21-de293734cce8.jpg",
+   "is_main": false,
+   "license": 2,
+   "license_author": "gemini",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 2674,
+   "image": "https://wger.de/media/exercise-images/2674/3e752d40-288d-4a45-9b51-1f18433e664f.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2675,
+   "image": "https://wger.de/media/exercise-images/2675/6165b802-9139-4a27-8892-946aa19c2b5c.webp",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2678,
+   "image": "https://wger.de/media/exercise-images/2678/030003e2-3042-4b12-b770-f5c702603540.jpg",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": false
+  },
+  {
+   "exercise": 2680,
+   "image": "https://wger.de/media/exercise-images/2680/566cfe8f-ee9a-4f4c-8d1f-f8d71f4779ba.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 2680,
+   "image": "https://wger.de/media/exercise-images/2680/8dae6a8f-ae1b-492e-ae4a-9a827a6afdcd.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 2681,
+   "image": "https://wger.de/media/exercise-images/2681/c787822b-e5ad-415b-a686-af2f18133b3c.png",
+   "is_main": false,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  },
+  {
+   "exercise": 2681,
+   "image": "https://wger.de/media/exercise-images/2681/d4f89553-c920-4748-8302-9bd30b4f4c4d.png",
+   "is_main": true,
+   "license": 2,
+   "license_author": "",
+   "is_ai_generated": true
+  }
+ ]
+}

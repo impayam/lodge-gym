@@ -56,6 +56,9 @@ export const exercises = (): Exercise[] =>
       instructions_en: [],
       archived_at: null,
       category: "strength" as const,
+      license: null,
+      license_author: null,
+      regions: [],
     };
   });
 

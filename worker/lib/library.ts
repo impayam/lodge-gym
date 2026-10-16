@@ -4,6 +4,7 @@
 
 import { countsVolume, fedbCategory, isCategory, type Category } from "./category";
 import { fedbMuscles, isLowerBody, isMuscle, type Muscle } from "./muscles";
+import type { SourceKey } from "./librarySources";
 import type { Equipment } from "./types";
 
 /** free-exercise-db commit the import is pinned to (github.com/yuhonas/free-exercise-db, Unlicense). */
@@ -82,6 +83,9 @@ export interface Media {
   kind: "image" | "gif";
   r2_key?: string;
   url?: string;
+  /** An image from an open-licence source keeps its own licence and author (SPEC-v11 A1). */
+  license?: string;
+  author?: string;
 }
 
 /** One row of the exercises table as the library writes it. */
@@ -91,7 +95,7 @@ export interface LibraryRow {
   muscle_primary: Muscle;
   is_lower: boolean;
   equipment: Equipment;
-  source: "fedb" | "manual";
+  source: "fedb" | "manual" | SourceKey;
   source_id: string;
   muscles_secondary: Muscle[];
   pattern: Pattern | null;
@@ -100,6 +104,9 @@ export interface LibraryRow {
   media: Media[];
   instructions_en: string[];
   category: Category;
+  /** Licence of the stored content and who to credit (migration 0013); null when nothing licensed is stored. */
+  license: string | null;
+  license_author: string | null;
 }
 
 /** Enrichment of a seeded exercise from its matched library entry (the row keeps its id, SPEC-v2 §7.2). */
@@ -133,6 +140,8 @@ export interface ManualExercise {
   muscles_secondary: Muscle[];
   pattern: Pattern;
   mechanic: Mechanic;
+  /** Our own short instructions (SPEC-v11 A1: never copied from a source). */
+  instructions_en: string[];
 }
 
 /**
@@ -189,6 +198,7 @@ export function validateInputs(seedMatches: SeedMatch[], manual: ManualExercise[
     for (const x of m.muscles_secondary) if (!isMuscle(x) || x === m.muscle_primary) errors.push(`manual ${m.id}: secondary ${x}`);
     if (!PATTERNS.includes(m.pattern)) errors.push(`manual ${m.id}: pattern ${m.pattern}`);
     if (!asMechanic(m.mechanic)) errors.push(`manual ${m.id}: mechanic ${m.mechanic}`);
+    if (!Array.isArray(m.instructions_en) || m.instructions_en.length < 2 || m.instructions_en.some((x) => typeof x !== "string" || !x.trim())) errors.push(`manual ${m.id}: two or more instruction steps are required`);
   }
   for (const [id, p] of Object.entries(patterns)) {
     if (p.pattern !== null && !PATTERNS.includes(p.pattern)) errors.push(`patterns ${id}: ${p.pattern}`);
@@ -298,6 +308,8 @@ export function buildLibrary(
       media: media(x.images),
       instructions_en: x.instructions,
       category,
+      license: "Unlicense",
+      license_author: null,
     });
   }
   for (const g of manual) {
@@ -314,8 +326,10 @@ export function buildLibrary(
       mechanic: g.mechanic,
       level: null,
       media: [],
-      instructions_en: [],
+      instructions_en: g.instructions_en,
       category: "strength",
+      license: null,
+      license_author: null,
     });
   }
   report.imported = rows.length;
@@ -337,7 +351,7 @@ const json = (v: unknown) => q(JSON.stringify(v));
  */
 export function librarySql(rows: LibraryRow[], seedUpdates: SeedUpdate[]): string[] {
   const out: string[] = [];
-  const cols = ["name_en", "muscle_primary", "is_lower", "equipment", "source", "source_id", "muscles_secondary", "pattern", "mechanic", "level", "media", "instructions_en", "category"];
+  const cols = ["name_en", "muscle_primary", "is_lower", "equipment", "source", "source_id", "muscles_secondary", "pattern", "mechanic", "level", "media", "instructions_en", "category", "license", "license_author"];
   const changed = cols.map((c) => `exercises.${c} IS NOT excluded.${c}`).join(" OR ");
   for (const r of rows) {
     const vals = [
@@ -358,9 +372,11 @@ export function librarySql(rows: LibraryRow[], seedUpdates: SeedUpdate[]): strin
       json(r.media),
       json(r.instructions_en),
       q(r.category),
+      q(r.license),
+      q(r.license_author),
     ];
     out.push(
-      `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, cue_en, source, source_id, muscles_secondary, pattern, mechanic, level, media, instructions_en, category) VALUES (${vals.join(", ")})` +
+      `INSERT INTO exercises (id, name_fa, name_en, muscle_primary, is_lower, equipment, cue_fa, cue_en, source, source_id, muscles_secondary, pattern, mechanic, level, media, instructions_en, category, license, license_author) VALUES (${vals.join(", ")})` +
         ` ON CONFLICT (id) DO UPDATE SET ${cols.map((c) => `${c} = excluded.${c}`).join(", ")} WHERE ${changed};`
     );
   }

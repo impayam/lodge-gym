@@ -8,7 +8,7 @@ import type { Exercise } from "../../../worker/lib/types";
 type Row = Pick<Exercise, "id" | "name_en" | "muscle_primary" | "muscles_secondary" | "equipment" | "pattern" | "mechanic" | "level" | "category" | "source">;
 
 export const libraryExercises = (): Exercise[] =>
-  (lib as Row[]).map((r) => ({ ...r, name_fa: "", cue_fa: "", cue_en: null, is_lower: false, media: [], instructions_en: [], archived_at: null }));
+  (lib as Row[]).map((r) => ({ ...r, name_fa: "", cue_fa: "", cue_en: null, is_lower: false, media: [], instructions_en: [], archived_at: null, license: null, license_author: null, regions: [] }));
 
 /** The active seed program, with every exercise of it treated as having logged sets. */
 export function currentProgram() {

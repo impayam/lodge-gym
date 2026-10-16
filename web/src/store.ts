@@ -214,9 +214,10 @@ export async function init() {
   ]);
   setState({
     autoClosed: autoClosed ?? [],
-    boot: boot ?? null,
+    boot: boot ? { ...boot, exercises: boot.exercises.map(withExerciseDefaults) } : null,
     sessions: Object.fromEntries(sessions.map((s) => [s.id, s])),
-    library: library ?? null,
+    // A copy cached before the M14 fields existed: no regions, no licence (refreshed by the next library load).
+    library: library ? library.map(withExerciseDefaults) : null,
     plans: Object.fromEntries(plans.map((p) => [p.id, p])),
     shifts: Object.fromEntries(shifts.map((x) => [x.id, x])),
     gymPlans: Object.fromEntries(gymPlans.map((x) => [x.id, x])),
@@ -659,6 +660,9 @@ export const photoSrc = (p: Photo, size: "thumb" | "full") => state.pendingPhoto
 /* ---------------- exercise library (SPEC-v2 §7) ---------------- */
 
 /** Loads the library list; the cached copy serves offline. */
+/** An exercise from an older cached copy gets the fields added since (SPEC-v11: regions, licence). */
+export const withExerciseDefaults = (e: Exercise): Exercise => ({ ...e, regions: e.regions ?? [], license: e.license ?? null, license_author: e.license_author ?? null });
+
 export function loadLibrary() {
   return tracked("library", async () => {
     const r = await api<{ exercises: Exercise[] }>("GET", "/exercises");

@@ -1,6 +1,7 @@
 // Library screen logic (SPEC-v8 §6.05): the muscle-group chips and the number at the end of each row. Pure,
 // unit-tested.
 
+import { REGIONS, REGION_INFO, type Region } from "../../../worker/lib/regions";
 import { bestSet } from "../../../worker/lib/reports";
 import type { Unit, WorkoutSession } from "../../../worker/lib/types";
 
@@ -16,6 +17,56 @@ export const LIBRARY_GROUPS: readonly { key: LibraryGroup; label: string; muscle
   { key: "arms", label: "Arms", muscles: ["biceps", "triceps", "forearms"] },
   { key: "core", label: "Core", muscles: ["core"] },
 ];
+
+/** The region chips under each muscle chip (SPEC-v11 A4), in the region list's order. */
+const GROUP_REGION_FAMILIES: Readonly<Record<Exclude<LibraryGroup, "all">, readonly string[]>> = {
+  chest: ["chest"],
+  back: ["back"],
+  legs: ["quads", "hamstrings", "glutes", "calves", "adductors"],
+  shoulders: ["shoulders"],
+  arms: ["triceps", "biceps"],
+  core: ["core"],
+};
+export function regionsForGroup(group: LibraryGroup): Region[] {
+  if (group === "all") return [];
+  const families = GROUP_REGION_FAMILIES[group];
+  return REGIONS.filter((r) => families.includes(REGION_INFO[r].muscle));
+}
+/** A region chip's label: short where the chip row is one muscle, otherwise naming the muscle too. */
+export function regionChipLabel(region: Region, group: LibraryGroup): string {
+  const info = REGION_INFO[region];
+  if (group === "chest" || group === "shoulders" || group === "back" || group === "core") return info.short;
+  return CHIP_LABEL[region] ?? info.label;
+}
+const CHIP_LABEL: Partial<Record<Region, string>> = {
+  triceps_long: "Triceps long head",
+  triceps_lateral_medial: "Triceps lateral/medial",
+  biceps_long: "Biceps long head",
+  biceps_short: "Biceps short head",
+  brachialis: "Brachialis",
+  quads_squat: "Quads, squat",
+  quads_knee_ext: "Quads, knee extension",
+  hamstrings_hinge: "Hamstrings, hinge",
+  hamstrings_curl: "Hamstrings, curl",
+  glutes_ext: "Glutes, extension",
+  glutes_abd: "Glutes, abduction",
+  calves_gastroc: "Calves, straight knee",
+  calves_soleus: "Calves, bent knee",
+  adductors: "Adductors",
+};
+
+/** Whether an exercise trains a region as its main focus (a primary tag). */
+export const emphasises = (regions: readonly { region: string; emphasis: string }[], region: string) => regions.some((r) => r.region === region && r.emphasis === "primary");
+
+/** "Upper chest · moderate evidence" style line parts for the exercise detail. */
+export const EVIDENCE_LABEL: Readonly<Record<"strong" | "moderate" | "weak", string>> = { strong: "strong evidence", moderate: "moderate evidence", weak: "weak evidence" };
+
+/** Ids of exercises with at least one done set: "New to me" shows the others (SPEC-v11 A4). */
+export function loggedExerciseIds(sessions: readonly WorkoutSession[]): Set<string> {
+  const ids = new Set<string>();
+  for (const s of sessions) for (const x of s.sets) if (x.done) ids.add(x.exercise_id);
+  return ids;
+}
 
 /** Whether an exercise belongs to a chip: its main muscle is in the group. */
 export function inGroup(primary: string, group: LibraryGroup): boolean {

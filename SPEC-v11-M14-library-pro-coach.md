@@ -43,6 +43,28 @@ New table (migration, **STOP**: show SQL):
 - `evidence` says how well research supports that the exercise emphasises that region. Ideas without support ("inner chest", "outer chest", shaping a muscle's insertion) are **not** tagged; the Coach must say they are not supported if asked.
 - Unit tests: every strength exercise has ≥1 region; every region has ≥3 exercises; no exercise has two primary regions of the same muscle unless reviewed.
 
+### Phase A decisions (Payam, 2026-10-16) and how they are built
+- **Sources** (STOP 1, approved; replaces the A1 table where they differ): every database reachable, as a source of
+  names and facts only (name, muscles, equipment, pattern, mechanic); exercises are common knowledge. Descriptions,
+  instructions and media only under an open licence. Used: free-exercise-db (unchanged), wger (licence per record,
+  images per their own licence with author; **AI-generated wger images are left out**: they may show the wrong form),
+  everkinetic (CC BY-SA 4.0, images), ExerciseDB v1 dataset, Liftosaur and exercemus (facts only). MuscleWiki and
+  exercisedb.dev were not reachable from the build environment and are not used.
+- Kettlebell, band and ball stay excluded (with foam roller and TRX). From the new sources stretching and cardio are
+  imported too: they count 0 toward volume, carry no region and stay out of the region tests. Plyometrics and
+  strongman are not imported. Source records without muscles (wger: 130 strength records) are listed in the report
+  and not imported.
+- **Review** (approved): one decision file per source, pinned to the source commit; the dedupe review list filled
+  first by us, Payam can change any line; our own short instructions (two or three steps) on every added row.
+- The 22 hand-written exercises (approved) join `manual.json`.
+- Migration `0013_exercise_regions.sql` (approved) has no CHECK on `region_key`; the import and the tests check the 26
+  keys. It also adds `license` and `license_author` to `exercises`.
+- The region rule table (approved) lives in `worker/lib/regions.ts` with its evidence levels; first matching rule per
+  muscle wins; reviewed exceptions go to `seed/library/region-overrides.json`. A plain curl tags both biceps heads as
+  main focus (the reviewed exception to "one primary region per muscle").
+- The program generator chooses from the whole library, so the new rows can appear in a new program; history and the
+  current program are still preferred.
+
 ### A4. Library UI
 - Region chips under each muscle chip (e.g. Chest → Upper / Middle / Lower).
 - Exercise detail shows its regions with the evidence word ("Upper chest · strong evidence").
