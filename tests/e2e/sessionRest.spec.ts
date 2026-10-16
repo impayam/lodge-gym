@@ -142,8 +142,19 @@ test("Settings → Training: his rest between sets and before the next exercise;
   const training = page.getByTestId("training-settings");
   await expect(training.locator("#s-rest-sets")).toHaveValue("30");
   await expect(training.locator("#s-rest-next")).toHaveValue("120");
-  await training.locator("#s-rest-sets").selectOption("60");
-  await training.locator("#s-rest-next").selectOption("180");
+  // Both in the same moment: two changes queued at once must both reach the server (one once overwrote the other).
+  await page.evaluate(() => {
+    for (const [id, value] of [
+      ["s-rest-sets", "60"],
+      ["s-rest-next", "180"],
+    ]) {
+      const select = document.getElementById(id) as HTMLSelectElement;
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await expect(training.locator("#s-rest-sets")).toHaveValue("60");
+  await expect(training.locator("#s-rest-next")).toHaveValue("180");
   await expect
     .poll(() => sql("SELECT key, value FROM settings WHERE key IN ('rest_between_sets_sec', 'rest_next_exercise_sec') ORDER BY key"), { timeout: 20_000 })
     .toEqual([
