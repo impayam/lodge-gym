@@ -9,7 +9,8 @@ import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
 import { dateShort, dayMonth, fmtNum, plural } from "../format";
 import { newGymPlan, streakNote } from "../lib/calendarView";
-import { allExercises, flash, navigate, openCalendar, refresh, saveGymPlan, useStore } from "../store";
+import { activeSession } from "../model";
+import { addCoachExtras, allExercises, flash, getState, navigate, openCalendar, refresh, saveGymPlan, useStore } from "../store";
 import { Bars } from "./Bars";
 import { Columns } from "./Columns";
 import { TimeChart } from "./TimeChart";
@@ -30,6 +31,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_calendar: "Reading your calendar",
   find_free_slots: "Finding gym times",
   propose_schedule: "Writing a gym schedule",
+  propose_session_additions: "Picking exercises for today",
   propose_program: "Writing a program draft",
 };
 export const toolLabel = (name: string) => TOOL_LABEL[name] ?? "Working";
@@ -157,7 +159,7 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
             <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-draft" disabled={state === "busy"} onClick={() => void add()}>
               Add to Planner
             </button>
-            <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-draft" onClick={onChange}>
+            <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-draft" onClick={() => onChange()}>
               Change
             </button>
           </div>
@@ -244,7 +246,112 @@ function ScheduleCard({ result }: { result: Schedule }) {
   );
 }
 
-export function CoachCard({ name, input, result, messageId, toolUseId, onChange, onAdd }: { name: string; input: unknown; result: unknown; messageId: string; toolUseId: string; onChange: () => void; onAdd: (m: string, t: string) => Promise<unknown> }) {
+/* propose_session_additions (worker/lib/coach/sessionTools.ts). */
+type Addition = {
+  exercise_id: string;
+  name: string;
+  sets: number;
+  reps_min: number;
+  reps_max: number;
+  is_time: boolean;
+  weight: number | null;
+  weight_unit: string | null;
+  basis: "program" | "history" | "none";
+  rule: string;
+  last: { date: string; sets: string } | null;
+  reason_fa: string;
+};
+type Additions = {
+  target: { kind: "open_session"; session_id: string; date: string; day_id: string; day: string } | { kind: "start_day"; day_id: string; day: string; named: boolean };
+  items: Addition[];
+  dropped: { exercise_id: string; reason: string }[];
+};
+
+const repsText = (x: Pick<Addition, "reps_min" | "reps_max" | "is_time">) =>
+  `${x.reps_min === x.reps_max ? fmtNum(x.reps_max) : `${fmtNum(x.reps_min)}–${fmtNum(x.reps_max)}`}${x.is_time ? " s" : ""}`;
+
+/**
+ * The coach's exercises for today (Payam, 2026-10-16): each with sets × reps and weight from the app's progression,
+ * the step it took, and the coach's reason in Persian. Add puts them into the open session as "Added today" extras, or
+ * starts the day with them; nothing changes before the tap, and the program never changes. Change asks the coach again.
+ */
+function AdditionsCard({ result, onChange }: { result: Additions; onChange: (prefix: string) => void }) {
+  const sessions = useStore((s) => s.sessions);
+  const open = activeSession(sessions);
+  const added = Boolean(open && result.items.every((x) => open.sets.some((y) => y.exercise_id === x.exercise_id && y.is_extra)));
+  const [busy, setBusy] = useState(false);
+  const where = open ? `Into your open session: ${dayName(open.program_day_id, result)}` : `Starts ${result.target.kind === "start_day" ? result.target.day : dayName(result.target.day_id, result)} with these added`;
+  const add = async () => {
+    setBusy(true);
+    try {
+      const s = await addCoachExtras(
+        result.items.map((x) => ({ exercise_id: x.exercise_id, sets: x.sets, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null })),
+        result.target.day_id
+      );
+      flash(`Added ${plural(result.items.length, "exercise")} to ${dayName(s.program_day_id, result)}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section class="card l-col l-gap-10" data-testid="coach-additions">
+      <div class="card__head">
+        <h2 class="card__title l-m0">Add to today's session</h2>
+        <span class="caption num">{plural(result.items.length, "exercise")}</span>
+      </div>
+      <span class="caption" data-testid="coach-additions-target">
+        {where}
+      </span>
+      <ul class="list-plain">
+        {result.items.map((x) => (
+          <li class="list-row" data-testid="coach-addition-row" data-ex={x.exercise_id}>
+            <span class="list-row__text">
+              <span class="t-title">{x.name}</span>
+              <span class="list-row__note num">
+                {fmtNum(x.sets)} × {repsText(x)}
+              </span>
+              <span class="caption">{x.rule}</span>
+              {x.reason_fa ? (
+                <span class="caption fa" dir="rtl" lang="fa">
+                  {x.reason_fa}
+                </span>
+              ) : null}
+            </span>
+            <span class="list-row__value t-title num" data-testid="coach-addition-weight">
+              {x.weight != null ? `${fmtNum(x.weight)} ${x.weight_unit}` : "–"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {result.dropped.length ? <span class="caption">Left out: {result.dropped.map((x) => `${x.exercise_id} (${x.reason})`).join(", ")}</span> : null}
+      <span class="caption">Sets, reps and weights from the app's progression; your program does not change.</span>
+      {added ? (
+        <div class="l-row l-between l-gap-8" data-testid="coach-additions-added">
+          <span class="caption">In today's session.</span>
+          <button type="button" class="clay press btn-sm t-pink" onClick={() => open && navigate("session", open.id)}>
+            Open
+          </button>
+        </div>
+      ) : (
+        <div class="l-row l-gap-8">
+          <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-additions" disabled={busy} onClick={() => void add()}>
+            Add
+          </button>
+          <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-additions" onClick={() => onChange("Change these exercises: ")}>
+            Change
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A program day's name: the bootstrap's, else the card's own target. */
+function dayName(id: string, result: Additions): string {
+  return getState().boot?.program.days.find((d) => d.id === id)?.name_en ?? (result.target.day_id === id ? result.target.day : id);
+}
+
+export function CoachCard({ name, input, result, messageId, toolUseId, onChange, onAdd }: { name: string; input: unknown; result: unknown; messageId: string; toolUseId: string; onChange: (prefix?: string) => void; onAdd: (m: string, t: string) => Promise<unknown> }) {
   switch (name) {
     case "get_sessions": {
       const r = result as Sessions;
@@ -512,6 +619,8 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
     }
     case "propose_schedule":
       return <ScheduleCard result={result as Schedule} />;
+    case "propose_session_additions":
+      return <AdditionsCard result={result as Additions} onChange={onChange} />;
     case "propose_program":
       return <DraftCard input={input as Draft} result={result as DraftResult} messageId={messageId} toolUseId={toolUseId} onChange={onChange} onAdd={onAdd} />;
     default:

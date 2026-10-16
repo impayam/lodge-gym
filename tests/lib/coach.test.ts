@@ -104,7 +104,7 @@ describe("coach tool inputs", () => {
     expect(sessions[1].exercises.find((x) => x.exercise_id === "cs_row")!.sets[0].weight).toBe(55.1);
   });
 
-  it("every tool has a strict object schema; there are 13 read tools, propose_schedule and propose_program", () => {
+  it("every tool has a strict object schema; there are 13 read tools, propose_schedule, propose_session_additions and propose_program", () => {
     expect(COACH_TOOLS.map((t) => t.name)).toEqual([
       "get_sessions",
       "get_e1rm_history",
@@ -120,6 +120,7 @@ describe("coach tool inputs", () => {
       "get_calendar",
       "find_free_slots",
       "propose_schedule",
+      "propose_session_additions",
       "propose_program",
     ]);
     for (const t of COACH_TOOLS) expect(t.input_schema).toMatchObject({ type: "object", additionalProperties: false });

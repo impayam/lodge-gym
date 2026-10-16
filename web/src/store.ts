@@ -13,7 +13,7 @@ import { cancelPush, schedulePush } from "./push";
 import { addDays, localDate } from "../../worker/lib/time";
 import { api, ApiError, apiUpload, NetworkError } from "./api";
 import * as ldb from "./localdb";
-import { openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
+import { activeSession, homeModel, newSession, openPlanFor, planForSession, sessionFromPlan, sessionPlan } from "./model";
 import type { BootData, OutboxEntry } from "./localdb";
 import { backTarget, tabAfter, type TabName, type ViewName } from "./lib/nav";
 
@@ -699,6 +699,67 @@ export async function addExtraExercise(sessionId: string, ex: Exercise) {
     updated_at: now,
   }));
   await saveSession({ ...s, sets: [...s.sets, ...sets] });
+}
+
+/** One exercise of the coach's "Add to today's session" card (worker/lib/coach/sessionTools.ts Addition). */
+export interface CoachExtra {
+  exercise_id: string;
+  sets: number;
+  reps_max: number;
+  is_time: boolean;
+  weight: number | null;
+  weight_unit: Unit | null;
+}
+
+/**
+ * The coach's additions for today (Payam, 2026-10-16): into the open session as extras, as the 3D picker adds them
+ * (is_extra, after the other extras), or, with no open session, into the day it names (or Home's next day) started
+ * now, its open plan first if it has one. Each set is prefilled with the card's reps and its weight when the units
+ * match, not checked (as "Copy last" fills a set). The program never changes. Returns the session.
+ */
+export async function addCoachExtras(items: CoachExtra[], dayId: string | null): Promise<WorkoutSession> {
+  const boot = state.boot!;
+  let s = activeSession(state.sessions);
+  if (!s) {
+    const days = boot.program.days;
+    const day = days.find((d) => d.id === dayId) ?? days.find((d) => d.id === homeModel(boot, state.sessions, today()).next.dayId) ?? days[0];
+    const plan = openPlanFor(state.plans, day.id);
+    const now = new Date().toISOString();
+    if (plan) {
+      const started: SessionPlan = { ...plan, status: "started", started_at: now, updated_at: now };
+      s = sessionFromPlan(boot, started, today(), now);
+      await saveSession(s);
+      await savePlan(started);
+    } else s = newSession(boot, day, today());
+  }
+  const lib = allExercises();
+  let position = Math.max(-1, ...s.sets.filter((x) => x.is_extra).map((x) => x.position ?? 0));
+  const now = new Date().toISOString();
+  const added = [];
+  for (const it of items) {
+    const ex = lib.get(it.exercise_id);
+    if (!ex || s.sets.some((x) => x.exercise_id === ex.id)) continue;
+    await rememberExercise(ex);
+    position += 1;
+    const weight = it.weight != null && it.weight_unit === s.unit ? it.weight : null;
+    for (let i = 0; i < it.sets; i++)
+      added.push({
+        id: ulid(),
+        exercise_id: ex.id,
+        set_index: i,
+        weight,
+        reps: it.is_time ? null : it.reps_max || null,
+        seconds: it.is_time ? it.reps_max : null,
+        done: false,
+        rir: null,
+        is_extra: true,
+        position,
+        updated_at: now,
+      });
+  }
+  const next = { ...s, sets: [...s.sets, ...added] };
+  await saveSession(next);
+  return next;
 }
 
 /** Removes an extra exercise from the session; only allowed while none of its sets is done. */
