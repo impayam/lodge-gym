@@ -149,7 +149,7 @@ test("yesterday's open session closes by itself: finished at its last done set, 
   await page.goto("/");
   await expect(page.getByTestId("auto-closed")).toHaveText(`Your session from ${dateShort(y)} was closed automatically.`);
   await expect.poll(() => sql(`SELECT status, ended_at FROM workout_sessions WHERE id = '${id}'`), { timeout: 20_000 }).toEqual([{ status: "done", ended_at: lastDone }]);
-  // As a normal Finish: the server writes the session report.
+  // As a normal Finish: it ended over 2 hours ago, so the server writes its report at once (Step 3 timing rule).
   await expect.poll(() => count(`SELECT COUNT(*) AS n FROM session_reports WHERE session_id = '${id}' AND status = 'ok'`), { timeout: 30_000 }).toBe(1);
   await aiJobsIdle(context, baseURL!);
   // One time only.

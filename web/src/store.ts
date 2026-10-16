@@ -144,9 +144,12 @@ export function openPhotos(opts: { compare?: boolean; open?: string } = {}) {
   window.scrollTo(0, 0);
 }
 
-/** A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). */
-export function openReport(sessionId: string, fresh = false) {
-  setState({ view: { name: "report", sessionId, fresh } });
+/**
+ * A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). `inReports`
+ * opens it on the Reports tab, where every AI report lives (Step 3), so Back goes there.
+ */
+export function openReport(sessionId: string, fresh = false, inReports = false) {
+  setState((s) => ({ view: { name: "report", sessionId, fresh }, tab: inReports ? "reports" : s.tab }));
   window.scrollTo(0, 0);
 }
 
@@ -156,7 +159,7 @@ export function openCalendar(opts: { week?: string; free?: boolean; find?: boole
   window.scrollTo(0, 0);
 }
 
-/** A saved report from History → Reports timeline, read-only (SPEC-v7 M9d). */
+/** A saved report from the Reports timeline, read-only (SPEC-v7 M9d). */
 export function openSaved(item: TimelineItem) {
   setState({ view: { name: "saved", saved: item } });
   window.scrollTo(0, 0);

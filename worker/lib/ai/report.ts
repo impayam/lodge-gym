@@ -1,5 +1,9 @@
 // AI session report (SPEC-v3 M9a), the pure part: the input the model reads, built server-side from the training data
 // only (no photos, no personal data beyond training), the system prompt, and the output schema the reply must match.
+// Since 2026-10-16 it is the one "After-session report" (Payam): today on top, then "Where you are" in 2–4 lines from
+// the training overview's consistency and main-lift facts (where_you_are), and one motivational line that differs from
+// the latest ones (recent_motivation); the overview is no longer written after each session. The volume rows are the
+// app's own, never the model's.
 // Weights stay in the session's unit; earlier sessions are converted to it. Volume uses the muscle map's rules: each
 // done set counts 1 for its primary muscle's group and 0.5 for each other group, at most once per group, and only
 // strength work counts (setContribution, countsVolume).
@@ -13,6 +17,8 @@ import { balanceStatus, convertWeight, epley, muscleTargets, programOn, setsPerM
 import { REPORT_GROUPS, isTargetGroup } from "../muscles";
 import { addDays, localHM } from "../time";
 import type { DayExercise, Exercise, ProgramDay, SetEntry, Unit, WorkoutSession } from "../types";
+import { onlySupplied, suppliedNumbers } from "./numbers";
+import type { WhereYouAre } from "./overview";
 
 export const GROUP_NAME: Readonly<Record<string, string>> = {
   chest: "Chest",
@@ -109,6 +115,10 @@ export interface ReportInput {
   week_so_far: { start: string; end: string; sessions_done: number; sessions_planned: number; volume: VolumeIn[] };
   watch: { hr_avg: number | null; hr_max: number | null; active_kcal: number | null } | null;
   body_weight: { unit: Unit; today: number | null; weekly_avg_last_4_weeks: { week_start: string; avg: number | null }[] } | null;
+  /** "Where you are": consistency and main-lift trends up to the session's date; added by the job (worker/aiReports.ts). */
+  where_you_are?: WhereYouAre | null;
+  /** The motivational lines of the latest earlier reports, newest first, so this one says something new; added by the job. */
+  recent_motivation?: string[];
 }
 
 const rirText = (r: number | null | undefined) => (r == null ? null : r >= 3 ? "3+" : String(r));
@@ -329,18 +339,6 @@ export const ReportOutput = z.object({
   summary_fa: fa(1500, "2–4 sentences in Persian: how the session went, honestly."),
   // List lengths are not enforced by the API; normalizeReport keeps the first LIST_MAX items.
   highlights: z.array(fa(400, "Persian")).describe("PRs and progress against the previous session of the same day, in Persian. At most 5; empty when there is none."),
-  volume: z
-    .array(
-      z.object({
-        group: z.string().max(40).describe("The group name exactly as given in week_so_far.volume[].group"),
-        today: z.number(),
-        week: z.number(),
-        target: z.number().nullable(),
-        // The API does not enforce enums in this schema; the shown status always comes from the input (normalizeReport).
-        status: z.string().max(20).describe("under | on | over | untracked | none, as given"),
-      })
-    )
-    .describe("The groups trained today and the targeted groups, copied from week_so_far.volume without changing any number."),
   extras_note_fa: fa(800, "Persian").nullable().describe("What the added (extra) exercises contributed, in Persian; null when there were none."),
   missed_note_fa: fa(800, "Persian").nullable().describe("What was skipped and its effect on the week, in Persian; null when nothing was skipped."),
   next_time: z
@@ -352,6 +350,10 @@ export const ReportOutput = z.object({
     )
     .describe("A short Persian note per exercise with app_next_time. No weights, reps, seconds or set counts: the app shows its own numbers next to the note."),
   warnings: z.array(fa(400, "Persian")).describe("Only real issues, in Persian: a big drop in performance, pain in the note, very many RIR 0 sets. At most 3; usually empty."),
+  where_fa: z
+    .array(fa(300, "Persian"))
+    .describe("Where you are: 2–4 short Persian lines from where_you_are only (consistency, main-lift trends). No tables, no repeat of today's numbers. Empty when where_you_are is null."),
+  motivation_fa: fa(200, "One short Persian motivational sentence that ends the report, different from every line in recent_motivation."),
 });
 export type ReportOutput = z.infer<typeof ReportOutput>;
 
@@ -359,12 +361,20 @@ export type ReportOutput = z.infer<typeof ReportOutput>;
 export type NextTimeRow = NextTime & { exercise_id: string; name: string; note_fa: string | null };
 
 /**
- * The report as stored and shown: the volume table carries the input's own numbers and status, and "Next time" the
- * app's progression, never the model's numbers.
+ * The report as stored and shown: the volume rows are the input's own (every group of the week so far; the screen
+ * shows the groups trained today in a table and the rest in one line), and "Next time" the app's progression, never
+ * the model's numbers.
  */
-export type SessionReport = Omit<ReportOutput, "volume" | "next_time"> & {
+export type SessionReport = Omit<ReportOutput, "next_time" | "where_fa" | "motivation_fa"> & {
+  /** Reports written before 2026-10-16 hold the rows the model copied: the groups trained that day and the targeted ones. */
   volume: { group: string; today: number; week: number; target: number | null; status: BalanceStatus }[];
   next_time: NextTimeRow[];
+  /** After-session reports only (2026-10-16); older session reports have none. */
+  where_fa?: string[];
+  /** "Where you are" lines left out because they had a number the app did not supply. */
+  where_dropped?: number;
+  /** The closing motivational line (Payam, 2026-10-16); null when it had a number the app did not supply. */
+  motivation_fa?: string | null;
 };
 
 /** GET /api/sessions/:id/report: the latest row of session_reports. */
@@ -377,35 +387,39 @@ export interface ReportView {
   /** missing | auth | limit | rate | network | api | invalid | refusal (worker/ai.ts). */
   error_code: string | null;
   error: string | null;
+  /** Estimated cost of the call from its token counts (null for a model without a known price). */
+  cost_usd: number | null;
 }
 
 export interface ReportResponse {
   report: ReportView | null;
-  /** A report is being written (queued or running). */
+  /** A report is queued (waiting for its timing rule) or being written. */
   pending: boolean;
+  /** When the queued report will be written (UTC ISO); null when none is queued. */
+  due_at: string | null;
   session_status: string;
 }
 
 /** Items kept per list of the report. */
-export const LIST_MAX = { highlights: 8, warnings: 6 } as const;
+export const LIST_MAX = { highlights: 8, warnings: 6, where: 4 } as const;
 
 /** Latin, Persian and Arabic-Indic digits: a note with any of them is not shown (the numbers are the app's). */
 const DIGITS = /[0-9\u06F0-\u06F9\u0660-\u0669]/;
 
 /**
- * Keeps the model's prose and makes its volume table exact: rows for unknown groups are dropped and every number comes
- * from the input (the model is told to copy them; this guarantees it). Rows the model left out are not added. Over-long
- * lists are cut to LIST_MAX.
+ * Keeps the model's prose and adds the app's numbers: the volume rows come from the input (the model writes none), and
+ * "Next time" from the app's progression. Prose with a number the app did not supply is left out. Over-long lists are
+ * cut to LIST_MAX.
  */
 export function normalizeReport(out: ReportOutput, input: ReportInput): SessionReport {
-  const byName = new Map(input.week_so_far.volume.map((v) => [v.group.toLowerCase(), v]));
-  const seen = new Set<string>();
-  const volume = out.volume.flatMap((r) => {
-    const v = byName.get(r.group.trim().toLowerCase());
-    if (!v || seen.has(v.key)) return [];
-    seen.add(v.key);
-    return [{ group: v.group, today: v.today, week: v.week, target: v.target, status: v.status }];
-  });
+  // "Where you are" uses only where_you_are's numbers (as the overview did); a line with any other number is left out.
+  const supplied = suppliedNumbers(input.where_you_are ?? {});
+  const where = (out.where_fa ?? []).map((t) => t.trim()).filter(Boolean);
+  const whereKept = where.filter((t) => onlySupplied(t, supplied));
+  // The motivational line may use the input's numbers (not those of earlier lines); prefer none.
+  const motivation = out.motivation_fa?.trim() || null;
+  const motivationKept = motivation && onlySupplied(motivation, suppliedNumbers({ ...input, recent_motivation: [] })) ? motivation : null;
+  const volume = input.week_so_far.volume.map((v) => ({ group: v.group, today: v.today, week: v.week, target: v.target, status: v.status }));
   return {
     ...out,
     highlights: out.highlights.slice(0, LIST_MAX.highlights),
@@ -417,20 +431,40 @@ export function normalizeReport(out: ReportOutput, input: ReportInput): SessionR
       }),
     warnings: out.warnings.slice(0, LIST_MAX.warnings),
     volume,
+    where_fa: whereKept.slice(0, LIST_MAX.where),
+    where_dropped: where.length - whereKept.length,
+    motivation_fa: motivationKept,
   };
 }
 
-export const REPORT_SYSTEM = `You write a short training report for one finished gym session of Payam, for the GYM time app.
+export const REPORT_SYSTEM = `You write the after-session training report for one finished gym session of Payam, for the GYM time app. It is the only report after a session: first today, then where his training stands.
 
 Rules:
 - Write every text field in Persian (Farsi). Exercise names may stay in English.
 - Be honest and concise. Praise only what the numbers show; say plainly when something went worse.
 - Use only the numbers in the input. Never invent sets, weights, reps, dates, heart rate or body weight. If something is missing, leave it out.
-- The volume table: copy the rows of week_so_far.volume for the groups trained today and every group that has a target, with the exact numbers given. Volume counts each set 1 for its primary group and 0.5 for each other group, at most once per group per set; only strength work counts.
+
+Today:
+- summary_fa: 2–4 sentences on how this session went.
+- highlights: today's records (prs_today) and progress against the previous session of the same day.
+- Volume: week_so_far.volume has each group's sets today and this week against its target. The app shows it itself (a table of the groups trained today and one line for the rest of the week), so do not list it; mention a group in the prose only when it matters, with its exact numbers. Volume counts each set 1 for its primary group and 0.5 for each other group, at most once per group per set; only strength work counts.
 - Exercises with counts_volume false (stretching, plyometrics, cardio, strongman) are listed where relevant but marked as not counted in volume («در حجم شمرده نمی‌شود»).
 - Extra exercises (is_extra true) were added during the session; say what they contributed in extras_note_fa (null if there were none).
 - Missed exercises and sets: say in missed_note_fa what was skipped and what it means for the week's targets (null if nothing was skipped).
 - Next time: the app sets every weight, rep and time for next session with its progression rules (all planned sets at the top of the rep range → +5 lb upper body, +10 lb lower body, +5 lb per dumbbell; kg: +2.5, +5, +2 per dumbbell; RIR 3+ on every planned set → twice that; otherwise the same weight) and shows them itself (app_next_time). In next_time write only a short Persian note per exercise that has app_next_time (keep the weight and aim for every rep, or move up as the app shows), with no numbers at all. Never suggest a weight anywhere in the report. Extra exercises have no progression target.
+- Warnings only for real issues: a big drop in performance, pain in the note, or a very high number of RIR 0 sets. Usually there are none.
+
+Where you are (where_fa):
+- 2–4 short lines on where his training stands, from where_you_are only: consistency (sessions done against sessions planned, week by week in weeks and in totals, which count from totals.since) and the main lifts' estimated 1RM trend (lifts[].change_pct, stalls, drops).
+- One idea per line. No tables, and do not repeat today's numbers: today's part above already has them.
+- Numbers: write only numbers that appear in where_you_are, exactly or rounded (a change_pct of 3.8 may be written as 4%). Prefer words to numbers. The app removes any line with another number.
+- When where_you_are is null, where_fa is an empty list.
+
+Motivation (motivation_fa):
+- One short Persian sentence that ends the report: encouraging and specific to this session or this week (the effort, a record, showing up, the next session).
+- Vary it: never repeat or closely rephrase a line in recent_motivation, and take a different angle from them.
+- Sincere, not exaggerated; no emoji. Numbers only from the input, and preferably none.
+
+Always:
 - No medical advice. If the note mentions pain or injury, suggest rest or seeing a professional, nothing more.
-- Never suggest a deload, a light week or reducing volume, unless Payam's note says he is tired. This is his stated preference.
-- Warnings only for real issues: a big drop in performance, pain in the note, or a very high number of RIR 0 sets. Usually there are none.`;
+- Never suggest a deload, a light week or reducing volume, unless Payam's note says he is tired. This is his stated preference.`;

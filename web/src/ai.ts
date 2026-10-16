@@ -1,17 +1,17 @@
-// AI session report, plan advice and training overview on the phone (SPEC-v3 M9a, M9c; SPEC-v7 M9d). They need a
-// connection; the report and the overview are written on the server once the session has synced, so until then they are
+// AI after-session report, plan advice and the saved training overviews on the phone (SPEC-v3 M9a, M9c; SPEC-v7 M9d;
+// Step 3). They need a connection; the report is written on the server once the session has synced, so until then it is
 // "pending". Nothing here holds the API key.
 
 import type { PlanAdvice } from "../../worker/lib/ai/suggestions";
 import type { AiUsage } from "../../worker/lib/ai/cost";
-import type { OverviewResponse, OverviewView, SessionReportItem } from "../../worker/lib/ai/overview";
+import type { OverviewView, SessionReportItem } from "../../worker/lib/ai/overview";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import type { ReportResponse } from "../../worker/lib/ai/report";
 import type { WeeklyReview } from "../../worker/lib/types";
 import { api } from "./api";
 import * as ldb from "./localdb";
 
-export type { AiUsage, OverviewResponse, OverviewView, PlanAdvice, ReportResponse, SessionReportItem, TimelineItem };
+export type { AiUsage, OverviewView, PlanAdvice, ReportResponse, SessionReportItem, TimelineItem };
 
 /** The latest answer per session, so a screen shown again starts from what it last saw. */
 const seen = new Map<string, ReportResponse>();
@@ -46,19 +46,6 @@ export interface AdviceResponse {
 
 export const fetchAdvice = (planId: string) => api<AdviceResponse>("POST", `/sessions/${encodeURIComponent(planId)}/plan-advice`, {});
 
-/** The training overview; the last answer is kept on the device so Reports shows it offline. */
-export async function fetchOverview(): Promise<OverviewResponse> {
-  const r = await api<OverviewResponse>("GET", "/overview");
-  await ldb.kvSet("ai:overview", r);
-  return r;
-}
-export const cachedOverview = () => ldb.kvGet<OverviewResponse>("ai:overview");
-
-/** Rewrite the overview now (Regenerate, Retry); the server keeps the older ones. */
-export async function requestOverview(): Promise<void> {
-  await api("POST", "/overview", {});
-}
-
 /** Every session's latest report, newest session first; kept on the device for offline use. */
 export async function fetchSessionReports(): Promise<SessionReportItem[]> {
   const r = await api<{ reports: SessionReportItem[] }>("GET", "/session-reports");
@@ -75,7 +62,7 @@ export async function fetchReviews(): Promise<WeeklyReview[]> {
 }
 export const cachedReviews = () => ldb.kvGet<WeeklyReview[]>("reviews");
 
-/** Every saved report on its date (History → Reports timeline); kept on the device for offline use. */
+/** Every saved report on its date (the Reports timeline); kept on the device for offline use. */
 export async function fetchTimeline(): Promise<TimelineItem[]> {
   const r = await api<{ items: TimelineItem[] }>("GET", "/report-timeline");
   await ldb.kvSet("ai:timeline", r.items);

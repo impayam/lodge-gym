@@ -106,7 +106,7 @@ export function Me() {
           icon={<IconSpark />}
           tone="t-violet"
           title="AI reports"
-          sub={usage ? `This month ~$${usage.month.cost_usd.toFixed(2)}, ${usage.model}` : "Reports, overviews and plan advice"}
+          sub={usage ? `This month ~$${usage.month.cost_usd.toFixed(2)}, ${usage.model}` : "Reports and plan advice"}
           onOpen={open("ai")}
         />
         <Row testid="me-backup" icon={<IconDownload />} tone="t-muted" title="Backup and export" sub="Weekly copy every Monday" onOpen={open("backup")} />

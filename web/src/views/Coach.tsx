@@ -32,7 +32,7 @@ import { CoachCard, toolLabel } from "../components/CoachCards";
 import { IconBack, IconCamera, IconPlus, IconProgram, IconSend, IconSpark } from "../components/PulseIcons";
 import { Sheet } from "../components/Sheet";
 import { Empty, LoadError, Loading } from "../components/States";
-import { dayMonth, instantShort, plural } from "../format";
+import { costText, dayMonth, instantShort, plural } from "../format";
 import { trainingSince } from "../model";
 import { addPhoto, flash, goBack, loadAllHistory, loadPhotos, photoSrc, syncNow, today, useStore } from "../store";
 import { ulid } from "../../../worker/lib/ulid";
@@ -60,8 +60,6 @@ const isPersian = (s: string) => /[؀-ۿ]/.test(s);
 /** Class, direction and language of a text in either language (Persian right to left, as the app shows it). */
 const textProps = (s: string, cls = "") =>
   isPersian(s) ? { class: `${cls} fa`.trim(), dir: "rtl" as const, lang: "fa" } : { class: cls || undefined, dir: "auto" as const };
-
-const costText = (usd: number | null) => (usd == null ? null : usd < 0.01 ? "<$0.01" : `~$${usd.toFixed(2)}`);
 
 type Mode = "chat" | "list" | "archived";
 

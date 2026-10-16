@@ -2,10 +2,11 @@
 //   GET  /api/overview          the latest overview, whether a newer attempt failed, and whether one is being written
 //   POST /api/overview          rewrite it now (Regenerate), in the background
 //   GET  /api/session-reports   every session's latest report, newest session first (the Reports list)
-//   GET  /api/report-timeline   every saved report on its date, for History → Reports timeline (no report text)
+//   GET  /api/report-timeline   every saved report on its date, for the Reports timeline (no report text)
 //   GET  /api/overviews/:id     one saved overview, read-only (opened from the timeline)
-// The overview is rewritten by the AiJobs Durable Object after every finished session, right after that session's
-// report (worker/aiReports.ts). Older rows are kept; a failed attempt never hides the previous overview.
+// The overview is written by the AiJobs Durable Object (worker/aiReports.ts) on POST only: since Step 3 (2026-10-16) no
+// longer after each session, whose after-session report carries "Where you are". Older rows are kept and stay readable;
+// a failed attempt never hides the previous overview.
 
 import { Hono } from "hono";
 import { callModel, effortOf, maxTokensOf, modelOf, type AiFail, type AiOk } from "./ai";

@@ -50,7 +50,7 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
     await page.waitForLoadState("networkidle");
     await check(tab);
   }
-  await goTo(page, "History");
+  await goTo(page, "Reports");
   await expect(page.getByTestId("rt-col")).toHaveCount(1);
   await page.getByTestId("rt-mode-list").click();
   await check("Reports timeline (list)");

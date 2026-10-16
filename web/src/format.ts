@@ -42,6 +42,9 @@ export const minutesBetween = (a: string, b: string | null) => (b ? Math.max(0, 
 /** "1 set", "3 sets" */
 export const plural = (n: number, one: string, many = one + "s") => `${fmtNum(n)} ${n === 1 ? one : many}`;
 
+/** An AI call's estimated cost: "~$0.03", "<$0.01", or null without a price. */
+export const costText = (usd: number | null) => (usd == null ? null : usd < 0.01 ? "<$0.01" : `~$${usd.toFixed(2)}`);
+
 export { fmtNum };
 
 /** YouTube search for the exercise's form (SPEC-v2 §7.1): English name + " form", built at render time. */

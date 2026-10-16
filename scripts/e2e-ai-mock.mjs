@@ -1,6 +1,8 @@
 // Mock of the Claude Messages API for the Playwright tests (SPEC-v3: the real API is never called in tests). The e2e
 // Workers point ANTHROPIC_BASE_URL here. It answers like the model would, from the request's own input:
-//   session report:    a short Persian report that names the extra exercises and copies the volume rows given
+//   session report:    a short Persian report that names the extra exercises, "Where you are" lines from
+//                      where_you_are plus one with a number the input lacks (the app drops it), and a closing
+//                      motivational line that is not among recent_motivation
 //   plan advice:       "add" the first candidate not in the plan, at position 2
 //   training overview: Persian prose using only the input's numbers, plus one warning with a number the input lacks
 //                      (the app must drop it), and the weekly motivational line from the motivation block
@@ -50,6 +52,28 @@ export function overviewReply(input) {
   };
 }
 
+/** The report's "Where you are" lines as the prompt asks for them, plus one with a number the input lacks (dropped by the app). */
+export function whereLines(w) {
+  if (!w) return [];
+  const lines = [`در این بازه ${w.totals.sessions_done} جلسه از ${w.totals.sessions_planned} جلسهٔ برنامه انجام شد.`];
+  for (const l of w.lifts.filter((x) => x.change_pct != null).slice(0, 2)) lines.push(`${l.name}: ${l.change_pct}٪ تغییر در 1RM تخمینی.`);
+  if (lines.length < 3) lines.push("روند حرکت‌های اصلی ثابت است؛ با همین برنامه ادامه بده.");
+  lines.push("هفتهٔ بعد ۹۹۹۹ ست بزن.");
+  return lines;
+}
+
+/** The closing lines the mock picks from: the first one not among the recent ones, so each report says something new. */
+export const MOTIVATION_LINES = [
+  "همین که امروز آمدی و کامل تمرین کردی، یعنی مسیر درست است.",
+  "قدرت با همین جلسه‌های پشت‌سرهم ساخته می‌شود؛ جلسهٔ بعد هم همین‌طور.",
+  "امروز یک قدم جلوتر رفتی؛ آرام و پیوسته ادامه بده.",
+  "فرم درست امروز، رکورد فردای توست.",
+];
+
+export function closingLine(recent = []) {
+  return MOTIVATION_LINES.find((l) => !recent.includes(l)) ?? MOTIVATION_LINES[recent.length % MOTIVATION_LINES.length];
+}
+
 export function startAiMock(port) {
   const mode = { report: "ok", advice: "ok", overview: "ok", coach: "ok" };
   const calls = [];
@@ -71,16 +95,17 @@ export function startAiMock(port) {
 
   const report = (input) => {
     const extras = input.exercises.filter((x) => x.is_extra && x.done_sets.length).map((x) => x.name);
-    const trained = input.week_so_far.volume.filter((v) => v.today > 0 || v.target != null);
     return {
       summary_fa: `جلسهٔ ${input.session.program_day} انجام شد؛ ${input.exercises.filter((x) => x.done_sets.length).length} حرکت با ست‌های کامل.`,
       highlights: input.prs_today.map((p) => `رکورد تازه در ${p.name}: ${p.weight} × ${p.reps}`),
-      volume: trained.map((v) => ({ group: v.group, today: v.today, week: v.week, target: v.target, status: v.status })),
       extras_note_fa: extras.length ? `حرکت‌های اضافه: ${extras.join("، ")}.` : null,
       missed_note_fa: input.missed.exercises_not_done.length ? `انجام نشد: ${input.missed.exercises_not_done.join("، ")}.` : null,
       // Notes only, like the real prompt asks; one with a number, which the app must not show.
       next_time: input.exercises.filter((x) => x.app_next_time).map((x, i) => ({ exercise_id: x.exercise_id, note_fa: i === 0 ? "همین مسیر را با فرم درست ادامه بده." : "دفعهٔ بعد ۲۰۰ پوند." })),
       warnings: [],
+      // "Where you are": numbers from where_you_are only, plus one line with a number it lacks (the app drops it).
+      where_fa: whereLines(input.where_you_are),
+      motivation_fa: closingLine(input.recent_motivation),
     };
   };
 

@@ -257,6 +257,33 @@ Replaces the logging flow and rest settings above, and SPEC §7's "rest timer wi
 - **Body weight after Finish:** the end-of-session screen has an optional "Body weight today (lb)" with − / +, shown from his last entry (the − / + start from it). It is the same value as the session's More sheet (one manual value per day); skipping it blocks nothing.
 - **Ask Coach** from the session's More sheet: SPEC-v9 §13.
 
+### Change by Payam, 2026-10-16: one after-session report (Step 3)
+Replaces the session report above and the training overview after each session (SPEC-v7 §10). Prompt, the 9 decisions
+and the layout approved 2026-10-16.
+- **One report per session**, written once by the AiJobs Durable Object:
+  - as soon as that day's body weight (any source) and the Apple Health workout matched to the session are both in;
+  - otherwise 2 hours after the session ends (`REPORT_WAIT_MS`); a session that ended longer ago (auto-closed, synced
+    late) is written at once;
+  - **Write report now** (POST `/api/sessions/:id/report`) writes it at once. Regenerate on a written report stays (one
+    model call). Later weight, watch data or syncs never write a second one.
+  - A body weight (PUT `/api/body-mass/:date`), a Shortcuts ingest that matched a workout, or a manual match wakes the
+    waiting reports. GET `/api/sessions/:id/report` adds `due_at` (when it will be written).
+- **Content** (`REPORT_SYSTEM`, Persian, right-to-left):
+  - Today on top: summary, records and highlights, extras, skipped, next time (the app's numbers), warnings.
+  - Volume: the app's own rows (the model writes none). The table shows the groups trained today (today, week, target);
+    one line covers the rest of the week: groups under target, not trained yet, over target (named) and on target
+    (counted).
+  - **Where you are** at the bottom: 2–4 lines from `where_you_are` (the overview's consistency and main-lift facts up
+    to the session's date). A line with a number the app did not supply is dropped; "1RM" is a term, not a number.
+  - One short **motivational line** at the end, different from the last 6 (`recent_motivation`); dropped if it has a
+    number the input does not supply.
+  - The "Written …" line shows the report's cost (`cost_usd`, from its tokens).
+- **Where it lives:** the end-of-session screen shows only its status (when it will be written, Write report now, Open
+  in Reports). Every AI report is in the Reports tab: the after-session reports list and the reports timeline (moved
+  from History; History links to Reports). Reports' main-lift e1RM table (this week and the previous 4) is computed by
+  the app, no AI. Old session reports and overviews stay readable; no data deleted, no migration.
+- The weekly review is unchanged.
+
 ### AI plan advice (button only)
 - The planner has an **Get advice** button. It is never automatic, and each tap is one model call.
 - Model: the same as the session report (`REPORT_MODEL`, `claude-opus-5-5`), with the same `ANTHROPIC_API_KEY`, cost log and Settings cost line.

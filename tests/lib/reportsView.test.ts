@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, signedPct } from "../../web/src/lib/reportsView";
+import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, restOfWeek, signedPct } from "../../web/src/lib/reportsView";
 
 describe("Reports view (SPEC-v8 §6.03)", () => {
   it("1RM chart window: 8 weeks, 6 months, or since the first session", () => {
@@ -42,5 +42,33 @@ describe("Reports view (SPEC-v8 §6.03)", () => {
   it("bar scale is 0–20 sets, wider when needed", () => {
     expect(barScale([9, 13, 17.5])).toBe(20);
     expect(barScale([24, 13])).toBe(24);
+  });
+});
+
+describe("after-session report: the rest of the week in one line (Payam, 2026-10-16)", () => {
+  const row = (group: string, today: number, status: string, target: number | null = 10) => ({ group, today, week: 2, target, status });
+  it("counts the groups not trained today by status, naming all but the ones on target; groups without a target are left out", () => {
+    expect(
+      restOfWeek([
+        row("Chest", 4, "under"),
+        row("Back", 0, "under"),
+        row("Quads", 0, "under"),
+        row("Calves", 0, "none"),
+        row("Shoulders", 0, "over"),
+        row("Biceps", 0, "on"),
+        row("Core", 0, "on"),
+        row("Neck", 0, "none", null),
+        row("Forearms", 0, "untracked", null),
+      ])
+    ).toBe("Rest of the week: 2 groups under target (Back, Quads), 1 not trained yet (Calves), 1 over target (Shoulders), 2 on target.");
+    expect(restOfWeek([row("Back", 0, "on")])).toBe("Rest of the week: 1 group on target.");
+    // The first session of the week: the rest are not trained yet.
+    expect(restOfWeek([row("Chest", 4, "under"), row("Back", 0, "none"), row("Quads", 0, "none")])).toBe("Rest of the week: 2 groups not trained yet (Back, Quads).");
+  });
+
+  it("is null when every group was trained today or none left has a target", () => {
+    expect(restOfWeek([row("Chest", 4, "under")])).toBeNull();
+    expect(restOfWeek([row("Neck", 0, "none", null)])).toBeNull();
+    expect(restOfWeek([])).toBeNull();
   });
 });

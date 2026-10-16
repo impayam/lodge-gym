@@ -5,10 +5,12 @@
 //   https  for WebKit (it does not send Secure / __Host- cookies over http://localhost; wrangler's self-signed
 //          certificate + ignoreHTTPSErrors)
 // plus the forward proxy WebKit uses (scripts/e2e-proxy.mjs) and a mock of the Claude Messages API
-// (scripts/e2e-ai-mock.mjs); the real API is never called. Each Worker logs to .wrangler/e2e/logs/<slot>-<protocol>.log.
+// (scripts/e2e-ai-mock.mjs); the real API is never called. Each Worker logs to
+// .wrangler/e2e-logs/<run start>/<slot>-<protocol>.log; the last LOG_RUNS runs are kept, so the server log of a run
+// that failed is still there after the next run (.wrangler/e2e itself is wiped at every start).
 // Prints "e2e servers ready" once every slot answers; playwright.config.ts waits for that line.
 import { execFileSync, spawn } from "node:child_process";
-import { cpSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import net from "node:net";
 import { startProxy } from "./e2e-proxy.mjs";
 import { startAiMock } from "./e2e-ai-mock.mjs";
@@ -17,6 +19,9 @@ import { WORKERS, slot } from "./e2e-slots.mjs";
 
 const ROOT = ".wrangler/e2e";
 const TEMPLATE = `${ROOT}/template`;
+const LOG_ROOT = ".wrangler/e2e-logs";
+const LOG_RUNS = 10;
+const LOGS = `${LOG_ROOT}/${new Date().toISOString().replace(/[:.]/g, "-")}`;
 
 const children = [];
 const closers = [];
@@ -64,11 +69,14 @@ const w = (...args) => execFileSync("npx", ["wrangler", ...args, "--local", "--p
 w("d1", "migrations", "apply", "DB");
 w("d1", "execute", "DB", "--file", "seed/seed.sql");
 loadLibrary(TEMPLATE);
-mkdirSync(`${ROOT}/logs`, { recursive: true });
+mkdirSync(LOGS, { recursive: true });
+// Only the newest runs' logs are kept (the folder names sort by start time).
+for (const old of readdirSync(LOG_ROOT).sort().slice(0, -LOG_RUNS)) rmSync(`${LOG_ROOT}/${old}`, { recursive: true, force: true });
+console.log(`e2e: server logs in ${LOGS}`);
 
 function startWorker(i, s, ai) {
   cpSync(TEMPLATE, s.persist, { recursive: true });
-  const logFile = `${ROOT}/logs/${i}-${s.protocol}.log`;
+  const logFile = `${LOGS}/${i}-${s.protocol}.log`;
   const log = openSync(logFile, "a");
   const dev = spawn(
     "npx",

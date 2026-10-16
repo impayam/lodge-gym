@@ -133,10 +133,10 @@ test("active session: effort chip, bar and colour; one card with Prev / Next and
   await expect(more.getByRole("button", { name: "Delete session" })).toBeVisible();
   await closeMore(page);
 
-  // Finish → report; the finished session opens as a list of all its exercises.
+  // Finish → the report's status (Step 3); the finished session opens as a list of all its exercises.
   await page.getByTestId("rest-timer").getByRole("button", { name: "Skip" }).click();
   await page.getByTestId("finish").click();
-  await expect(page.getByTestId("session-report")).toBeVisible();
+  await expect(page.getByTestId("report-status")).toBeVisible();
   await page.getByTestId("report-session").click();
   // Four exercises alone and Superset A on one card.
   await expect(card(page)).toHaveCount(4);

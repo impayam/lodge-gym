@@ -11,6 +11,7 @@ import { sessionEnd, sessionWatchStats } from "./lib/watchstats";
 import type { HealthWorkout } from "./lib/types";
 import { ID_RE, ulid } from "./lib/ulid";
 import { readSettings } from "./data";
+import { reportsMayBeReady } from "./aiReports";
 
 const HEALTH_SCOPE = "health:write";
 const MAX_BODY = 5 * 1024 * 1024;
@@ -139,6 +140,7 @@ healthRoutes.put("/workouts/:id/match", async (c) => {
   const res = await c.env.DB.prepare("UPDATE health_workouts SET matched_session_id = ? WHERE id = ?").bind(body.session_id, id).run();
   if (!res.meta.changes) return fail(c, 404, "not_found", "Watch workout not found.");
   const row = await c.env.DB.prepare(`SELECT ${HEALTH_COLUMNS} FROM health_workouts hw WHERE hw.id = ?`).bind(id).first<HealthRow>();
+  await reportsMayBeReady(c.env).catch((e: unknown) => console.error(`AI queue: ${e instanceof Error ? e.message : String(e)}`));
   return c.json({ ok: true, workout: row });
 });
 
@@ -289,6 +291,8 @@ export async function ingestRaw(c: import("hono").Context<AppBindings>) {
       .bind(JSON.stringify(keys))
       .first<{ n: number }>();
     matched = r?.n ?? 0;
+    // A report waiting for its watch workout may be ready now (Step 3 timing rule).
+    if (matched) await reportsMayBeReady(c.env).catch((e: unknown) => console.error(`AI queue: ${e instanceof Error ? e.message : String(e)}`));
   }
 
   const sessionsUpdated = await updateSessionStats(c.env, parsed.hr, parsed.energy, received_at);

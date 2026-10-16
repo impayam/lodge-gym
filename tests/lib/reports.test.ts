@@ -3,6 +3,7 @@ import {
   balanceStatus,
   convertWeight,
   epley,
+  liftTrends,
   mainLifts,
   monthKeyOf,
   monthRange,
@@ -13,6 +14,7 @@ import {
   progressReport,
   setsCsv,
   shiftMonth,
+  trendWindow,
   weeklyReport,
 } from "../../worker/lib/reports";
 import { reportData } from "../fixtures/report-data";
@@ -297,5 +299,37 @@ describe("past weeks stay scored against the program active then (SPEC-v2 §8.6)
     // September: 23 days at 4 a week, 7 days at 3 a week.
     expect(monthlyReport(d, "2026-09").target).toBe(Math.round(((23 * 4 + 7 * 3) / 7) * 10) / 10);
     expect(monthlyReport(base, "2026-09").target).toBe(Math.round(((30 * 4) / 7) * 10) / 10);
+  });
+});
+
+describe("main lifts' e1RM trend (the Reports tab's table and the report's Where you are, Step 3)", () => {
+  it("covers this week and the previous 4, by the week start setting", () => {
+    expect(trendWindow("2026-10-16", "mon")).toEqual({ start: "2026-09-14", end: "2026-10-16" });
+    expect(trendWindow("2026-10-16", "sun")).toEqual({ start: "2026-09-13", end: "2026-10-16" });
+  });
+
+  it("the best set per session, first to latest, and the change; lifts never done are left out", () => {
+    const sets = (sid: string, w: number) => [0, 1].map((i) => ({ id: `${sid}-${i}`, exercise_id: "bench", set_index: i, weight: w, reps: 5, seconds: null, done: true, rir: 1, updated_at: "2026-10-01T00:00:00.000Z" }));
+    const s = (id: string, date: string, w: number, unit: "lb" | "kg" = "lb") => ({
+      id,
+      program_day_id: "D1",
+      local_date: date,
+      started_at: `${date}T23:00:00.000Z`,
+      ended_at: `${date}T23:55:00.000Z`,
+      status: "done" as const,
+      unit,
+      note: "",
+      created_at: `${date}T23:00:00.000Z`,
+      updated_at: `${date}T23:55:00.000Z`,
+      source: "app" as const,
+      sets: sets(id, w),
+    });
+    const name = (id: string) => (id === "bench" ? "Barbell Bench Press" : id);
+    const [bench] = liftTrends([s("a", "2026-09-20", 130), s("b", "2026-10-01", 60, "kg"), s("c", "2026-10-12", 135)], ["bench", "squat"], name, "lb");
+    // Epley: 130 × (1 + 5/30) = 151.7; 60 kg = 132.3 lb → 154.3; 135 → 157.5.
+    expect(bench).toMatchObject({ exercise_id: "bench", name: "Barbell Bench Press", first_e1rm: 151.7, latest_e1rm: 157.5, change_pct: 3.8 });
+    expect(bench.points.map((p) => p.e1rm)).toEqual([151.7, 154.3, 157.5]);
+    // One session: no change yet.
+    expect(liftTrends([s("a", "2026-09-20", 130)], ["bench"], name, "lb")[0]).toMatchObject({ first_e1rm: 151.7, latest_e1rm: 151.7, change_pct: null });
   });
 });

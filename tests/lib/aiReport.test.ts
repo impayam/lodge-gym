@@ -233,7 +233,6 @@ describe("Next time comes from the progression function, never the model", () =>
     const out = ReportOutput.parse({
       summary_fa: "خوب بود.",
       highlights: [],
-      volume: [],
       extras_note_fa: null,
       missed_note_fa: null,
       // The model tries numbers and an exercise the app has no progression for: both are ignored.
@@ -243,6 +242,8 @@ describe("Next time comes from the progression function, never the model", () =>
         { exercise_id: "curl", note_fa: "بیشتر وزنه بزن." },
       ],
       warnings: [],
+      where_fa: [],
+      motivation_fa: "ادامه بده.",
     });
     const r = normalizeReport(out, input);
     const ids = ["bench", "rdl", "cable_row", "lateral", "facepull"];
@@ -271,32 +272,58 @@ describe("Next time comes from the progression function, never the model", () =>
     const d2 = data();
     const t = d2.sessions.find((x) => x.id === "T1")!;
     t.sets = t.sets.map((x) => (x.exercise_id === "rdl" ? { ...x, rir: 3 } : x));
-    const n = normalizeReport(ReportOutput.parse({ summary_fa: "x", highlights: [], volume: [], extras_note_fa: null, missed_note_fa: null, next_time: [], warnings: [] }), buildReportInput(d2, "T1", null));
+    const n = normalizeReport(ReportOutput.parse({ summary_fa: "x", highlights: [], extras_note_fa: null, missed_note_fa: null, next_time: [], warnings: [], where_fa: [], motivation_fa: "x" }), buildReportInput(d2, "T1", null));
     expect(n.next_time.find((x) => x.exercise_id === "rdl")).toMatchObject({ weight: 180, change: "up2", step: 20 });
   });
 });
 
 describe("normalizeReport", () => {
-  it("keeps the prose and copies the volume numbers and status from the input; unknown groups go", () => {
-    const input = buildReportInput(data(), "T1", null);
-    const out = ReportOutput.parse({
+  const where = { weeks: [{ start: "2026-09-28", this_week: true, sessions_done: 2, sessions_planned: 4 }], totals: { since: "2026-09-01", sessions_done: 9, sessions_planned: 16 }, unit: "lb" as const, lifts: [{ name: "Barbell Bench Press", sessions: 3, first_e1rm: 150, latest_e1rm: 157.5, change_pct: 5 }], stalls: [], drops: [] };
+  const reply = (over: Partial<ReportOutput> = {}) =>
+    ReportOutput.parse({
       summary_fa: "جلسهٔ خوبی بود.",
       highlights: Array.from({ length: 10 }, (_, i) => `نکتهٔ ${i + 1}`),
-      volume: [
-        { group: "Chest", today: 9, week: 99, target: 1, status: "over" },
-        { group: "Wings", today: 1, week: 1, target: 1, status: "on" },
-        { group: "chest", today: 3, week: 3, target: 1, status: "Under target" },
-      ],
       extras_note_fa: null,
       missed_note_fa: "پرس بالاسینه انجام نشد.",
       next_time: [],
       warnings: [],
+      where_fa: [],
+      motivation_fa: "همین مسیر را ادامه بده.",
+      ...over,
     });
-    const r = normalizeReport(out, input);
-    const chest = input.week_so_far.volume.find((v) => v.key === "chest")!;
-    expect(r.volume).toEqual([{ group: "Chest", today: chest.today, week: chest.week, target: chest.target, status: chest.status }]);
+
+  it("keeps the prose; the volume rows are the input's own, every group of the week (the model writes none)", () => {
+    const input = buildReportInput(data(), "T1", null);
+    const r = normalizeReport(reply(), input);
+    expect(r.volume).toEqual(input.week_so_far.volume.map(({ group, today, week, target, status }) => ({ group, today, week, target, status })));
+    expect(r.volume.some((v) => v.today === 0)).toBe(true);
     expect(r.summary_fa).toBe("جلسهٔ خوبی بود.");
     // List lengths are not enforced by the API: over-long lists are cut, not rejected.
     expect(r.highlights).toHaveLength(8);
+  });
+
+  it("Where you are: at most 4 lines, each with only where_you_are's numbers (rounded as prose rounds; 1RM is a term)", () => {
+    const input = { ...buildReportInput(data(), "T1", null), where_you_are: where };
+    const r = normalizeReport(
+      reply({
+        where_fa: ["از ۱۶ جلسهٔ برنامه ۹ جلسه انجام شد.", "پرس سینه 5٪ بهتر شد و 1RM تخمینی به ۱۵۷٫۵ رسید.", "هفتهٔ بعد ۲۰ ست بزن.", "روند خوب است.", "ادامه بده.", "ثابت بمان."],
+      }),
+      input
+    );
+    expect(r.where_fa).toEqual(["از ۱۶ جلسهٔ برنامه ۹ جلسه انجام شد.", "پرس سینه 5٪ بهتر شد و 1RM تخمینی به ۱۵۷٫۵ رسید.", "روند خوب است.", "ادامه بده."]);
+    expect(r.where_dropped).toBe(1);
+    // A percentage must be one the app computed: 9 is a count, not a change.
+    expect(normalizeReport(reply({ where_fa: ["پرس سینه ۹٪ بهتر شد."] }), input).where_fa).toEqual([]);
+    // No where_you_are (or no input): no number passes.
+    expect(normalizeReport(reply({ where_fa: ["۹ جلسه انجام شد.", "روند خوب است."] }), { ...input, where_you_are: null }).where_fa).toEqual(["روند خوب است."]);
+  });
+
+  it("the motivational line is kept without numbers or with the input's own; a number from nowhere drops it", () => {
+    const input = { ...buildReportInput(data(), "T1", null), where_you_are: where, recent_motivation: ["امروز ۴۴۴ بار قوی‌تر بودی."] };
+    expect(normalizeReport(reply(), input).motivation_fa).toBe("همین مسیر را ادامه بده.");
+    expect(normalizeReport(reply({ motivation_fa: "  ۹ جلسه از ۱۶ جلسه؛ ادامه بده.  " }), input).motivation_fa).toBe("۹ جلسه از ۱۶ جلسه؛ ادامه بده.");
+    expect(normalizeReport(reply({ motivation_fa: "امروز ۹۹۹ بار قوی‌تر بودی." }), input).motivation_fa).toBeNull();
+    // An earlier line's numbers are not the input's facts.
+    expect(normalizeReport(reply({ motivation_fa: "امروز ۴۴۴ بار قوی‌تر بودی." }), input).motivation_fa).toBeNull();
   });
 });
