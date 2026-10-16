@@ -118,3 +118,8 @@ Unit test example: shift 12:00–20:00 → suggested 08:00–09:00.
 Settings rows (written only when changed): `gym_hours`, `travel_buffer_min`, `wake_time_min`, `earliest_start_min`,
 `before_shift_gap_min`, `after_shift_gap_min`, `long_shift_gap_min`, `long_shift_min`, `preferred_windows`,
 `reminder_minutes`.
+
+## Change by Payam, 2026-10-16 (M13 review)
+
+- **Find times** lists the days in date order. The finder still ranks them, and the best ones for the week stay ticked.
+- A block's label on the week grid never shows cut: it hides once the rest of the scrolled block is too short to hold it.

@@ -4,7 +4,7 @@
 // finder) and its List view, Add shift (Copy last week), Plan gym (or a tap on an empty time, or a drag to move), and
 // Find times, all on this device's data and written offline through the outbox.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { DAY_END_MIN, DAY_START_MIN, hm, toMin, weekDates, type FreeSlot, type GymPlan, type SessionBlock, type UpcomingDay, type WorkShift } from "../../../worker/lib/calendar";
 import { addDays, localHM } from "../../../worker/lib/time";
 import { ulid } from "../../../worker/lib/ulid";
@@ -227,6 +227,16 @@ interface GridActions {
   onMove: (p: ShownPlan, to: { date: string; start_min: number; end_min: number }) => void;
 }
 
+/** Marks each block label that would reach up under the sticky day heads (`data-cut`), so it hides instead of showing cut. */
+function fitLabels(scroller: HTMLElement) {
+  const head = (scroller.querySelector(".cal-week__head") as HTMLElement | null)?.offsetHeight ?? 0;
+  const edge = scroller.getBoundingClientRect().top + head;
+  for (const label of scroller.querySelectorAll<HTMLElement>(".cal-block__label")) {
+    const cut = label.getBoundingClientRect().top < edge - 0.5;
+    if (cut !== label.hasAttribute("data-cut")) label.toggleAttribute("data-cut", cut);
+  }
+}
+
 /**
  * The week grid: 7 day columns over 04:00–24:00 with every block. A tap on an empty time plans gym there (or adds a
  * shift); a plan drags to another time or day; a swipe left or right changes the week.
@@ -237,6 +247,30 @@ function WeekGrid({ days, tz, act }: { days: CalendarDay[]; tz: string; act: Gri
   useEffect(() => {
     const el = ref.current;
     if (el) el.scrollTop = Math.max(0, ((nowMin(tz) - DAY_START_MIN) / 60 - 1) * HOUR_PX);
+  }, []);
+
+  // A block's label rides under the day heads while the block scrolls; once the rest of the block is too short to hold
+  // it, the label would slide under the heads and show cut, so it is hidden until it fits again.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) fitLabels(el);
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+    const onScroll = () => {
+      if (!frame)
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          fitLabels(el);
+        });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
   }, []);
 
   // A swipe across the grid changes the week; a tap right after it is not a tap.
@@ -706,6 +740,8 @@ function FindTimes({ slots, need, perWeek, src, onClose }: { slots: FreeSlot[]; 
   const order = upcoming(src);
   const ticked = slots.filter((x) => checked.has(x.date));
   const assigned = new Map(assignDays(ticked, order).map((a) => [a.slot.date, a.day]));
+  // The finder ranks the days (the best ones are ticked); the list reads in date order (Payam, 2026-10-16).
+  const byDate = [...slots].sort((a, b) => a.date.localeCompare(b.date));
   const now = () => new Date().toISOString();
   const add = async (list: FreeSlot[]) => {
     const plans = assignDays(list, order).map(({ slot, day }) => newGymPlan(ulid(), slot.date, slot.start_min, day, "finder", now()));
@@ -726,7 +762,7 @@ function FindTimes({ slots, need, perWeek, src, onClose }: { slots: FreeSlot[]; 
           : "This week's sessions are all done or planned. You can still add more."}
       </p>
       <ul class="list-plain">
-        {slots.map((x) => {
+        {byDate.map((x) => {
           const day = assigned.get(x.date);
           const note = streakNote(x.streak);
           const label = `${dateShort(x.date)} ${timeRange(x)}`;

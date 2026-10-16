@@ -527,7 +527,7 @@ fieldset.form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 /* The week grid: a time axis 04:00–24:00 at 44 px an hour (the touch row) and 7 day columns, scrolling inside its card under
    the sticky day heads, the card ending above the tab bar. Blocks are placed by minutes (--top, --h): work = --ink-3 on a
    well, planned = pink outline, done = pink fill, missed = grey outline, free = violet dotted. A block's label stays in
-   view under the day heads while a long block scrolls. */
+   view under the day heads while a long block scrolls, and hides once the rest of the block cannot hold it. */
 .card--calendar { padding: 0 6px 0 0; overflow: hidden; }
 .cal-scroll { height: clamp(300px, calc(100svh - 362px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 900px);
   overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
@@ -542,6 +542,7 @@ fieldset.form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .cal-block { position: absolute; left: 2px; right: 2px; top: var(--top); height: var(--h); min-height: 24px; overflow: clip; display: flex; flex-direction: column;
   padding: 3px 4px; border: 0; border-radius: 8px; font: 600 10px/1.25 var(--font-ui); text-align: left; }
 .cal-block__label { position: sticky; top: 51px; display: flex; flex-direction: column; }
+.cal-block__label[data-cut] { visibility: hidden; }                                  /* the rest of the block is too short: hidden, never cut */
 .cal-block__time { font-weight: 400; font-variant-numeric: tabular-nums; }
 .cal-block--work { background: var(--well); box-shadow: var(--sh-well); color: var(--ink-3); }
 .cal-block--plan { background: var(--card-top); box-shadow: inset 0 0 0 1.5px var(--pink); color: var(--pink); }

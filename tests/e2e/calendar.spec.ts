@@ -161,6 +161,44 @@ test("week grid: work, done, missed and planned blocks with their names; 44 px h
   await expect(page.getByTestId("cal-week")).toBeVisible();
 });
 
+test("week grid: a block's label rides under the day heads while it scrolls and hides once the rest is too short, never cut", async ({ page }) => {
+  const t = today();
+  shift("w1", t, "07:00", "15:30");
+  shift("w2", addDays(t, monday(t) === t ? 1 : -1), "07:00", "15:20");
+  await openCalendar(page);
+  const work = block(page, `Work, ${weekdayLong(t)} 07:00–15:30`);
+  await expect(work).toHaveCount(1);
+
+  // Every scroll position from the top to the bottom, 6 px at a time: a label that shows sits wholly below the heads.
+  const sweep = await page.locator(".cal-scroll").evaluate(async (el) => {
+    const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const head = (el.querySelector(".cal-week__head") as HTMLElement).offsetHeight;
+    const out = { cutShown: [] as number[], hidden: 0, shownUnder: 0 };
+    for (let y = 0; y <= el.scrollHeight - el.clientHeight; y += 6) {
+      el.scrollTop = y;
+      await frames();
+      const edge = el.getBoundingClientRect().top + head;
+      for (const label of el.querySelectorAll<HTMLElement>(".cal-block__label")) {
+        const box = label.getBoundingClientRect();
+        const block = (label.parentElement as HTMLElement).getBoundingClientRect();
+        if (block.bottom <= edge) continue; // scrolled away entirely
+        if (getComputedStyle(label).visibility === "hidden") out.hidden++;
+        else if (box.top < edge - 0.5) out.cutShown.push(y);
+        else if (block.top < edge) out.shownUnder++;
+      }
+    }
+    return out;
+  });
+  expect(sweep.cutShown).toEqual([]);
+  expect(sweep.hidden).toBeGreaterThan(0); // the short rest of a block hides its label
+  expect(sweep.shownUnder).toBeGreaterThan(0); // and a long block keeps it in view under the heads
+
+  // Back up: the label shows again.
+  await page.locator(".cal-scroll").evaluate((el) => (el.scrollTop = 0));
+  await expect(work.locator(".cal-block__label")).not.toHaveAttribute("data-cut", "");
+  await expect(work.locator(".cal-block__label")).toBeVisible();
+});
+
 test("free times: the shared finder's suggestion for each day of a free week (08:00, the earliest start), off again with the switch", async ({ page }) => {
   await openCalendar(page);
   const next = addDays(monday(today()), 7);
@@ -236,11 +274,14 @@ test("§8: add shifts, Copy last week, Find times → Add all with reminders; a 
   await expect(page.getByTestId("cal-week").locator(".cal-block--work")).toHaveCount(2);
   await expect(page.getByTestId("cal-empty")).toHaveCount(0);
 
-  // Find times: one suggestion a day, best first, the best four ticked; Monday's 12:00–20:00 shift → 08:00 before it.
+  // Find times: one suggestion a day in date order, the best four ticked; Monday's 12:00–20:00 shift → 08:00 before it.
   await page.getByTestId("cal-find-times").click();
   const find = page.getByTestId("cal-find-sheet");
   await expect(find).toHaveAttribute("open", "");
   await expect(find.getByTestId("find-row")).toHaveCount(7);
+  expect(await find.getByTestId("find-row").evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.date))).toEqual(
+    Array.from({ length: 7 }, (_, i) => addDays(w2, i))
+  );
   const mon = find.locator(`[data-testid="find-row"][data-date="${w2}"]`);
   await expect(mon).toHaveAttribute("data-start", "08:00");
   await expect(mon).toContainText("Before your 12:00 shift");
