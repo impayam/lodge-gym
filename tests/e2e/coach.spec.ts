@@ -92,7 +92,7 @@ test("a question streams: the coach's progress note in the typing line, the app'
   await expect(card).toContainText("Sets vs target");
   await expect(card).toContainText("Numbers calculated by the app from your logs");
   // The mock writes its sentence from the card's numbers, as the real coach must: text and card agree, so no note.
-  const status = await card.locator('.bar-row[data-row="chest"]').getAttribute("data-status");
+  const status = await card.locator('tr[data-row="chest"]').getAttribute("data-status");
   await expect(answer).toContainText(`So far this week chest is ${STATUS_WORD[status!]}`);
   await expect(page.getByTestId("coach-cost")).toBeVisible();
   await expect(page.getByTestId("coach-status-note")).toHaveCount(0);
@@ -255,14 +255,14 @@ test("an answer whose text names a status its card does not show gets a note und
   await ask(page, "How was my week?");
   await expect(page.getByTestId("coach-cost")).toBeVisible();
   const answer = page.getByTestId("coach-answer");
-  const status = await answer.locator('[data-card="get_volume"] .bar-row[data-row="chest"]').getAttribute("data-status");
+  const status = await answer.locator('[data-card="get_volume"] tr[data-row="chest"]').getAttribute("data-status");
   const shown = status === "none" ? "under" : status!;
   const said = ({ under: "over", on: "under", over: "under" } as Record<string, string>)[shown];
   // The mock's text names another status on purpose; the text is shown unchanged and the note sits under it.
   await expect(answer).toContainText(`So far this week chest is ${said} target`);
   const note = page.getByTestId("coach-status-note");
   await expect(note).toHaveText("The numbers in the card are the app's; the text may be wrong.");
-  await expect(answer.locator('[data-card="get_volume"] .bar-row[data-row="chest"]')).toHaveAttribute("data-status", status!);
+  await expect(answer.locator('[data-card="get_volume"] tr[data-row="chest"]')).toHaveAttribute("data-status", status!);
   // A saved chat shows the same note when opened again.
   await page.reload();
   await page.getByRole("button", { name: "Ask the coach" }).click();

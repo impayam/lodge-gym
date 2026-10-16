@@ -282,6 +282,18 @@ export function moveItemTo(p: SessionPlan, itemId: string, index: number, now: s
 }
 
 /**
+ * Moves an item to just after the exercise `exerciseId`, or after its whole group when it is in one (the coach's one
+ * added exercise, Payam 2026-10-16: the plan gets it where the card says). Unchanged when that exercise is not live
+ * in the plan.
+ */
+export function moveAfter(p: SessionPlan, itemId: string, exerciseId: string, now: string): SessionPlan {
+  const blocks = planBlocks(p).filter((b) => !b.items.some((it) => it.id === itemId));
+  const bi = blocks.findIndex((b) => b.items.some((it) => it.exercise_id === exerciseId));
+  if (bi < 0) return p;
+  return moveItemTo(p, itemId, blocks.slice(0, bi + 1).reduce((a, b) => a + b.items.length, 0), now);
+}
+
+/**
  * Puts an item back as it was (Undo of an applied advice): its exercise, sets, reps, rest and origin, live again near
  * live index `index`. Group membership is not restored (groups may have been re-lettered since); a live item keeps
  * the group it is in now.

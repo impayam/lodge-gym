@@ -1,6 +1,7 @@
 // The coach's data cards (SPEC-v9 M12 §4): each tool result drawn the way the app draws the same numbers elsewhere
-// (bars vs target, columns per week, a line chart with a Table view), captioned as the app's own numbers. The program
-// draft card has Add to Planner and Change.
+// (a table of weeks vs target, columns per week, a line chart with a Table view), captioned as the app's own numbers.
+// The program draft card has Add to Planner and Change; the one-exercise card has Only this session and Whole program.
+// get_program, get_library and get_recovery draw a card only when the model passed show: true (he asked to see it).
 
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
@@ -14,7 +15,6 @@ import { inPlan } from "../../../worker/lib/plan";
 import { openPlanFor } from "../model";
 import { addCoachExtras, allExercises, coachTargets, flash, navigate, openCalendar, openPlan, refresh, saveGymPlan, today, useStore } from "../store";
 import { Select } from "./Select";
-import { Bars } from "./Bars";
 import { Columns } from "./Columns";
 import { TimeChart } from "./TimeChart";
 
@@ -34,6 +34,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_calendar: "Reading your calendar",
   find_free_slots: "Finding gym times",
   propose_schedule: "Writing a gym schedule",
+  propose_exercise: "Placing the exercise",
   propose_session_additions: "Picking exercises for today",
   propose_program: "Writing a program draft",
 };
@@ -371,6 +372,196 @@ function AdditionsCard({ result }: { result: Additions }) {
   );
 }
 
+/**
+ * Sets vs target (Payam, 2026-10-16): one card for every week of the call, muscle groups as rows and weeks as columns
+ * (the current week marked "so far"), plus the target of the latest week's program. The same rows and fractional sets
+ * as the Reports screen; each row carries the latest week's status.
+ */
+function VolumeCard({ result }: { result: Volume }) {
+  const weeks = result.weeks;
+  const latest = weeks.at(-1);
+  const keys = [...new Set(weeks.flatMap((w) => w.groups.filter((g) => g.target != null || g.fractional_sets > 0).map((g) => g.group)))];
+  const order = latest?.groups.map((g) => g.group) ?? [];
+  keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const cell = (w: Volume["weeks"][number], key: string) => w.groups.find((g) => g.group === key);
+  return (
+    <DataCard title="Sets vs target" sub={plural(weeks.length, "week")} testid="get_volume">
+      {weeks.length && keys.length ? (
+        <div class="timeline__scroll">
+          <table class="data-table num" data-testid="coach-volume-table">
+            <thead>
+              <tr>
+                <th scope="col">Muscle</th>
+                {weeks.map((w) => (
+                  <th scope="col">
+                    {dayMonth(w.start)}
+                    {w.partial ? "*" : ""}
+                  </th>
+                ))}
+                <th scope="col">Target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((key) => {
+                const now = latest ? cell(latest, key) : undefined;
+                return (
+                  <tr data-row={key} data-status={now?.status ?? "none"}>
+                    <td>{now?.name ?? weeks.map((w) => cell(w, key)?.name).find(Boolean) ?? key}</td>
+                    {weeks.map((w) => (
+                      <td>{fmtNum(cell(w, key)?.fractional_sets ?? 0, 1)}</td>
+                    ))}
+                    <td>{now?.target != null ? fmtNum(now.target, 1) : "–"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p class="state l-m0">No sets in these dates.</p>
+      )}
+      <span class="caption">{weeks.some((w) => w.partial) ? "* this week so far. " : ""}Sets: direct 1, secondary 0.5, as on Reports.</span>
+    </DataCard>
+  );
+}
+
+/** get_program, get_library and get_recovery: a card only when he asked to see it (the model passed show: true). */
+const asked = (input: unknown) => (input as { show?: unknown } | null)?.show === true;
+
+/* propose_exercise (worker/lib/coach/exerciseTool.ts). */
+type ExerciseChange = {
+  draft_id: string;
+  prefer: "session" | "program" | null;
+  day: { id: string; name: string; position: number };
+  exercise: Omit<Addition, "reason_fa">;
+  after: { exercise_id: string; name: string } | null;
+  notes: string[];
+};
+
+/**
+ * One more exercise for a day (Payam, 2026-10-16): only the change ("Day 1 · Chest: + Butterfly", 3 × 10–15 after
+ * Seated Cable Row, the weight from the app's progression), what it causes under Worth knowing, and two buttons, the
+ * one he asked for first. Only this session takes the propose_session_additions path (a session open today, else
+ * that day's plan, in the same place); Whole program saves the app's draft under Me → Program → Drafts. The reason is
+ * in the coach's text only, so it is said once.
+ */
+function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: ExerciseChange; messageId: string; toolUseId: string; onAdd: (m: string, t: string) => Promise<unknown> }) {
+  const boot = useStore((s) => s.boot)!;
+  const sessions = useStore((s) => s.sessions);
+  const plans = useStore((s) => s.plans);
+  useStore((s) => s.gymPlans);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const x = result.exercise;
+  // The day is still in his active program: its next session can take the exercise.
+  const dayKnown = boot.program.days.some((d) => d.id === result.day.id);
+  const { target } = coachTargets(dayKnown ? result.day.id : null);
+  const dayName = (id: string) => boot.program.days.find((d) => d.id === id)?.name_en ?? id;
+  const label = targetLabel(target, dayName(target.day_id), today());
+  const session = target.kind === "open_session" ? sessions[target.session_id] : null;
+  const plan = target.kind === "open_session" ? null : openPlanFor(plans, target.day_id);
+  const inSession = session ? session.sets.some((s) => s.exercise_id === x.exercise_id) : plan ? inPlan(plan, x.exercise_id) : false;
+  const inDrafts = saved || (boot.programs ?? []).some((p) => p.id === result.draft_id);
+
+  const addSession = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const r = await addCoachExtras(
+        [{ exercise_id: x.exercise_id, sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null }],
+        target,
+        result.after?.exercise_id ?? null
+      );
+      flash(r.added ? `Added ${x.name} to ${label}.` : r.missing ? "The exercise library did not load. Try again online." : `It is already in ${label}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addProgram = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await onAdd(messageId, toolUseId);
+      setSaved(true);
+      // The draft is now a program: the bootstrap carries it for the Drafts screen, offline too.
+      void refresh().catch(() => undefined);
+    } catch (e) {
+      setProblem(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sessionDone = (
+    <div class="l-row l-between l-gap-8" data-testid="coach-exercise-session-added">
+      <span class="caption">{session ? "In today's session." : "In the plan: it is there when you tap Start."}</span>
+      <button type="button" class="clay press btn-sm t-pink" onClick={() => (session ? navigate("session", session.id) : plan && openPlan(plan.id))}>
+        Open
+      </button>
+    </div>
+  );
+  const programDone = (
+    <div class="l-row l-between l-gap-8" data-testid="coach-exercise-program-added">
+      <span class="caption">Added to Me → Program → Drafts.</span>
+      <button type="button" class="clay press btn-sm t-pink" onClick={() => navigate("program")}>
+        Open
+      </button>
+    </div>
+  );
+  const choices = [
+    { key: "session", done: inSession, shown: dayKnown, line: sessionDone, label: "Only this session", testid: "coach-exercise-session", run: addSession },
+    { key: "program", done: inDrafts, shown: true, line: programDone, label: "Whole program", testid: "coach-exercise-program", run: addProgram },
+  ].filter((c) => c.shown);
+  if (result.prefer === "program") choices.reverse();
+  const open = choices.filter((c) => !c.done);
+
+  return (
+    <section class="card l-col l-gap-10" data-testid="coach-exercise-change" data-prefer={result.prefer ?? "none"}>
+      <h2 class="card__title l-m0">
+        {result.day.name}: + {x.name}
+      </h2>
+      <ul class="list-plain">
+        <li class="list-row" data-testid="coach-exercise-row" data-ex={x.exercise_id}>
+          <span class="list-row__text">
+            <span class="t-title">{x.name}</span>
+            <span class="list-row__note num">
+              {fmtNum(x.sets)} × {repsText(x)}
+              {result.after ? ` · after ${result.after.name}` : ""}
+            </span>
+            <span class="caption">{x.rule}</span>
+          </span>
+          <span class="list-row__value t-title num" data-testid="coach-exercise-weight">
+            {x.weight != null ? `${fmtNum(x.weight)} ${x.weight_unit}` : "–"}
+          </span>
+        </li>
+      </ul>
+      {result.notes.length ? (
+        // Only what this change causes, as information: neither button is ever blocked.
+        <section class="callout" data-bad="false" data-testid="coach-exercise-notes">
+          <h2 class="card__title l-m0">Worth knowing</h2>
+          <ul class="prose-list ex-card__meta">
+            {result.notes.map((n) => (
+              <li>{n}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {choices.filter((c) => c.done).map((c) => c.line)}
+      {open.length ? (
+        <div class="l-row l-gap-8">
+          {open.map((c, i) => (
+            <button type="button" class={`clay press btn l-grow ${i === 0 ? "t-pink" : "t-muted"}`} data-testid={c.testid} disabled={busy} onClick={() => void c.run()}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {problem ? <span class="caption t-orange">{problem}</span> : null}
+    </section>
+  );
+}
+
 export function CoachCard({ name, input, result, messageId, toolUseId, onChange, onAdd }: { name: string; input: unknown; result: unknown; messageId: string; toolUseId: string; onChange: () => void; onAdd: (m: string, t: string) => Promise<unknown> }) {
   switch (name) {
     case "get_sessions": {
@@ -409,23 +600,8 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
         </DataCard>
       );
     }
-    case "get_volume": {
-      const r = result as Volume;
-      return (
-        <>
-          {r.weeks.map((w) => (
-            <DataCard title="Sets vs target" sub={`Week of ${dayMonth(w.start)}${w.partial ? ", so far" : ""}`} testid={name}>
-              <Bars
-                testid="coach-volume-bars"
-                markWord="Target"
-                fmt={(n) => fmtNum(n, 1)}
-                rows={w.groups.filter((g) => g.target != null || g.fractional_sets > 0).map((g) => ({ key: g.group, label: g.name, value: g.fractional_sets, mark: g.target, direct: g.direct_sets, status: g.status }))}
-              />
-            </DataCard>
-          ))}
-        </>
-      );
-    }
+    case "get_volume":
+      return <VolumeCard result={result as Volume} />;
     case "get_adherence": {
       const r = result as Adherence;
       return (
@@ -470,6 +646,7 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
       );
     }
     case "get_program": {
+      if (!asked(input)) return null;
       const r = result as Program;
       return (
         <DataCard title={r.name} sub={`${fmtNum(r.days_per_week)} days a week`} testid={name}>
@@ -478,6 +655,7 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
       );
     }
     case "get_library": {
+      if (!asked(input)) return null;
       const r = result as Library;
       return (
         <DataCard title="Exercises" sub={`${fmtNum(r.exercises.length)} of ${fmtNum(r.total)}`} testid={name} source={false}>
@@ -513,6 +691,7 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
       );
     }
     case "get_recovery": {
+      if (!asked(input)) return null;
       const r = result as Recovery;
       return (
         <DataCard title="Last heavy compound" sub="48-hour rule" testid={name}>
@@ -639,6 +818,8 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
     }
     case "propose_schedule":
       return <ScheduleCard result={result as Schedule} />;
+    case "propose_exercise":
+      return <ExerciseCard result={result as ExerciseChange} messageId={messageId} toolUseId={toolUseId} onAdd={onAdd} />;
     case "propose_session_additions":
       return <AdditionsCard result={result as Additions} />;
     case "propose_program":
