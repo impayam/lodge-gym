@@ -175,7 +175,7 @@ export function Settings() {
       <h2 class="section-label">About</h2>
       <section class="card" data-testid="about" aria-label="About">
         {/* CC BY-SA 4.0 attribution of the picker's 3D model (SPEC-v6 §1, web/public/models/ANATOMY-SOURCE.md). */}
-        <p class="ex-card__meta l-m0">
+        <p class="ex-card__meta l-m0" data-testid="about-model">
           3D anatomy model:{" "}
           <a class="t-pink" href="https://github.com/hpfrei/body-anatomy-3d-viewer" target="_blank" rel="noopener noreferrer">
             Body Anatomy 3D Viewer
@@ -205,10 +205,14 @@ export function Settings() {
             wger
           </a>{" "}
           (
+          <a class="t-pink" href={LICENCE_URL["CC-BY-SA-3.0"]} target="_blank" rel="noopener noreferrer">
+            CC BY-SA 3.0
+          </a>
+          ,{" "}
           <a class="t-pink" href={LICENCE_URL["CC-BY-SA-4.0"]} target="_blank" rel="noopener noreferrer">
-            CC BY-SA
+            CC BY-SA 4.0
           </a>{" "}
-          3.0 and 4.0, and{" "}
+          or{" "}
           <a class="t-pink" href={LICENCE_URL["CC0-1.0"]} target="_blank" rel="noopener noreferrer">
             CC0
           </a>
