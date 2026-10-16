@@ -279,10 +279,37 @@ and the layout approved 2026-10-16.
     number the input does not supply.
   - The "Written …" line shows the report's cost (`cost_usd`, from its tokens).
 - **Where it lives:** the end-of-session screen shows only its status (when it will be written, Write report now, Open
-  in Reports). Every AI report is in the Reports tab: the after-session reports list and the reports timeline (moved
-  from History; History links to Reports). Reports' main-lift e1RM table (this week and the previous 4) is computed by
-  the app, no AI. Old session reports and overviews stay readable; no data deleted, no migration.
+  in Reports). Every AI report is in the Reports tab: its AI reports card and, from there, All reports with the reports
+  timeline (moved from History; History links to Reports). The main lifts' e1RM table is computed by the app, no AI.
+  Old session reports and overviews stay readable; no data deleted, no migration.
 - The weekly review is unchanged.
+
+### Change by Payam, 2026-10-16: a shorter Reports tab
+Mockup (Week) approved 2026-10-16; Month and All follow the same rules. Replaces SPEC-v8 §6.03's tiles, 1RM sections
+and the order of the page. Top to bottom, in every period:
+1. Week / Month / All and the period's navigation (Week, Month).
+2. **Three tiles** (no lift numbers): Sessions (done / planned); **New records**; **Groups on target** (groups at 80–120%
+   of their weekly target, as in Sets vs target, out of the groups that have one).
+   - Week: records this week (the week's best set beats the best before it); groups this week.
+   - Month: records this month, by the same rule; each group's average week this month (sets × 7 ÷ the month's days,
+     up to today in the current month).
+   - All: record moments since the first session (each session in which an exercise beat its best of every earlier
+     session); groups this week.
+3. **Main lifts (estimated 1RM)**, the only place for 1RM: the chart of the big three over the period's window, then
+   every main lift of the program with its 1RM and the change — Week: the week's best set against last week's; Month:
+   the month's latest session, change from its first session to its last; All: the latest session, change from the
+   first session to now.
+4. Week: Sets this week vs target; Month: Volume vs last month; All: Muscle balance this week (unchanged).
+5. Consistency (unchanged).
+6. **AI reports**: the latest three sessions' reports, then "All reports and weekly reviews", a screen with the reports
+   timeline (Timeline / List). A saved report goes back to All reports, All reports to Reports.
+7. **Details**, folded by default: Week — new records, sessions, Apple Watch, body weight, notes; Month — month in
+   numbers, sessions per week, body weight, photos; All — the details period (since the first session / last 4 weeks),
+   in numbers, total volume per week.
+8. Share image and Export CSV (unchanged).
+
+The month report adds `prs` and `muscles` (the average week), the progress report `records` per period (additive
+fields; no other API change, no migration).
 
 ### AI plan advice (button only)
 - The planner has an **Get advice** button. It is never automatic, and each tap is one model call.

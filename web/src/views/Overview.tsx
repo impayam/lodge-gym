@@ -1,7 +1,7 @@
-// Reports → After-session reports, and the saved training overviews (SPEC-v7 M9d). Since Step 3 (Payam, 2026-10-16) the
-// overview is no longer written: one after-session report per session carries "Where you are", and the older overviews
-// stay readable from the Reports timeline. Persian prose renders right-to-left inside the English app. The list is
-// cached on the device, so Reports shows the last copy offline.
+// Reports → AI reports (the latest after-session reports and a row to All reports), and the saved training overviews
+// (SPEC-v7 M9d). Since Step 3 (Payam, 2026-10-16) the overview is no longer written: one after-session report per
+// session carries "Where you are", and the older overviews stay readable from All reports. Persian prose renders
+// right-to-left inside the English app. The list is cached on the device, so Reports shows the last copy offline.
 
 import { useEffect, useState } from "preact/hooks";
 import type { OverviewView, StoredMotivation } from "../../../worker/lib/ai/overview";
@@ -11,10 +11,10 @@ import { Empty, isOffline, LoadError } from "../components/States";
 import { dateShort, dayMonth, fmtNum } from "../format";
 import { dayTitle } from "../lib/lifts";
 import { dayInfo } from "../model";
-import { getState, loadAllHistory, openReport, useStore } from "../store";
+import { getState, loadAllHistory, navigate, openReport, useStore } from "../store";
 
-/** Session reports shown before "Show all". */
-const LIST_FIRST = 5;
+/** After-session reports shown on Reports; the rest are under All reports (Reports, approved 2026-10-16). */
+const LIST_FIRST = 3;
 
 const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmtNum(Math.abs(n), 1)}%`;
 
@@ -100,7 +100,10 @@ export function OverviewBody({ view, summary = true }: { view: OverviewView; sum
   );
 }
 
-/** Every session's latest report, newest session first; a row opens the full report. */
+/**
+ * Reports → AI reports: the latest three sessions' reports (newest first; a row opens the full report), then a row to
+ * All reports, the timeline of every saved report and weekly review.
+ */
 export function SessionReportsList() {
   const boot = useStore((s) => s.boot)!;
   const syncPending = useStore((s) => s.sync.pending);
@@ -108,7 +111,6 @@ export function SessionReportsList() {
   const [list, setList] = useState<SessionReportItem[] | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [round, setRound] = useState(0);
-  const [all, setAll] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,11 +141,11 @@ export function SessionReportsList() {
     openReport(id);
   };
 
-  const shown = list ? (all ? list : list.slice(0, LIST_FIRST)) : [];
+  const shown = list ? list.slice(0, LIST_FIRST) : [];
   return (
     <section class="card card--list" data-testid="session-reports" aria-labelledby="session-reports-title">
-      <h2 class="l-sr" id="session-reports-title">
-        After-session reports
+      <h2 class="card__title l-m0" id="session-reports-title">
+        AI reports
       </h2>
       {failure !== null && list ? <p class="caption">{isOffline(failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null}
       {!list ? (
@@ -186,13 +188,17 @@ export function SessionReportsList() {
               </button>
             );
           })}
-          {list.length > LIST_FIRST ? (
-            <button type="button" class="list-row press t-muted" data-testid="session-reports-all" onClick={() => setAll(!all)}>
-              <span class="list-row__text">{all ? "Show fewer" : `Show all ${fmtNum(list.length)}`}</span>
-            </button>
-          ) : null}
         </>
       )}
+      <button type="button" class="list-row press" data-testid="all-reports" onClick={() => navigate("allreports")}>
+        <span class="list-row__text">
+          <span class="t-title">All reports and weekly reviews</span>
+          <span class="caption">Timeline and list of every saved report</span>
+        </span>
+        <span class="list-row__chevron">
+          <IconChevron size={16} />
+        </span>
+      </button>
     </section>
   );
 }

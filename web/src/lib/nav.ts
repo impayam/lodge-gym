@@ -17,6 +17,7 @@ export type ViewName =
   | "plan"
   | "report"
   | "saved"
+  | "allreports"
   | "coach"
   | "calendar";
 
@@ -60,7 +61,10 @@ export function backTarget(view: ViewName, tab: TabName): ViewName | null {
     case "watch":
     case "newprogram":
       return "settings";
+    // A saved report opens from All reports, which opens from Reports.
     case "saved":
+      return "allreports";
+    case "allreports":
     case "report":
     case "plan":
     case "coach":

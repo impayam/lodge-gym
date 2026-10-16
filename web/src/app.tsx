@@ -17,7 +17,7 @@ import { Photos } from "./views/Photos";
 import { Planner } from "./views/Planner";
 import { Program } from "./views/Program";
 import { Reports } from "./views/Reports";
-import { SavedReport } from "./views/ReportsTimeline";
+import { AllReports, SavedReport } from "./views/ReportsTimeline";
 import { Session } from "./views/Session";
 import { SessionReportScreen } from "./views/SessionReport";
 import { Settings } from "./views/Settings";
@@ -94,6 +94,8 @@ export function App() {
       <Planner key={view.planId} id={view.planId} />
     ) : view.name === "history" ? (
       <History />
+    ) : view.name === "allreports" ? (
+      <AllReports />
     ) : view.name === "saved" && view.saved ? (
       <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
     ) : view.name === "reports" ? (

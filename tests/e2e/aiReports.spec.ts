@@ -2,8 +2,8 @@ import { expect, test, type Page } from "./fixtures";
 import { aiJobsIdle, aiMode, resetPrograms, resetWorkouts, setOffline, signIn, sql, goTo, enterSet } from "./helpers";
 
 // Step 3 (Payam, 2026-10-16): every AI report lives in the Reports tab. The training overview is no longer written after
-// each session; the older overviews stay readable on the reports timeline (moved here from History, which links here),
-// and the main lifts' estimated 1RM table is the app's own. The model is mocked (scripts/e2e-ai-mock.mjs): the real
+// each session; the older overviews stay readable on the reports timeline (Reports → All reports; History links to
+// Reports), and the main lifts' estimated 1RM table is the app's own. The model is mocked (scripts/e2e-ai-mock.mjs): the real
 // Anthropic API is never called.
 test.describe.configure({ mode: "serial" });
 
@@ -63,7 +63,8 @@ test("Reports: the main lifts' 1RM table is the app's own, no overview card or o
   await page.goto("/");
   await toReports(page);
   await expect(page.getByTestId("training-overview")).toHaveCount(0);
-  await expect(page.getByTestId("main-lifts")).toContainText("No main lift logged this week or in the previous 4.");
+  await expect(page.getByTestId("main-lifts")).toContainText("No bench press, squat or deadlift logged in this period.");
+  await expect(page.getByTestId("main-lifts-table").locator('tr[data-lift="bench"] td')).toHaveText(["Barbell Bench Press", "–", "–"]);
   await expect(page.getByTestId("session-reports")).toContainText("No after-session reports yet.");
 
   await finishDay1(page);
@@ -72,7 +73,7 @@ test("Reports: the main lifts' 1RM table is the app's own, no overview card or o
   const table = page.getByTestId("main-lifts-table");
   await expect(table.locator('tr[data-lift="bench"] td')).toHaveText(["Barbell Bench Press", "163.3", "–"]);
   await expect(table.locator("th").nth(1)).toHaveText("1RM (lb)");
-  await expect(page.getByTestId("main-lifts")).toContainText("This week and the previous 4.");
+  await expect(page.getByTestId("main-lifts")).toContainText("Best set of the week (Epley). Change: against last week's best.");
   // One report, and no training overview after it.
   expect(sql("SELECT COUNT(*) AS n FROM session_reports")).toEqual([{ n: 1 }]);
   expect(sql("SELECT COUNT(*) AS n FROM training_overviews")).toEqual([{ n: 0 }]);
@@ -96,7 +97,7 @@ test("Reports: the main lifts' 1RM table is the app's own, no overview card or o
   await expect(page.getByTestId("history-group").getByTestId("session-card")).toHaveCount(1);
   await page.getByTestId("history-reports-link").click();
   await expect(page.getByTestId("reports")).toBeVisible();
-  await expect(page.getByTestId("reports-timeline")).toBeVisible();
+  await expect(page.getByTestId("all-reports")).toBeVisible();
 
   // Settings: this month's one report; no overview counted.
   await goTo(page, "AI reports");
@@ -112,7 +113,32 @@ test("Reports: the main lifts' 1RM table is the app's own, no overview card or o
   await setOffline(context, page, false);
 });
 
-test("Reports → reports timeline: a session date lists its report and an old overview written after it; an old Regenerate gets ◆; weekly reviews on their week's last day; everything opens read-only and goes back to Reports", async ({ page }) => {
+test("AI reports on Reports: the latest three sessions' reports, newest first, then a row to all reports", async ({ page }) => {
+  // Four finished sessions with a report each, a day apart (old data, written straight into the database).
+  const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+  for (const n of [1, 2, 3, 4]) {
+    const id = `01AIRPT${n}`;
+    sql(
+      `INSERT INTO workout_sessions (id, program_day_id, local_date, started_at, ended_at, status, unit, note, created_at, updated_at, source)
+         VALUES ('${id}', 'D1', date('now', '-${n} days'), '${day(n)}', '${day(n)}', 'done', 'lb', '', '${day(n)}', '${day(n)}', 'app');
+       INSERT INTO session_reports (id, session_id, created_at, model, status, report_json, error, input_tokens, output_tokens)
+         VALUES ('01AIRPTREP${n}', '${id}', '${day(n)}', 'claude-opus-5-5', 'ok', '{"summary_fa":"گزارش ${n}"}', NULL, 4000, 800)`
+    );
+  }
+  await page.goto("/");
+  await toReports(page);
+  const rows = page.getByTestId("session-report-row");
+  await expect(rows).toHaveCount(3);
+  expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-session")))).toEqual(["01AIRPT1", "01AIRPT2", "01AIRPT3"]);
+  await expect(page.getByTestId("session-reports").getByRole("heading", { level: 2 })).toHaveText("AI reports");
+  await expect(page.getByTestId("all-reports")).toContainText("All reports and weekly reviews");
+  // The fourth is under All reports.
+  await page.getByTestId("all-reports").click();
+  await page.getByTestId("rt-mode-list").click();
+  await expect(page.getByTestId("rt-list").getByTestId("rt-item")).toHaveCount(4);
+});
+
+test("Reports → All reports: a session date lists its report and an old overview written after it; an old Regenerate gets ◆; weekly reviews on their week's last day; everything opens read-only and goes back to All reports", async ({ page }) => {
   // Reports, overviews and reviews opened one by one: 37–46 s in WebKit on a busy machine.
   test.setTimeout(120_000);
   sql("DELETE FROM weekly_reviews");
@@ -135,6 +161,9 @@ test("Reports → reports timeline: a session date lists its report and an old o
   );
 
   await toReports(page);
+  // The AI reports card: the latest after-session reports, then a row to all of them.
+  await page.getByTestId("all-reports").click();
+  await expect(page.getByTestId("all-reports-screen")).toBeVisible();
   const cols = page.getByTestId("rt-col");
   await expect(cols).toHaveCount(3);
   expect(await cols.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")))).toEqual([localDay(7), threeAgo, today]);
@@ -163,7 +192,7 @@ test("Reports → reports timeline: a session date lists its report and an old o
   await expect(page.getByTestId("saved-body").getByTestId("overview-lifts")).toBeVisible();
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page");
-  await page.getByRole("main").getByRole("button", { name: "Back to Reports" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to All reports" }).click();
 
   await cols.nth(2).click();
   await page.getByTestId("rt-chooser").getByTestId("rt-item").nth(0).click();
@@ -175,14 +204,18 @@ test("Reports → reports timeline: a session date lists its report and an old o
   await expect(page.getByTestId("saved-body").getByTestId("report-cost")).toHaveText(/^ · ~\$\d+\.\d{2}$/);
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
-  await page.getByRole("main").getByRole("button", { name: "Back to Reports" }).click();
+  await page.getByRole("main").getByRole("button", { name: "Back to All reports" }).click();
 
   // One report on the date: it opens at once.
   await cols.nth(1).click();
   await expect(page.getByTestId("saved-report")).toHaveAttribute("data-kind", "overview");
   await expect(page.getByTestId("saved-report")).toContainText("Regenerated · ");
+  await page.getByRole("main").getByRole("button", { name: "Back to All reports" }).click();
+  await expect(page.getByTestId("all-reports-screen")).toBeVisible();
+  // Its own Back returns to Reports.
   await page.getByRole("main").getByRole("button", { name: "Back to Reports" }).click();
   await expect(page.getByTestId("reports")).toBeVisible();
+  await page.getByTestId("all-reports").click();
 
   // The List view keeps all three types, newest first; the choice is kept.
   await page.getByTestId("rt-mode-list").click();
@@ -195,6 +228,7 @@ test("Reports → reports timeline: a session date lists its report and an old o
   ]);
   await page.reload();
   await toReports(page);
+  await page.getByTestId("all-reports").click();
   await expect(page.getByTestId("reports-timeline")).toHaveAttribute("data-mode", "list");
   await page.getByTestId("rt-list").getByTestId("rt-item").nth(3).click();
   await expect(page.getByTestId("weekly-review")).toContainText("مرور هفته");

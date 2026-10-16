@@ -51,6 +51,9 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
     await check(tab);
   }
   await goTo(page, "Reports");
+  await page.getByTestId("report-details").click();
+  await check("Reports details");
+  await page.getByTestId("all-reports").click();
   await expect(page.getByTestId("rt-col")).toHaveCount(1);
   await page.getByTestId("rt-mode-list").click();
   await check("Reports timeline (list)");

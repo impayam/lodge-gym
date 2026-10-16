@@ -139,9 +139,18 @@ const runs = (page: Page) =>
         if (l.contains(el)) return false;
         const b = l.getBoundingClientRect();
         if (!(r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom)) return false;
-        // Only a layer painted over the text covers it (a sheet's scrim lies under the sheet's own text).
-        const top = document.elementFromPoint((Math.max(r.left, b.left) + Math.min(r.right, b.right)) / 2, (Math.max(r.top, b.top) + Math.min(r.bottom, b.bottom)) / 2);
-        return top !== null && l.contains(top) && !el.contains(top);
+        // Only a layer painted over the text covers it (a sheet's scrim lies under the sheet's own text). Every point the
+        // contrast is sampled at (measure) is checked: a rounded corner, like the Coach button's, can cover some of
+        // them and not the middle of the overlap.
+        for (let i = 0; i < 7; i++)
+          for (let j = 0; j < 3; j++) {
+            const x = r.left + (r.width * (i + 0.5)) / 7;
+            const y = r.top + (r.height * (j + 0.5)) / 3;
+            if (x < b.left || x > b.right || y < b.top || y > b.bottom) continue;
+            const top = document.elementFromPoint(x, y);
+            if (top !== null && l.contains(top) && !el.contains(top)) return true;
+          }
+        return false;
       });
       if (under) continue;
       const badge = el.closest(".badge");
@@ -279,6 +288,12 @@ test("contrast: the five tabs", async ({ page }) => {
     await goTo(page, tab);
     failed.push(...(await contrast(page, tab)));
   }
+  // Reports' folded details, and All reports.
+  await goTo(page, "Reports");
+  await page.getByTestId("report-details").click();
+  failed.push(...(await contrast(page, "Reports details")));
+  await page.getByTestId("all-reports").click();
+  failed.push(...(await contrast(page, "All reports")));
   expect(failed).toEqual([]);
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, restOfWeek, signedPct } from "../../web/src/lib/reportsView";
+import { barScale, calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, restOfWeek } from "../../web/src/lib/reportsView";
 
 describe("Reports view (SPEC-v8 §6.03)", () => {
   it("1RM chart window: 8 weeks, 6 months, or since the first session", () => {
@@ -28,15 +28,11 @@ describe("Reports view (SPEC-v8 §6.03)", () => {
     expect(calendarStarts("all", "2026-10-12", { start: "2026-09-27", end: "2026-10-14" }, "2026-09-21")).toEqual(["2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12"]);
   });
 
-  it("tile changes", () => {
+  it("the month's 1RM change, first to last session", () => {
     expect(changePct(157.5, 166.3)).toBe(5.6);
     expect(changePct(100, 100)).toBe(0);
     expect(changePct(null, 100)).toBeNull();
     expect(changePct(0, 100)).toBeNull();
-    expect(signedPct(5.6)).toBe("+5.6%");
-    expect(signedPct(-2)).toBe("−2%");
-    expect(signedPct(0)).toBe("0%");
-    expect(signedPct(null)).toBe("–");
   });
 
   it("bar scale is 0–20 sets, wider when needed", () => {

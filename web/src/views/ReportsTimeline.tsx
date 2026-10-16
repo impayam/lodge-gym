@@ -1,5 +1,5 @@
-// Reports → Reports timeline (SPEC-v7 M9d, design approved 2026-10-13; moved from History in Step 3, where every AI
-// report lives). Every saved report on its date: two labeled rows, After-session report (●) and Weekly review (□), one
+// Reports → All reports → the reports timeline (SPEC-v7 M9d, design approved 2026-10-13; moved from History in Step 3,
+// and off the Reports tab onto its own screen in the shorter layout approved 2026-10-16). Every saved report on its date: two labeled rows, After-session report (●) and Weekly review (□), one
 // column per date with a report, newest on the right. Training overviews (no longer written since Step 3; the older
 // ones stay readable) open from the date's chooser; one on a day without a session marks that date with ◆. Shape plus
 // label, never color alone. The List view is the accessible alternative and shows all three types. Every report opens
@@ -261,18 +261,36 @@ function Status({ load, retry }: { load: Load<unknown>; retry: () => void }) {
       </section>
     );
   if (load.state === "gone")
-    return <Empty action={{ label: "Back to Reports", onClick: goBack, testId: "saved-gone-back" }}>This report is no longer available.</Empty>;
+    return <Empty action={{ label: "Back to All reports", onClick: goBack, testId: "saved-gone-back" }}>This report is no longer available.</Empty>;
   return load.failure !== null ? <p class="caption l-m0">{isOffline(load.failure) ? "Offline" : "Couldn't refresh"}: showing the last saved copy.</p> : null;
 }
 
-/** The screen: one saved report, read-only, opened from the Reports timeline. */
+/** The screen opened from Reports → AI reports: the timeline of every saved report and weekly review. */
+export function AllReports() {
+  return (
+    <main class="page" data-testid="all-reports-screen">
+      <header class="screen-head">
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to Reports" data-testid="back" onClick={goBack}>
+          <IconBack size={20} />
+        </button>
+        <div class="l-col l-grow">
+          <span class="screen-head__sub">Reports</span>
+          <h1 class="screen-head__title l-m0">All reports</h1>
+        </div>
+      </header>
+      <ReportsTimeline />
+    </main>
+  );
+}
+
+/** The screen: one saved report, read-only, opened from All reports. */
 export function SavedReport({ item }: { item: TimelineItem }) {
   const boot = useStore((s) => s.boot)!;
   const tz = boot.settings.timezone;
   return (
     <main class="page" data-testid="saved-report" data-kind={item.kind}>
       <header class="screen-head">
-        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to Reports" data-testid="back" onClick={goBack}>
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to All reports" data-testid="back" onClick={goBack}>
           <IconBack size={20} />
         </button>
         <div class="l-col l-grow">

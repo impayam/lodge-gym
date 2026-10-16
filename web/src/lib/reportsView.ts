@@ -68,14 +68,6 @@ export function changePct(first: number | null | undefined, last: number | null 
   return Math.round(((last - first) / first) * 1000) / 10;
 }
 
-/** "+5.6%", "−2%", "0%", or "–" without a value. */
-export function signedPct(n: number | null): string {
-  if (n == null) return "–";
-  const abs = Math.abs(n);
-  const text = Number.isInteger(abs) ? String(abs) : abs.toFixed(1);
-  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${text}%`;
-}
-
 /** The bars' scale: 0–20 sets (the design), wider when a value or target is above 20. */
 export function barScale(values: readonly number[]): number {
   return Math.max(20, ...values);

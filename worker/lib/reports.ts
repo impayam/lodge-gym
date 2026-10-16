@@ -140,7 +140,7 @@ export function bestSet(s: WorkoutSession, exerciseId: string, unit: Unit): SetR
   return best;
 }
 
-/** A main lift's estimated 1RM over a window (SPEC-v7 M9d; the Reports tab's table and "Where you are", Step 3). */
+/** A main lift's estimated 1RM over a window (SPEC-v7 M9d; the after-session report's "Where you are", Step 3). */
 export interface LiftTrend {
   exercise_id: string;
   name: string;
@@ -150,14 +150,6 @@ export interface LiftTrend {
   latest_e1rm: number | null;
   /** % change from the first to the latest point in the window; null with fewer than two points. */
   change_pct: number | null;
-}
-
-/** Weeks of the main lifts' trend: this week and the previous 4 (approved 2026-10-13). */
-export const TREND_WEEKS = 5;
-
-/** The trend's window up to `today`: the start of the week 4 weeks before this one, to today. */
-export function trendWindow(today: string, weekStart: Settings["week_start"]): { start: string; end: string } {
-  return { start: addDays(weekRange(today, weekStart).start, -7 * (TREND_WEEKS - 1)), end: today };
 }
 
 /** Each lift's best set per session in `sessions` (done ones in the window, oldest first); lifts never done are left out. */
@@ -250,6 +242,35 @@ export function bodyDaily(d: Pick<ReportData, "body">, unit: Unit): Map<string, 
 
 const nameOf = (c: Ctx, id: string) => ({ exercise_id: id, name_fa: c.ex.get(id)?.name_fa ?? id, name_en: c.ex.get(id)?.name_en ?? id });
 
+/**
+ * Records of a period: each exercise logged in `list` whose best set (Epley) beats its best in `before`. A record needs
+ * an earlier best to beat, so an exercise's first time never counts.
+ */
+function recordsIn(c: Ctx, list: WorkoutSession[], before: WorkoutSession[]) {
+  const ids = [...new Set(list.flatMap((s) => s.sets.map((x) => x.exercise_id)))];
+  return ids
+    .map((id) => ({ id, best: bestIn(list, id, c.unit), previous: bestIn(before, id, c.unit) }))
+    .filter((x) => x.best && x.previous && x.best.e1rm > x.previous.e1rm)
+    .map((x) => ({ ...nameOf(c, x.id), ...x.best!, previous_e1rm: x.previous!.e1rm }));
+}
+
+/** Record moments in [from, to]: each session in which an exercise beat its best of every earlier session. */
+function recordEvents(c: Ctx, from: string, to: string): number {
+  const best = new Map<string, number>();
+  let n = 0;
+  for (const s of c.done) {
+    const ids = [...new Set(s.sets.map((x) => x.exercise_id))];
+    for (const id of ids) {
+      const b = bestSet(s, id, c.unit);
+      if (!b) continue;
+      const before = best.get(id);
+      if (before != null && b.e1rm > before && s.local_date >= from && s.local_date <= to) n++;
+      if (before == null || b.e1rm > before) best.set(id, b.e1rm);
+    }
+  }
+  return n;
+}
+
 /* ---------------- weekly ---------------- */
 
 export function weeklyReport(d: ReportData, anyDateInWeek: string) {
@@ -271,12 +292,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
     return { ...nameOf(c, id), best, prev_e1rm: prevBest?.e1rm ?? null, change_pct: pctChange(prevBest?.e1rm ?? null, best?.e1rm ?? null) };
   });
 
-  const loggedIds = [...new Set(week.flatMap((s) => s.sets.map((x) => x.exercise_id)))];
-  const prs = loggedIds
-    .map((id) => ({ id, best: bestIn(week, id, c.unit), previous: bestIn(before, id, c.unit) }))
-    // A record needs an earlier best to beat.
-    .filter((x) => x.best && x.previous && x.best.e1rm > x.previous.e1rm)
-    .map((x) => ({ ...nameOf(c, x.id), ...x.best!, previous_e1rm: x.previous!.e1rm }));
+  const prs = recordsIn(c, week, before);
 
   const watchRows = week.map((s) => watchForSession(d, s.id));
   const kcal = watchRows.map((w) => w?.kcal).filter((v): v is number => v != null);
@@ -340,12 +356,21 @@ export function shiftMonth(key: string, delta: number): string {
   return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
-export function monthlyReport(d: ReportData, key: string) {
+/**
+ * `today` (the local date) ends the current month's average week; a past month counts all its days.
+ */
+export function monthlyReport(d: ReportData, key: string, today: string = monthRange(key).end) {
   const c = ctx(d);
   const range = monthRange(key);
   const prevRange = monthRange(shiftMonth(key, -1));
   const month = c.done.filter((s) => inRange(s.local_date, range));
   const prevMonth = c.done.filter((s) => inRange(s.local_date, prevRange));
+  // Groups on target (Reports, 2026-10-16): the month's average week against the program's weekly target.
+  const last = today < range.end ? today : range.end;
+  const days = Math.max(1, Math.round((Date.parse(`${last}T12:00:00Z`) - Date.parse(`${range.start}T12:00:00Z`)) / 86_400_000) + 1);
+  const monthSets = setsPerMuscle(month, c.ex);
+  const avgWeek = Object.fromEntries(Object.entries(monthSets).map(([g, v]) => [g, { direct: round1((v.direct * 7) / days), fractional: round1((v.fractional * 7) / days) }]));
+  const targets = muscleTargets({ program: programOn(d, range.end).program, exercises: d.exercises });
 
   const weeks: { start: string; end: string; sessions: number }[] = [];
   for (let w = weekRange(range.start, d.settings.week_start); w.start <= range.end; w = weekRange(addDays(w.start, 7), d.settings.week_start)) {
@@ -394,6 +419,10 @@ export function monthlyReport(d: ReportData, key: string) {
     photos,
     avg_minutes: mins.length ? Math.round(mean(mins)!) : null,
     avg_active_kcal: kcal.length ? Math.round(mean(kcal)!) : null,
+    /** Records this month, by the weekly report's rule. */
+    prs: recordsIn(c, month, c.done.filter((s) => s.local_date < range.start)),
+    /** Each group's average week this month (sets × 7 / days counted) against its weekly target. */
+    muscles: muscleRows(avgWeek, targets),
   };
 }
 
@@ -460,6 +489,8 @@ function period(d: ReportData, c: Ctx, from: string, to: string) {
     },
     sessions: list.length,
     adherence_pct: target ? Math.min(100, Math.round((list.length / target) * 100)) : 0,
+    /** Record moments in the period: sessions in which an exercise beat its best of every earlier session. */
+    records: recordEvents(c, from, to),
   };
 }
 

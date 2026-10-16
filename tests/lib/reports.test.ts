@@ -13,8 +13,8 @@ import {
   volumePerMuscle,
   progressReport,
   setsCsv,
+  setsPerMuscle,
   shiftMonth,
-  trendWindow,
   weeklyReport,
 } from "../../worker/lib/reports";
 import { reportData } from "../fixtures/report-data";
@@ -181,6 +181,24 @@ describe("monthly report", () => {
     ]);
   });
 
+  it("records, by the weekly rule: the month's best against the best before the month (Reports tiles, 2026-10-16)", () => {
+    // Squat 185 × 5 (215.8) beats August's 180 × 5 (210); bench was first logged this month, so it has no record yet.
+    expect(r.prs.map((p) => [p.exercise_id, p.e1rm, p.previous_e1rm])).toEqual([["squat", 215.8, 210]]);
+  });
+
+  it("each group's average week against its weekly target: a past month counts all its days, the current one its days so far", () => {
+    const d = reportData();
+    const sep = d.sessions.filter((s) => s.status === "done" && s.local_date.startsWith("2026-09"));
+    const total = setsPerMuscle(sep, new Map(d.exercises.map((e) => [e.id, e])));
+    const avg = (days: number) => Math.round(((total.chest.fractional * 7) / days) * 10) / 10;
+    const chest = r.muscles.find((m) => m.muscle === "chest")!;
+    expect(chest.fractional).toBe(avg(30));
+    expect(chest.status).toBe(balanceStatus(chest.fractional, chest.target!));
+    expect(monthlyReport(d, "2026-09", "2026-09-27").muscles.find((m) => m.muscle === "chest")!.fractional).toBe(avg(27));
+    // A day after the month: the whole month.
+    expect(monthlyReport(d, "2026-09", "2026-10-03").muscles.find((m) => m.muscle === "chest")!.fractional).toBe(avg(30));
+  });
+
   it("first vs last photo of the month per pose, averages", () => {
     expect(r.photos.map((p) => [p!.pose, p!.first.id, p!.last.id])).toEqual([["front", "F1", "F2"]]);
     expect(r.avg_minutes).toBe(60);
@@ -200,6 +218,13 @@ describe("progress page", () => {
     expect(p.since).toMatchObject({ from: "2026-08-20", to: "2026-09-27", sessions: 6 });
     expect(p.last4).toMatchObject({ from: "2026-08-31", sessions: 5 });
     expect(p.last4.adherence_pct).toBe(31);
+  });
+
+  it("record moments: each session in which an exercise beat its best of every earlier session (the All tiles)", () => {
+    // Bench 135 × 5 on Sep 21 beat Sep 15; squat 185 × 5 on Sep 23 beat Aug 20; every other exercise was logged once.
+    expect(p.since.records).toBe(2);
+    expect(p.last4.records).toBe(2);
+    expect(progressReport(reportData(), "2026-09-20").since.records).toBe(0);
   });
 
   it("volume trend and body weight first/current/change", () => {
@@ -302,12 +327,7 @@ describe("past weeks stay scored against the program active then (SPEC-v2 §8.6)
   });
 });
 
-describe("main lifts' e1RM trend (the Reports tab's table and the report's Where you are, Step 3)", () => {
-  it("covers this week and the previous 4, by the week start setting", () => {
-    expect(trendWindow("2026-10-16", "mon")).toEqual({ start: "2026-09-14", end: "2026-10-16" });
-    expect(trendWindow("2026-10-16", "sun")).toEqual({ start: "2026-09-13", end: "2026-10-16" });
-  });
-
+describe("main lifts' e1RM trend (the report's Where you are, Step 3)", () => {
   it("the best set per session, first to latest, and the change; lifts never done are left out", () => {
     const sets = (sid: string, w: number) => [0, 1].map((i) => ({ id: `${sid}-${i}`, exercise_id: "bench", set_index: i, weight: w, reps: 5, seconds: null, done: true, rir: 1, updated_at: "2026-10-01T00:00:00.000Z" }));
     const s = (id: string, date: string, w: number, unit: "lb" | "kg" = "lb") => ({

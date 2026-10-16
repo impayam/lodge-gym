@@ -34,10 +34,11 @@ describe("back", () => {
     expect(backTarget("calendar", "home")).toBe("home");
   });
 
-  it("goes to Settings from Apple Watch and the program editor; a saved report goes back to its tab (Reports, Step 3)", () => {
+  it("goes to Settings from Apple Watch and the program editor; a saved report back to All reports, and that to Reports", () => {
     expect(backTarget("watch", "me")).toBe("settings");
     expect(backTarget("newprogram", "me")).toBe("settings");
-    expect(backTarget("saved", "reports")).toBe("reports");
+    expect(backTarget("saved", "reports")).toBe("allreports");
+    expect(backTarget("allreports", "reports")).toBe("reports");
   });
 
   it("is null on tab roots and the active session", () => {
