@@ -110,11 +110,14 @@ export const draftSchema = z
 export type DraftInput = z.infer<typeof draftSchema>;
 export type DraftExercise = z.infer<typeof draftExercise>;
 
-/** A draft with every exercise in the library, ready to show and to save. */
+/**
+ * A draft with every exercise in the library, ready to show and to save. A day built from his program (the exercise
+ * card's Whole program) keeps the program's estimate as est_minutes, as the Program screen and the Planner show it.
+ */
 export interface CleanDraft {
   name: string;
   summary_fa: string | null;
-  days: { name: string; exercises: DraftExercise[] }[];
+  days: { name: string; exercises: DraftExercise[]; est_minutes?: number }[];
 }
 
 export interface Dropped {
@@ -342,6 +345,6 @@ export function draftDayRows(draft: CleanDraft) {
         target_rir_max: x.target_rir_max ?? null,
       };
     });
-    return { name: day.name, est_minutes: dayMinutes({ exercises }), exercises };
+    return { name: day.name, est_minutes: day.est_minutes ?? dayMinutes({ exercises }), exercises };
   });
 }

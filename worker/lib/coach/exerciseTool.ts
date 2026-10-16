@@ -15,6 +15,7 @@ import { z } from "zod";
 import { scheme } from "../generator/model";
 import { looksTimed } from "../generator/pick";
 import { programName } from "../programRules";
+import { addItem, planFromDay, planMinutes, seqIds } from "../plan";
 import { TARGET_GROUPS } from "../muscles";
 import { GROUP_NAME } from "../ai/report";
 import type { DayExercise, Exercise, ProgramDay } from "../types";
@@ -71,10 +72,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 const fmt = (n: number) => String(round1(n));
 const byPosition = <T extends { position: number }>(xs: readonly T[]) => [...xs].sort((a, b) => a.position - b.position);
 
-/** A program's days as draft days: same order, numbers, groups (A1, A2 → A), main lifts and RIR targets. */
+/** A program's days as draft days: same order, numbers, groups (A1, A2 → A), main lifts, RIR targets and estimates. */
 export function programDraftDays(days: readonly ProgramDay[]): CleanDraft["days"] {
   return byPosition(days).map((day) => ({
     name: day.name_en,
+    est_minutes: day.est_minutes,
     exercises: byPosition(day.exercises).map((x: DayExercise) => ({
       exercise_id: x.exercise_id,
       sets: x.sets,
@@ -119,9 +121,19 @@ const entryOf = (x: ProposedExercise): DraftExercise => ({
   target_rir_max: x.target_rir_max,
 });
 
-/** The days with the exercise inserted at `at` in day `dayIndex`. */
-function withExercise(days: CleanDraft["days"], dayIndex: number, at: number, entry: DraftExercise): CleanDraft["days"] {
-  return days.map((day, i) => (i === dayIndex ? { ...day, exercises: [...day.exercises.slice(0, at), entry, ...day.exercises.slice(at)] } : day));
+/** The days with the exercise inserted at `at` in day `dayIndex`, whose estimate becomes `minutes`. */
+function withExercise(days: CleanDraft["days"], dayIndex: number, at: number, entry: DraftExercise, minutes: number): CleanDraft["days"] {
+  return days.map((day, i) => (i === dayIndex ? { ...day, est_minutes: minutes, exercises: [...day.exercises.slice(0, at), entry, ...day.exercises.slice(at)] } : day));
+}
+
+/**
+ * The day's "about N min" with the exercise (Payam, 2026-10-16: one number everywhere), by the Planner's rule
+ * (worker/lib/plan.ts planMinutes): the day's own estimate, moved by what the exercise adds with its sets and rest.
+ * The card, that day's plan after Only this session (it gets the same rest) and the Whole program draft show it.
+ */
+export function minutesWith(day: ProgramDay, x: Pick<ProposedExercise, "exercise_id" | "sets" | "reps_min" | "reps_max" | "is_time" | "rest_sec">): number {
+  const plan = planFromDay(day, "m", "", seqIds("m"));
+  return planMinutes(addItem(plan, x.exercise_id, "", "m-x", { sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, rest_sec: x.rest_sec }), day);
 }
 
 /** The active program version (its id and days) as Home and get_program read it. */
@@ -150,11 +162,12 @@ const SAID_BY_SETS = new Set(["under_target", "over_target"]);
 
 /**
  * Worth knowing (Payam, 2026-10-16): only what this change causes, information only. The weekly sets of every group
- * the exercise changes (biggest change first), against the current target; the day's extra minutes; every note of
- * the program check that the new program has and the current one does not (the same note with other numbers is not
- * new); and the spacing advice for the groups the change adds to two adjacent days.
+ * the exercise changes (biggest change first), against the current target; the day's extra minutes (`minutes`: the
+ * day's estimate before and after, by the Planner's rule); every note of the program check that the new program has
+ * and the current one does not (the same note with other numbers is not new); and the spacing advice for the groups
+ * the change adds to two adjacent days.
  */
-export function changeNotes(d: CoachData, before: CleanDraft["days"], after: CleanDraft["days"], dayIndex: number, plannedDates?: ReadonlyMap<number, string>): string[] {
+export function changeNotes(d: CoachData, before: CleanDraft["days"], after: CleanDraft["days"], dayIndex: number, minutes: [number, number], plannedDates?: ReadonlyMap<number, string>): string[] {
   const was = scoreDraft(d, before, d.today, plannedDates);
   const now = scoreDraft(d, after, d.today, plannedDates);
   const groups = TARGET_GROUPS.filter((g) => round1(now.planned[g]) !== round1(was.planned[g])).sort((a, b) => now.planned[b] - was.planned[b] - (now.planned[a] - was.planned[a]));
@@ -162,8 +175,8 @@ export function changeNotes(d: CoachData, before: CleanDraft["days"], after: Cle
     const target = round1(was.targets[g] ?? 0);
     return `${GROUP_NAME[g] ?? g}: ${fmt(now.planned[g])} sets a week with this change (now ${fmt(was.planned[g])}${target ? `; target ${fmt(target)}` : ""}).`;
   });
-  const longer = now.day_minutes[dayIndex] - was.day_minutes[dayIndex];
-  const minutes = longer > 0 ? [`Day ${dayIndex + 1} gets about ${longer} min longer (about ${now.day_minutes[dayIndex]} min).`] : [];
+  const longer = minutes[1] - minutes[0];
+  const length = longer > 0 ? [`Day ${dayIndex + 1} gets about ${longer} min longer (about ${minutes[1]} min).`] : [];
   // A note the current program already has (with other numbers) is not caused by the change.
   const key = (i: { code: string; message: string }) => `${i.code}:${i.message.replace(/\d+(\.\d+)?/g, "#")}`;
   const had = new Set(was.issues.map(key));
@@ -174,7 +187,7 @@ export function changeNotes(d: CoachData, before: CleanDraft["days"], after: Cle
     const groups = f.groups.filter((g) => !prev?.groups.includes(g));
     return groups.length ? [spacingMessage({ ...f, groups })] : [];
   });
-  return [...sets, ...minutes, ...added, ...spacing];
+  return [...sets, ...length, ...added, ...spacing];
 }
 
 /** propose_exercise: checks the day, the exercise and the place, fills the numbers and works out the change's notes. */
@@ -196,7 +209,8 @@ export function proposeExercise(d: CoachData, raw: unknown, draftId: string, pla
 
   const open = d.sessions.find((s) => s.status === "active" && s.local_date === d.today);
   const exercise = proposed(d, ex, ordered, open?.id);
-  const next = withExercise(days, dayIndex, at, entryOf(exercise));
+  const minutes = minutesWith(day, exercise);
+  const next = withExercise(days, dayIndex, at, entryOf(exercise), minutes);
   const prev = at > 0 ? days[dayIndex].exercises[at - 1] : null;
   const names = new Map(d.exercises.map((e) => [e.id, e.name_en]));
   const result: ExerciseChange = {
@@ -207,7 +221,7 @@ export function proposeExercise(d: CoachData, raw: unknown, draftId: string, pla
     day: { id: day.id, name: day.name_en, position: dayIndex + 1 },
     exercise,
     after: prev ? { exercise_id: prev.exercise_id, name: names.get(prev.exercise_id) ?? prev.exercise_id } : null,
-    notes: changeNotes(d, days, next, dayIndex, plannedDates),
+    notes: changeNotes(d, days, next, dayIndex, [day.est_minutes, minutes], plannedDates),
   };
   return { ok: true, result };
 }
@@ -229,5 +243,5 @@ export function exerciseDraft(d: Pick<CoachData, "exercises" | "program" | "prog
   if (days[dayIndex].exercises.some((x) => x.exercise_id === ex.id)) return null;
   const at = insertIndex(days[dayIndex].exercises, change.after?.exercise_id);
   if (at < 0) return null;
-  return { name: `${programName(info, version.name)} + ${ex.name_en}`, summary_fa: null, days: withExercise(days, dayIndex, at, entryOf(change.exercise)) };
+  return { name: `${programName(info, version.name)} + ${ex.name_en}`, summary_fa: null, days: withExercise(days, dayIndex, at, entryOf(change.exercise), minutesWith(ordered[dayIndex], change.exercise)) };
 }

@@ -433,7 +433,7 @@ type ExerciseChange = {
   draft_id: string;
   prefer: "session" | "program" | null;
   day: { id: string; name: string; position: number };
-  exercise: Omit<Addition, "reason_fa">;
+  exercise: Omit<Addition, "reason_fa"> & { rest_sec: number };
   after: { exercise_id: string; name: string } | null;
   notes: string[];
 };
@@ -469,7 +469,7 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
     setProblem(null);
     try {
       const r = await addCoachExtras(
-        [{ exercise_id: x.exercise_id, sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null }],
+        [{ exercise_id: x.exercise_id, sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null, rest_sec: x.rest_sec }],
         target,
         result.after?.exercise_id ?? null
       );
@@ -531,9 +531,12 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
             </span>
             <span class="caption">{x.rule}</span>
           </span>
-          <span class="list-row__value t-title num" data-testid="coach-exercise-weight">
-            {x.weight != null ? `${fmtNum(x.weight)} ${x.weight_unit}` : "–"}
-          </span>
+          {x.weight != null ? (
+            // No history, no weight: the rule line under the name says to enter it (Payam, 2026-10-16).
+            <span class="list-row__value t-title num" data-testid="coach-exercise-weight">
+              {fmtNum(x.weight)} {x.weight_unit}
+            </span>
+          ) : null}
         </li>
       </ul>
       {result.notes.length ? (

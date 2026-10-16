@@ -391,6 +391,12 @@ describe("program drafts", () => {
     const at = program.findIndex((x) => x.day === 1 && x.exercise_id === "facepull") + 1;
     const fly = { day: 1, exercise_id: "fly", sets: 3, reps_min: 12, reps_max: 12, rest_sec: 90, superset_tag: null, is_main: 0 };
     expect(await rowsOf(r.draft_id)).toEqual([...program.slice(0, at), fly, ...program.slice(at)]);
+    // One "about N min": Day 1's estimate in the draft is the card's (the Planner's rule); the other days keep his program's.
+    const minutes = async (programId: string) => (await env.DB.prepare("SELECT est_minutes FROM program_days WHERE program_id = ? ORDER BY position").bind(programId).all<{ est_minutes: number }>()).results.map((x) => x.est_minutes);
+    const [draftDay1, ...draftRest] = await minutes(r.draft_id);
+    const [programDay1, ...programRest] = await minutes("fullbody4");
+    expect(draftRest).toEqual(programRest);
+    expect(r.notes).toContain(`Day 1 gets about ${draftDay1 - programDay1} min longer (about ${draftDay1} min).`);
     expect(await rowsOf("fullbody4")).toEqual(program);
     expect(await env.DB.prepare("SELECT id FROM programs WHERE active = 1").all()).toMatchObject({ results: [{ id: "fullbody4" }] });
     // A second tap returns the same draft.

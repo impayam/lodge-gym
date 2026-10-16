@@ -68,6 +68,9 @@ test("one more exercise on the chest day: one card with only the change; no prog
   await expect(answer).toContainText("یک حرکت ایزوله بعد از Seated Cable Row");
   await expect(card.locator('[dir="rtl"]')).toHaveCount(0);
   await expect(card.locator(".caption")).toHaveCount(1); // the progression rule only
+  // No history, no weight: no "–" on the right; the rule line says to enter it.
+  await expect(card.getByTestId("coach-exercise-weight")).toHaveCount(0);
+  await expect(card.getByTestId("coach-exercise-row")).toContainText("No history with this exercise: enter the weight");
   // Read by the coach, not shown: his program and the exercise list.
   await expect(answer.locator('[data-card="get_program"]')).toHaveCount(0);
   await expect(answer.locator('[data-card="get_library"]')).toHaveCount(0);
@@ -76,6 +79,7 @@ test("one more exercise on the chest day: one card with only the change; no prog
   const notes = card.getByTestId("coach-exercise-notes");
   await expect(notes.locator("li").first()).toHaveText(/^Chest: [\d.]+ sets a week with this change \(now [\d.]+; target [\d.]+\)\.$/);
   await expect(notes).toContainText(/Day 1 gets about \d+ min longer \(about \d+ min\)\./);
+  const minutes = /\(about (\d+) min\)/.exec((await notes.textContent())!)![1];
   // He did not say which: Only this session first.
   await expect(card).toHaveAttribute("data-prefer", "none");
   await expect(card.getByRole("button")).toHaveText(["Only this session", "Whole program"]);
@@ -93,8 +97,9 @@ test("one more exercise on the chest day: one card with only the change; no prog
   // Whole program stays available.
   await expect(card.getByRole("button", { name: "Whole program" })).toBeVisible();
 
-  // At the gym: Open → the plan → Start: the session has it after Seated Cable Row.
+  // At the gym: Open → the plan, which says the card's "about N min" → Start: the session has it after Seated Cable Row.
   await card.getByTestId("coach-exercise-session-added").getByRole("button", { name: "Open" }).click();
+  await expect(page.getByTestId("plan-estimate")).toHaveText(`7 exercises · about ${minutes} min`);
   await page.getByTestId("plan-start").click();
   await expect(page.getByTestId("finish")).toBeVisible();
   await expect.poll(() => sql("SELECT DISTINCT exercise_id FROM set_entries").map((r) => (r as { exercise_id: string }).exercise_id), { timeout: 20_000 }).toEqual(expect.arrayContaining([...D1, id]));
@@ -105,6 +110,7 @@ test("from now on: Whole program first; it saves his program with that exercise 
   const before = program();
   await askCoach(page, "From now on add one more chest exercise on my chest day");
   const { card, id, name } = await exerciseCard(page);
+  const minutes = /\(about (\d+) min\)/.exec((await card.getByTestId("coach-exercise-notes").textContent())!)![1];
   await expect(card).toHaveAttribute("data-prefer", "program");
   await expect(card.getByRole("button")).toHaveText(["Whole program", "Only this session"]);
 
@@ -131,6 +137,12 @@ test("from now on: Whole program first; it saves his program with that exercise 
   // Open: Me → Program, where it waits for his approval with the other drafts.
   await card.getByTestId("coach-exercise-program-added").getByRole("button", { name: "Open" }).click();
   await expect(page.getByTestId("program-screen-drafts")).toContainText(`Full body · 4 days + ${name}`);
+  // The draft's Day 1 says the card's "about N min"; the other days keep the program's estimate.
+  await page.getByTestId("program-screen-drafts").getByTestId("open-draft").filter({ hasText: name }).click();
+  const screen = page.getByTestId("coach-draft-screen");
+  await expect(screen).toContainText(`Day 1 · Chest · about ${minutes} min`);
+  for (const d of sql("SELECT name_en, est_minutes FROM program_days WHERE program_id = 'fullbody4' AND position > 1") as { name_en: string; est_minutes: number }[])
+    await expect(screen).toContainText(`${d.name_en} · about ${d.est_minutes} min`);
 });
 
 test("just today, with a session open: Only this session first; it goes into that session as an extra; the program is unchanged", async ({ page, baseURL }) => {

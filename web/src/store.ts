@@ -721,6 +721,8 @@ export interface CoachExtra {
   is_time: boolean;
   weight: number | null;
   weight_unit: Unit | null;
+  /** The exercise card's rest (so the plan's "about N min" is the card's); the planner's default without it. */
+  rest_sec?: number;
 }
 
 /** Where the coach's exercises can go, from this device's state (worker/lib/coach/additionTarget.ts). */
@@ -773,7 +775,7 @@ export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget
       if (!ex || inPlan(plan, ex.id)) continue;
       await rememberExercise(ex);
       const itemId = ulid();
-      plan = addItem(plan, ex.id, now, itemId, { sets: it.sets, reps_min: it.reps_min, reps_max: it.reps_max, is_time: it.is_time });
+      plan = addItem(plan, ex.id, now, itemId, { sets: it.sets, reps_min: it.reps_min, reps_max: it.reps_max, is_time: it.is_time, rest_sec: it.rest_sec });
       if (after) plan = moveAfter(plan, itemId, after, now);
       added++;
     }

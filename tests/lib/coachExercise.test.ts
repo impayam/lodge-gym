@@ -6,7 +6,7 @@ import { exerciseDraft, insertIndex, programDraftDays, type ExerciseChange } fro
 import { draftDayRows, scoreDraft } from "../../worker/lib/coach/draft";
 import { COACH_SYSTEM } from "../../worker/lib/coach/prompt";
 import { DEFAULT_CALENDAR_SETTINGS } from "../../worker/lib/calendar";
-import { liveItems, moveAfter, addItem, planFromDay, seqIds } from "../../worker/lib/plan";
+import { liveItems, moveAfter, addItem, planFromDay, planMinutes, seqIds } from "../../worker/lib/plan";
 import type { Exercise } from "../../worker/lib/types";
 
 // propose_exercise (Payam, 2026-10-16): one more exercise for a day. The model picks the day, the exercise and the
@@ -94,15 +94,18 @@ describe("propose_exercise", () => {
     const was = scoreDraft(d, days, d.today);
     const chestNow = was.planned.chest;
     expect(r.notes[0]).toBe(`Chest: ${chestNow + 3} sets a week with this change (now ${chestNow}; target ${was.targets.chest}).`);
-    // The day's length grows by 3 × (75 s rest + 40 s work), rounded up to the minute.
-    const longer = scoreDraft(d, [{ ...days[0], exercises: [...days[0].exercises, { exercise_id: "pec_deck", sets: 3, reps_min: 10, reps_max: 15, rest_sec: 75 }] }, ...days.slice(1)], d.today).day_minutes[0];
-    expect(r.notes).toContain(`Day 1 gets about ${longer - was.day_minutes[0]} min longer (about ${longer} min).`);
+    // The day's length by the Planner's own rule (planMinutes): Day 1's estimate (60 min) plus 3 × (75 s rest + 40 s
+    // work), the number the Planner shows once the exercise is in that day's plan.
+    const plan = addItem(planFromDay(d1(), "P", "t", seqIds("P")), "pec_deck", "t", "X", { sets: 3, reps_min: 10, reps_max: 15, rest_sec: 75 });
+    const longer = planMinutes(plan, d1());
+    expect(longer).toBe(Math.round(60 + (3 * 115) / 60));
+    expect(r.notes).toContain(`Day 1 gets about ${longer - 60} min longer (about ${longer} min).`);
     // The secondary group too (a fly counts 0.5 for shoulders), and nothing else: Day 1 and its neighbours already
     // train chest, so no spacing note is new, and over target is said by the weekly-sets line.
     expect(r.notes).toEqual([
       `Chest: ${chestNow + 3} sets a week with this change (now ${chestNow}; target ${was.targets.chest}).`,
       `Shoulders: ${was.planned.shoulders + 1.5} sets a week with this change (now ${was.planned.shoulders}; target ${was.targets.shoulders}).`,
-      `Day 1 gets about ${longer - was.day_minutes[0]} min longer (about ${longer} min).`,
+      `Day 1 gets about ${longer - 60} min longer (about ${longer} min).`,
     ]);
   });
 
@@ -143,9 +146,11 @@ describe("the exercise card's Whole program draft", () => {
       ["facepull", "A2", false],
     ]);
     expect(rows[0].exercises[4]).toMatchObject({ sets: 3, reps_min: 10, reps_max: 15, rest_sec: 75, target_rir_min: null });
-    // Every other day is the program's day, unchanged.
+    // Every other day is the program's day, unchanged, with the program's estimate; Day 1's estimate is the card's.
     const program = draftDayRows({ name: "x", summary_fa: null, days: programDraftDays(base.program.days) });
     expect(rows.slice(1)).toEqual(program.slice(1));
+    expect(rows.map((x) => x.est_minutes)).toEqual([planMinutes(addItem(planFromDay(d1(), "P", "t", seqIds("P")), "pec_deck", "t", "X", { sets: 3, rest_sec: 75 }), d1()), ...base.program.days.slice(1).map((x) => x.est_minutes)]);
+    expect(r.notes).toContain(`Day 1 gets about ${rows[0].est_minutes - d1().est_minutes} min longer (about ${rows[0].est_minutes} min).`);
     expect(rows[0].exercises.filter((x) => x.exercise_id !== "pec_deck").map(({ position: _p, ...x }) => x)).toEqual(program[0].exercises.map(({ position: _p, ...x }) => x));
   });
 
