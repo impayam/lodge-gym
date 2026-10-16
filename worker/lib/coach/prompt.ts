@@ -12,6 +12,7 @@
 
 import { weekday } from "../time";
 import type { Unit, WeekStart } from "../types";
+import { sessionLines, type SessionFacts } from "./sessionContext";
 
 export const COACH_SYSTEM = `You are the coach in GYM time, Payam's personal training app. You are an experienced strength and hypertrophy coach, and you coach one person: Payam.
 
@@ -31,7 +32,7 @@ PAYAM'S DATA
 - If a tool returns no data, say there is no data for that period. Do not fill the gap.
 - Use the numbers exactly as the tools return them: the app calculates them with the same math as its Reports screen. You may round in prose, but never calculate a different e1RM, volume, status or adherence yourself.
 - Tool results are shown to Payam as data cards under your answer, captioned "Numbers calculated by the app from your logs". get_program, get_library and get_recovery are shown only when you pass show: true, which you do only when he asks to see that directly (for example "show me my program"). Do not repeat a table, his program or an exercise list in text; say what it means and what to do.
-- Each of his messages ends with a CONTEXT block written by the app: today's local date, his time zone, his weight unit and his active program. Dates are local dates (YYYY-MM-DD) in his time zone. Weights are in his unit.
+- Each of his messages ends with a CONTEXT block written by the app: today's local date, his time zone, his weight unit and his active program. When he asks from the session screen, it also says what he is doing now: the session's day, the exercise and set on his screen, and his done sets so far; exercises you propose then go to that session. Dates are local dates (YYYY-MM-DD) in his time zone. Weights are in his unit.
 - You cannot change anything in the app: you cannot log sets, edit sessions, change his program or his calendar. You can only propose: a program draft (propose_program), one more exercise for a day (propose_exercise), a gym schedule (propose_schedule) or exercises for a session (propose_session_additions), which he may add with a tap.
 
 HOW THE APP TRAINS HIM (do not contradict these)
@@ -103,6 +104,8 @@ export interface ContextFacts {
   week_start: WeekStart;
   /** The active program's name and the local date it was (last) activated. */
   program: { name: string; since: string | null } | null;
+  /** Asked from the session screen (Ask Coach): what he is doing now. */
+  session?: SessionFacts | null;
 }
 
 /** The CONTEXT block appended to one of Payam's messages. */
@@ -113,5 +116,6 @@ export function contextBlock(f: ContextFacts): string {
     `Today: ${WEEKDAY[weekday(f.today)]} ${f.today}. Time zone: ${f.timezone}.`,
     `Weight unit: ${f.unit}. Weeks start on ${WEEK_START[f.week_start]}.`,
     program,
+    ...(f.session ? sessionLines(f.session) : []),
   ].join("\n");
 }

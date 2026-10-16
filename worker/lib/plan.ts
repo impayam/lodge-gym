@@ -444,15 +444,3 @@ export function itemAsDayExercise(it: PlanItem, label: string | null, dayExercis
     slot: dayExercise?.slot ?? null,
   };
 }
-
-/**
- * Rest after checking a set, inside a group (SPEC-v3 M9c logging flow): a round is set i of every member that has a
- * set i. Inside a round no timer runs (null); after the last set of the round the group's rest starts. Sets beyond the
- * other members' counts are done alone, each followed by that member's own rest.
- * @param done per member, the done flags of its sets in order, after the check.
- */
-export function restAfterGroupSet(done: boolean[][], set: number, groupRest: number, ownRest: number): number | null {
-  const inRound = done.filter((sets) => sets.length > set);
-  if (inRound.length < 2) return ownRest;
-  return inRound.every((sets) => sets[set]) ? groupRest : null;
-}

@@ -129,3 +129,12 @@ From his iPhone test: "on my chest day add one exercise for more chest focus" ma
 - **Cards he did not ask to see:** get_program, get_library and get_recovery take `show`. The model passes `show: true` only when he asks to see that directly ("show me my program"); otherwise the result is read by the model and no card is drawn, older chats included.
 - **Prompt:** one exercise → `propose_exercise` (also when it is only for today), never a whole draft; two or more for a session → `propose_session_additions`; `propose_program` for new programs and bigger changes. After the card, one or two sentences on why this exercise and this place, without repeating the card.
 - **Cost:** no model change. The model no longer writes the whole program (about 1,800 output tokens in his test) and the answer is shorter; estimated about $0.14 instead of $0.20 for the same request.
+
+## 13. Change by Payam, 2026-10-16: Ask Coach from the session screen (Step 2)
+
+- **Where:** the top row of the active session's More sheet ("…"), above Add exercise. It opens the Coach as a sheet over the session; the session and its timers keep running, and closing it returns to the same card. Offline the row is disabled and says "Needs connection".
+- **Context, automatic:** each message carries `session: { id, exercise_id, set }` (the card on screen and its current set; a group card's current row). The app syncs the session first, then the server adds to the message's CONTEXT block, from the session as saved: the day and start time, "On his screen: <exercise>, set k of n", and the done sets so far in the order he did them. A finished session, or one that is not his, adds nothing. Built in `worker/lib/coach/sessionContext.ts`.
+- **One chat per session:** opening the sheet again shows that session's chat; the Coach tab lists it with his other chats.
+- **Adding exercises:** `propose_session_additions` and `propose_exercise` already target the session open today (§11, §12), so what he adds there lands in this session as extras; the prompt says so.
+- No model, tool or schema change; the API change is the optional `session` field on a message.
+

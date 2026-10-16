@@ -8,16 +8,17 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { localHM } from "../../../worker/lib/time";
 import type { HealthWorkout, SetEntry, Unit, WorkoutSession } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
-import { restAfterGroupSet } from "../../../worker/lib/plan";
+import { REST_DEFAULTS, restAfterSet as restRule, restLabel, roundRows, type RestUnit } from "../../../worker/lib/rest";
+import { BodyWeight } from "../components/BodyWeight";
 import { groupKind, PlanList } from "../components/PlanList";
-import { IconBack, IconCheck, IconChevron, IconMore, IconPlay, IconPlus, IconProgram } from "../components/PulseIcons";
+import { IconBack, IconCheck, IconChevron, IconMore, IconPlay, IconPlus, IconProgram, IconSpark } from "../components/PulseIcons";
 import { Sheet } from "../components/Sheet";
 import { Stepper } from "../components/Stepper";
 import { SyncStatus } from "../components/SyncStatus";
 import { clock, dateShort, fmtNum, hm, minutesBetween, ytLink } from "../format";
 import { effortColor, effortLabel } from "../lib/effort";
 import { dayTitle } from "../lib/lifts";
-import { cardIndex, cardSwipeOutcome, currentSetIndex, sessionEffort } from "../lib/session";
+import { cardIndex, cardSwipeOutcome, currentSetIndex, groupCurrent, sessionEffort, sessionUnits } from "../lib/session";
 import { effortStops } from "../lib/tokens";
 import { dayInfo, guidance, planForSession, retime, sessionBlocks, sessionPlan, type ExerciseBlock, type Guidance } from "../model";
 import {
@@ -32,13 +33,13 @@ import {
   removeExtraExercise,
   removeSession,
   removeSessionExercise,
-  saveBodyMass,
   savePlan,
   saveSession,
   startRest,
   stopRest,
   useStore,
 } from "../store";
+import { Coach } from "./Coach";
 import { ExercisePicker } from "./Library";
 import { poseLabel } from "./Photos";
 import { rirText, targetText } from "./Program";
@@ -80,10 +81,14 @@ function Elapsed({ from }: { from: string }) {
   return <span data-testid="elapsed">{sec < 86_400 ? clock(sec) : "–"}</span>;
 }
 
-/** The exercise each session's card showed last, so leaving and reopening the session keeps it. */
+/** The card (exercise or group key) each session showed last, so leaving and reopening the session keeps it. */
 const shownExercise = new Map<string, string>();
 
-type SheetState = { kind: "set"; exerciseId: string; set: number } | { kind: "more" } | { kind: "delete" } | null;
+type Card = { key: string; blocks: ExerciseBlock[] };
+/** A card's name: the exercise, or "Superset A". */
+const unitName = (u: Card) => (u.blocks.length >= 2 ? `${groupKind(u.blocks.length)} ${u.blocks[0].group!.tag}` : u.blocks[0].ex.name_en);
+
+type SheetState = { kind: "set"; exerciseId: string; set: number } | { kind: "more" } | { kind: "delete" } | { kind: "coach" } | null;
 
 export function Session({ id }: { id: string }) {
   const boot = useStore((s) => s.boot)!;
@@ -94,12 +99,13 @@ export function Session({ id }: { id: string }) {
   const [arranging, setArranging] = useState(false);
   const [, setShown] = useState<string | null>(null);
   const [said, setSaid] = useState("");
-  // The card changed by Prev / Next, a swipe or a superset round: focus follows it to the new exercise's title.
+  // The card changed by Prev / Next or a swipe: focus follows it to the new card's title.
   const moved = useRef(false);
   useStore((st) => st.library);
   const plans = useStore((st) => st.plans);
   const photos = useStore((st) => st.photos);
   const resting = useStore((st) => st.rest !== null);
+  const online = useStore((st) => st.sync.online);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [note, setNote] = useState(s?.note ?? "");
   useWakeLock(s?.status === "active");
@@ -116,26 +122,28 @@ export function Session({ id }: { id: string }) {
   const exMap = allExercises();
   const plan = sessionPlan(plans, s.id);
   const blocks = sessionBlocks(boot, s, exMap, plan);
+  // One card per exercise, one per superset or tri-set (Payam, 2026-10-16).
+  const units: Card[] = sessionUnits(blocks);
   const sessionPhotos = photos.filter((p) => p.session_id === s.id);
   const startHM = localHM(tz, s.started_at);
   const endHM = s.ended_at ? localHM(tz, s.ended_at) : "";
   const effort = sessionEffort(s.sets);
   const vars = { "--effort": effortColor(effort.e, effortStops()), "--e": String(effort.e) };
 
-  // The card keeps its exercise; the first time it opens on the first exercise with a set left.
+  // The card keeps its exercise (or group); the first time it opens on the first card with a set left.
   const idx = cardIndex(
-    blocks.map((b) => ({ id: b.ex.id, sets: b.sets })),
+    units.map((u) => ({ id: u.key, sets: u.blocks.flatMap((b) => b.sets) })),
     shownExercise.get(id) ?? null
   );
-  const cur = blocks[idx] ?? null;
-  if (cur) shownExercise.set(id, cur.ex.id);
+  const cur = units[idx] ?? null;
+  if (cur) shownExercise.set(id, cur.key);
   const show = (i: number) => {
-    const b = blocks[i];
-    if (!b) return;
-    shownExercise.set(id, b.ex.id);
+    const u = units[i];
+    if (!u) return;
+    shownExercise.set(id, u.key);
     moved.current = true;
-    setShown(b.ex.id);
-    setSaid(`Exercise ${i + 1} of ${blocks.length}: ${b.ex.name_en}`);
+    setShown(u.key);
+    setSaid(`Card ${i + 1} of ${units.length}: ${unitName(u)}`);
   };
 
   const update = (mut: (x: WorkoutSession) => WorkoutSession) => {
@@ -158,24 +166,26 @@ export function Session({ id }: { id: string }) {
     });
 
   /**
-   * Rest after a checked set (SPEC-v3 M9c). In a superset or tri-set a round is set i of each member: no timer inside
-   * the round (the card moves to the next member), the group's rest after its last set; a member's extra sets beyond
-   * the others' counts are done alone with their own rest.
+   * Rest after a checked set (Payam, 2026-10-16; worker/lib/rest.ts): the between-sets rest while the exercise has a
+   * set left, the next-exercise rest after its last; a group rests by its own rest after each round and the
+   * next-exercise rest after the last round, with no timer inside a round. The label says what comes next. Nothing
+   * left: no timer.
    */
+  const rules = {
+    rest_between_sets_sec: boot.settings.rest_between_sets_sec ?? REST_DEFAULTS.rest_between_sets_sec,
+    rest_next_exercise_sec: boot.settings.rest_next_exercise_sec ?? REST_DEFAULTS.rest_next_exercise_sec,
+  };
   const restAfterSet = (b: ExerciseBlock, i: number) => {
-    const g = b.group;
-    if (!g) return startRest(b.plan.rest_sec, `Rest after ${b.ex.name_en}`);
-    const members = blocks.filter((x) => x.group?.tag === g.tag);
-    const done = members.map((m) => m.sets.map((x, j) => (m.ex.id === b.ex.id && j === i ? true : x.done)));
-    const rest = restAfterGroupSet(done, i, g.rest, b.plan.rest_sec);
-    if (rest === null) {
-      const k = members.findIndex((m) => m.ex.id === b.ex.id);
-      const next = [...members.slice(k + 1), ...members.slice(0, k)].find((m) => m.sets[i] && !m.sets[i].done);
-      if (next) show(blocks.indexOf(next));
-      return;
-    }
-    const round = done.filter((d) => d.length > i).length >= 2;
-    startRest(rest, round ? `Rest after ${groupKind(g.size)} ${g.tag}` : `Rest after ${b.ex.name_en}`);
+    const at = units.findIndex((u) => u.blocks.some((x) => x.ex.id === b.ex.id));
+    const restUnits: RestUnit[] = units.map((u) => ({
+      members: u.blocks.map((m) => ({ id: m.ex.id, name: m.ex.name_en, done: m.sets.map((x, j) => (m.ex.id === b.ex.id && j === i ? true : x.done)) })),
+      groupRest: u.blocks.length >= 2 ? (u.blocks[0].group?.rest ?? null) : null,
+    }));
+    const r = restRule(restUnits, at, b.ex.id, i, rules);
+    if (r.kind === "rest") return startRest(r.seconds, restLabel(r.next));
+    // Inside a round the rest is over: the next member's set is highlighted on the same card.
+    stopRest();
+    if (r.kind === "in_round") setSaid(`Next: ${exMap.get(r.exerciseId)?.name_en ?? ""}, set ${r.set + 1}`);
   };
 
   const removeExercise = async (exerciseId: string, name: string) => {
@@ -239,21 +249,51 @@ export function Session({ id }: { id: string }) {
       </div>
     );
 
-  const card = (b: ExerciseBlock, i: number, current: boolean) => (
-    <ExerciseCard
-      key={b.ex.id}
-      block={b}
-      n={i + 1}
-      total={blocks.length}
-      session={s}
-      g={guidance(b, s, sessions)}
-      current={current}
-      updateSets={(fn) => updateSets(b.ex.id, fn)}
-      onSetDone={(k) => restAfterSet(b, k)}
-      onEdit={(k) => setSheet({ kind: "set", exerciseId: b.ex.id, set: k })}
-    />
-  );
-  const next = blocks[idx + 1] ?? null;
+  const card = (u: Card, current: boolean) => {
+    const n = blocks.indexOf(u.blocks[0]) + 1;
+    if (u.blocks.length >= 2)
+      return (
+        <GroupCard
+          key={u.key}
+          unit={u.blocks}
+          n={n}
+          total={blocks.length}
+          session={s}
+          gs={u.blocks.map((b) => guidance(b, s, sessions))}
+          current={current}
+          updateSets={updateSets}
+          onSetDone={(b, k) => restAfterSet(b, k)}
+          onEdit={(b, k) => setSheet({ kind: "set", exerciseId: b.ex.id, set: k })}
+        />
+      );
+    const b = u.blocks[0];
+    return (
+      <ExerciseCard
+        key={b.ex.id}
+        block={b}
+        n={n}
+        total={blocks.length}
+        session={s}
+        g={guidance(b, s, sessions)}
+        current={current}
+        updateSets={(fn) => updateSets(b.ex.id, fn)}
+        onSetDone={(k) => restAfterSet(b, k)}
+        onEdit={(k) => setSheet({ kind: "set", exerciseId: b.ex.id, set: k })}
+      />
+    );
+  };
+  const next = units[idx + 1] ?? null;
+  /** Ask Coach's context: this session and the exercise and set on the card (the group's next row). */
+  const sessionRef = () => {
+    const u = cur;
+    if (!u) return { id: s.id, exercise_id: null, set: null };
+    if (u.blocks.length >= 2) {
+      const at = groupCurrent(u.blocks.map((b) => ({ id: b.ex.id, sets: b.sets })));
+      return { id: s.id, exercise_id: at?.exerciseId ?? u.blocks[0].ex.id, set: at?.set ?? null };
+    }
+    const k = currentSetIndex(u.blocks[0].sets);
+    return { id: s.id, exercise_id: u.blocks[0].ex.id, set: k >= 0 ? k : null };
+  };
   const editing = sheet?.kind === "set" ? (blocks.find((b) => b.ex.id === sheet.exerciseId) ?? null) : null;
   const minutes = minutesBetween(s.started_at, s.ended_at);
 
@@ -315,8 +355,8 @@ export function Session({ id }: { id: string }) {
         <main class="l-col l-gap-12">
           {active ? (
             cur ? (
-              <SwipeCard key={cur.ex.id} focus={moved.current} canPrev={idx > 0} canNext={next !== null} onSwipe={(dir) => show(dir === "next" ? idx + 1 : idx - 1)}>
-                {card(cur, idx, true)}
+              <SwipeCard key={cur.key} focus={moved.current} canPrev={idx > 0} canNext={next !== null} onSwipe={(dir) => show(dir === "next" ? idx + 1 : idx - 1)}>
+                {card(cur, true)}
               </SwipeCard>
             ) : (
               <div class="state card card--session">
@@ -328,7 +368,7 @@ export function Session({ id }: { id: string }) {
             )
           ) : (
             <>
-              {blocks.map((b, i) => card(b, i, false))}
+              {units.map((u) => card(u, false))}
               {watch.length ? <WatchCard watch={watch} session={s} tz={tz} cls="card card--session" /> : null}
               {sessionPhotos.length ? (
                 <section class="card card--session l-gap-12" data-testid="session-photos">
@@ -355,7 +395,7 @@ export function Session({ id }: { id: string }) {
               <IconBack size={20} />
             </button>
             <button type="button" class="clay press btn-lg t-effort" data-testid="next" disabled={next === null} onClick={() => show(idx + 1)}>
-              {next ? `Next: ${next.ex.name_en}` : "Last exercise"}
+              {next ? `Next: ${unitName(next)}` : "Last exercise"}
             </button>
             <button type="button" class="clay press btn-icon btn-icon--lg t-muted" aria-label="More" aria-haspopup="dialog" data-testid="more" onClick={() => setSheet({ kind: "more" })}>
               <IconMore />
@@ -377,6 +417,23 @@ export function Session({ id }: { id: string }) {
         <div class="l-col l-gap-12">
           <SyncStatus />
           <div class="card card--list">
+            {active ? (
+              // Payam, 2026-10-16: the coach in a sheet over the session; the session and its timer keep running.
+              <button type="button" class="list-row press" data-testid="ask-coach" disabled={!online} onClick={() => setSheet({ kind: "coach" })}>
+                <span class="well icon-well t-violet">
+                  <IconSpark size={18} />
+                </span>
+                <span class="list-row__text">
+                  <span class="t-title">Ask Coach</span>
+                  <span class="caption" data-testid="ask-coach-note">
+                    {online ? "About this session; the timer keeps running" : "Needs connection"}
+                  </span>
+                </span>
+                <span class="list-row__chevron">
+                  <IconChevron size={16} />
+                </span>
+              </button>
+            ) : null}
             <button
               type="button"
               class="list-row press"
@@ -438,7 +495,7 @@ export function Session({ id }: { id: string }) {
               onBlur={() => saveNote(note)}
             />
           </div>
-          <BodyWeight session={s} />
+          <BodyWeight date={s.local_date} unit={s.unit} label={`Body weight today (${s.unit}), optional, saved for the reports`} testId="body-weight" />
           <div class="form-field">
             <label class="form-field__label" for="f-date">
               Date
@@ -505,6 +562,10 @@ export function Session({ id }: { id: string }) {
         </div>
       </Sheet>
 
+      <Sheet open={sheet?.kind === "coach"} onClose={() => setSheet(null)} title="Coach" sub={`${dayTitle(day.name_en)} · the session keeps running`} testId="coach-sheet">
+        {sheet?.kind === "coach" ? <Coach inSession={{ session: sessionRef }} /> : null}
+      </Sheet>
+
       <Sheet open={sheet?.kind === "delete"} onClose={() => setSheet({ kind: "more" })} role="alertdialog" title="Delete this session permanently?" testId="delete-sheet">
         <div class="l-col l-gap-8">
           <button
@@ -526,31 +587,6 @@ export function Session({ id }: { id: string }) {
         </div>
       </Sheet>
     </>
-  );
-}
-
-/** The session's body weight (optional, for the reports), in the session's unit. */
-function BodyWeight({ session: s }: { session: WorkoutSession }) {
-  const boot = useStore((st) => st.boot)!;
-  const manualBody = (boot.body ?? []).filter((m) => m.kind === "body_mass" && m.source === "manual");
-  const bodyToday = manualBody.find((m) => m.local_date === s.local_date) ?? null;
-  const lastBody = [...manualBody].reverse().find((m) => m.unit === s.unit)?.value ?? null;
-  return (
-    <div class="form-field">
-      <span class="form-field__label" aria-hidden="true">
-        Body weight today ({s.unit}), optional, saved for the reports
-      </span>
-      <Stepper
-        value={bodyToday?.unit === s.unit || !bodyToday ? (bodyToday?.value ?? null) : null}
-        placeholder={bodyToday && bodyToday.unit !== s.unit ? `${fmtNum(bodyToday.value)} ${bodyToday.unit}` : "–"}
-        base={lastBody ?? 0}
-        step={0.1}
-        min={0}
-        label={`Body weight (${s.unit})`}
-        testId="body-weight"
-        onChange={(v) => void saveBodyMass(s.local_date, v, s.unit)}
-      />
-    </div>
   );
 }
 
@@ -762,42 +798,12 @@ function setDefaults(block: ExerciseBlock, g: Guidance) {
   };
 }
 
-function ExerciseCard({
-  block,
-  n,
-  total,
-  session,
-  g,
-  current,
-  updateSets,
-  onSetDone,
-  onEdit,
-}: {
-  block: ExerciseBlock;
-  n: number;
-  total: number;
-  session: WorkoutSession;
-  g: Guidance;
-  /** The active session's single card: the current set is highlighted and has the RIR chips. */
-  current: boolean;
-  updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void;
-  /** A set was checked in an active session: starts the rest timer (or, inside a group's round, moves on). */
-  onSetDone: (setIndex: number) => void;
-  onEdit: (setIndex: number) => void;
-}) {
-  const { ex, plan, sets, extra, group } = block;
+/** What a card's set controls do for one exercise: check (filling in the suggestion), add, remove, copy last time. */
+function setActions(block: ExerciseBlock, g: Guidance, session: WorkoutSession, updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void, onSetDone: (setIndex: number) => void) {
+  const { ex, plan, sets, extra } = block;
   const isTime = plan.is_time;
-  const labels = fieldLabels(block, session.unit);
   const defaults = setDefaults(block, g);
-  const sgText = suggestionText(g);
-  const lt = lastText(g, isTime);
-  const now = current ? currentSetIndex(sets) : -1;
-  // A finished session shows what was done: no first-time hint and no suggestion for a day already trained.
-  const live = session.status === "active";
-  const target = extra ? "" : [targetText(plan), rirText(plan)].filter(Boolean).join(" · ");
-
   const setField = (i: number, patch: Partial<SetEntry>) => updateSets((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-
   const toggle = (i: number) => {
     const x = sets[i];
     const done = !x.done;
@@ -813,7 +819,6 @@ function ExerciseCard({
     setField(i, patch);
     if (done && session.status === "active") onSetDone(i);
   };
-
   const addSet = () =>
     updateSets((list) => {
       const prev = list[list.length - 1];
@@ -859,6 +864,159 @@ function ExerciseCard({
       }))
     );
   };
+  return { defaults, setField, toggle, addSet, removeSet, copyLast, lastUndone };
+}
+
+type SetActions = ReturnType<typeof setActions>;
+
+/**
+ * One set's row: its number (or, on a group card, the member's label), weight and reps (or seconds), and the check.
+ * `filler`: a timed exercise's row on a group card whose other members have weights keeps the weight column empty.
+ */
+function SetRow({ block, i, mark, who, session, act, current, filler, onEdit }: { block: ExerciseBlock; i: number; mark: string; who: string; session: WorkoutSession; act: SetActions; current: boolean; filler: boolean; onEdit: (setIndex: number) => void }) {
+  const { ex, plan } = block;
+  const x = block.sets[i];
+  const isTime = plan.is_time;
+  const labels = fieldLabels(block, session.unit);
+  const { defaults } = act;
+  const wSet = x.weight != null;
+  const rVal = isTime ? x.seconds : x.reps;
+  const rDefault = isTime ? defaults.seconds : defaults.reps;
+  const rText = rVal != null ? fmtNum(rVal) : rDefault != null ? fmtNum(rDefault) : "–";
+  return (
+    <div class={`set-row${isTime && !filler ? " set-row--timed" : ""}${current ? " set-row--current" : ""}${x.done ? " set-row--done" : ""}`} data-set={`${ex.id}-${i}`}>
+      <span class="set-row__n num">{mark}</span>
+      {isTime ? (
+        filler ? (
+          <span aria-hidden="true" />
+        ) : null
+      ) : (
+        <button
+          type="button"
+          class="set-value press"
+          aria-haspopup="dialog"
+          aria-label={`${labels.weight}, ${who}set ${i + 1}: ${wSet ? fmtNum(x.weight) : defaults.weight != null ? `suggested ${defaults.weightText}` : "not entered"}`}
+          data-suggested={wSet ? "false" : "true"}
+          data-testid={`w-${ex.id}-${i}`}
+          onClick={() => onEdit(i)}
+        >
+          {wSet ? fmtNum(x.weight) : defaults.weightText}
+        </button>
+      )}
+      <button
+        type="button"
+        class="set-value press"
+        aria-haspopup="dialog"
+        aria-label={`${labels.reps}, ${who}set ${i + 1}: ${rVal != null ? fmtNum(rVal) : rDefault != null ? `target ${fmtNum(rDefault)}` : "not entered"}`}
+        data-suggested={rVal != null ? "false" : "true"}
+        data-testid={`${isTime ? "s" : "r"}-${ex.id}-${i}`}
+        onClick={() => onEdit(i)}
+      >
+        {rText}
+      </button>
+      <button type="button" class="set-check press" aria-pressed={x.done} aria-label={`${who ? who : ""}Set ${i + 1} done`} data-testid={`check-${ex.id}-${i}`} onClick={() => act.toggle(i)}>
+        {x.done ? <IconCheck /> : null}
+      </button>
+    </div>
+  );
+}
+
+/** Reps in reserve for the current set (not for timed holds). */
+function RirRow({ block, i, who, act }: { block: ExerciseBlock; i: number; who: string; act: SetActions }) {
+  const x = block.sets[i];
+  return (
+    <div class="rir-row" role="group" aria-label={`Reps in reserve (RIR), ${who}set ${i + 1}`} data-testid={`rir-${block.ex.id}-${i}`}>
+      <span aria-hidden="true">RIR</span>
+      <span class="segmented">
+        {RIR_CHOICES.map(([v, label]) => (
+          <button type="button" class="press" aria-pressed={x.rir === v} onClick={() => act.setField(i, { rir: x.rir === v ? null : v })}>
+            {label}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/** + Add set, − Remove set, Same as last time and (an exercise added today without a done set) Remove exercise. */
+function SetTools({ block, g, session, act }: { block: ExerciseBlock; g: Guidance; session: WorkoutSession; act: SetActions }) {
+  const { ex, sets, extra } = block;
+  return (
+    <div class="l-row l-wrap l-gap-8">
+      <button type="button" class="clay press btn-sm t-muted" data-testid={`add-set-${ex.id}`} onClick={act.addSet}>
+        + Add set
+      </button>
+      {act.lastUndone >= 0 ? (
+        <button type="button" class="clay press btn-sm t-muted" onClick={act.removeSet}>
+          − Remove set
+        </button>
+      ) : null}
+      {g.last ? (
+        <button type="button" class="clay press btn-sm t-muted" onClick={act.copyLast}>
+          Same as last time
+        </button>
+      ) : null}
+      {extra && !sets.some((x) => x.done) ? (
+        <button type="button" class="clay press btn-sm t-muted" data-testid={`remove-${ex.id}`} onClick={() => void removeExtraExercise(session.id, ex.id)}>
+          Remove exercise
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** Last time and the suggestion, or the first-time hint, under an exercise's name. */
+function GuidanceLines({ block, g, live }: { block: ExerciseBlock; g: Guidance; live: boolean }) {
+  const sgText = suggestionText(g);
+  return (
+    <>
+      {g.last ? (
+        <span class="ex-card__meta num" data-testid="last-perf">
+          Last time {lastText(g, block.plan.is_time)}
+        </span>
+      ) : live ? (
+        <span class="ex-card__meta">{block.extra ? "Added to this session only; no target." : "First time: choose your weight."}</span>
+      ) : null}
+      {live && g.last && sgText ? (
+        <span class="ex-card__suggest" data-testid="suggestion">
+          {sgText}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function ExerciseCard({
+  block,
+  n,
+  total,
+  session,
+  g,
+  current,
+  updateSets,
+  onSetDone,
+  onEdit,
+}: {
+  block: ExerciseBlock;
+  n: number;
+  total: number;
+  session: WorkoutSession;
+  g: Guidance;
+  /** The active session's single card: the current set is highlighted and has the RIR chips. */
+  current: boolean;
+  updateSets: (fn: (sets: SetEntry[]) => SetEntry[]) => void;
+  /** A set was checked in an active session: starts the rest timer. */
+  onSetDone: (setIndex: number) => void;
+  onEdit: (setIndex: number) => void;
+}) {
+  const { ex, plan, sets, extra, group } = block;
+  const isTime = plan.is_time;
+  const labels = fieldLabels(block, session.unit);
+  const act = setActions(block, g, session, updateSets, onSetDone);
+  const now = current ? currentSetIndex(sets) : -1;
+  // A finished session shows what was done: no first-time hint and no suggestion for a day already trained.
+  const live = session.status === "active";
+  const target = extra ? "" : [targetText(plan), rirText(plan)].filter(Boolean).join(" · ");
 
   return (
     <article class={`card card--session${group ? " card--grouped" : ""}`} data-ex={ex.id} data-testid="ex-card" aria-labelledby={`ex-title-${ex.id}`}>
@@ -883,18 +1041,7 @@ function ExerciseCard({
           <h2 class="big-num big-num--36 l-m0" id={`ex-title-${ex.id}`} tabIndex={-1}>
             {ex.name_en}
           </h2>
-          {g.last ? (
-            <span class="ex-card__meta num" data-testid="last-perf">
-              Last time {lt}
-            </span>
-          ) : live ? (
-            <span class="ex-card__meta">{extra ? "Added to this session only; no target." : "First time: choose your weight."}</span>
-          ) : null}
-          {live && g.last && sgText ? (
-            <span class="ex-card__suggest" data-testid="suggestion">
-              {sgText}
-            </span>
-          ) : null}
+          <GuidanceLines block={block} g={g} live={live} />
         </div>
         <a class="btn-icon btn-icon--soft press" href={ytLink(ex.name_en)} target="_blank" rel="noopener noreferrer" aria-label={`Form video: ${ex.name_en}`} data-testid="form-video">
           <IconPlay />
@@ -908,84 +1055,136 @@ function ExerciseCard({
           <span>{labels.reps}</span>
           <span>Done</span>
         </div>
-        {sets.map((x, i) => {
-          const wSet = x.weight != null;
-          const rVal = isTime ? x.seconds : x.reps;
-          const rDefault = isTime ? defaults.seconds : defaults.reps;
-          const rText = rVal != null ? fmtNum(rVal) : rDefault != null ? fmtNum(rDefault) : "–";
-          return (
-            <Fragment key={x.id}>
-              <div class={`set-row${isTime ? " set-row--timed" : ""}${i === now ? " set-row--current" : ""}${x.done ? " set-row--done" : ""}`} data-set={`${ex.id}-${i}`}>
-                <span class="set-row__n num">{fmtNum(i + 1)}</span>
-                {isTime ? null : (
-                  <button
-                    type="button"
-                    class="set-value press"
-                    aria-haspopup="dialog"
-                    aria-label={`${labels.weight}, set ${i + 1}: ${wSet ? fmtNum(x.weight) : defaults.weight != null ? `suggested ${defaults.weightText}` : "not entered"}`}
-                    data-suggested={wSet ? "false" : "true"}
-                    data-testid={`w-${ex.id}-${i}`}
-                    onClick={() => onEdit(i)}
-                  >
-                    {wSet ? fmtNum(x.weight) : defaults.weightText}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  class="set-value press"
-                  aria-haspopup="dialog"
-                  aria-label={`${labels.reps}, set ${i + 1}: ${rVal != null ? fmtNum(rVal) : rDefault != null ? `target ${fmtNum(rDefault)}` : "not entered"}`}
-                  data-suggested={rVal != null ? "false" : "true"}
-                  data-testid={`${isTime ? "s" : "r"}-${ex.id}-${i}`}
-                  onClick={() => onEdit(i)}
-                >
-                  {rText}
-                </button>
-                <button type="button" class="set-check press" aria-pressed={x.done} aria-label={`Set ${i + 1} done`} data-testid={`check-${ex.id}-${i}`} onClick={() => toggle(i)}>
-                  {x.done ? <IconCheck /> : null}
-                </button>
-              </div>
-              {i === now && !isTime ? (
-                <div class="rir-row" role="group" aria-label={`Reps in reserve (RIR), set ${i + 1}`} data-testid={`rir-${ex.id}-${i}`}>
-                  <span aria-hidden="true">RIR</span>
-                  <span class="segmented">
-                    {RIR_CHOICES.map(([v, label]) => (
-                      <button type="button" class="press" aria-pressed={x.rir === v} onClick={() => setField(i, { rir: x.rir === v ? null : v })}>
-                        {label}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-              ) : null}
-            </Fragment>
-          );
-        })}
+        {sets.map((x, i) => (
+          <Fragment key={x.id}>
+            <SetRow block={block} i={i} mark={fmtNum(i + 1)} who="" session={session} act={act} current={i === now} filler={false} onEdit={onEdit} />
+            {i === now && !isTime ? <RirRow block={block} i={i} who="" act={act} /> : null}
+          </Fragment>
+        ))}
       </div>
       {ex.cue_en ? (
         <p class="ex-card__cue" data-testid="cue">
           {ex.cue_en}
         </p>
       ) : null}
-      <div class="l-row l-wrap l-gap-8">
-        <button type="button" class="clay press btn-sm t-muted" onClick={addSet}>
-          + Add set
-        </button>
-        {lastUndone >= 0 ? (
-          <button type="button" class="clay press btn-sm t-muted" onClick={removeSet}>
-            − Remove set
-          </button>
-        ) : null}
-        {g.last ? (
-          <button type="button" class="clay press btn-sm t-muted" onClick={copyLast}>
-            Same as last time
-          </button>
-        ) : null}
-        {extra && !sets.some((x) => x.done) ? (
-          <button type="button" class="clay press btn-sm t-muted" data-testid={`remove-${ex.id}`} onClick={() => void removeExtraExercise(session.id, ex.id)}>
-            Remove exercise
-          </button>
-        ) : null}
+      <SetTools block={block} g={g} session={session} act={act} />
+    </article>
+  );
+}
+
+/**
+ * A superset or tri-set on one card (Payam, 2026-10-16): each member's name, Last time, suggestion, target, form video,
+ * cue and tools, and the sets round by round (set 1 of each member, then set 2 …; a member's extra sets are rounds of
+ * their own at the end). The current row has the RIR chips. No timer inside a round; the group's rest after it.
+ */
+function GroupCard({
+  unit,
+  n,
+  total,
+  session,
+  gs,
+  current,
+  updateSets,
+  onSetDone,
+  onEdit,
+}: {
+  unit: ExerciseBlock[];
+  n: number;
+  total: number;
+  session: WorkoutSession;
+  gs: Guidance[];
+  current: boolean;
+  updateSets: (exerciseId: string, fn: (sets: SetEntry[]) => SetEntry[]) => void;
+  onSetDone: (block: ExerciseBlock, setIndex: number) => void;
+  onEdit: (block: ExerciseBlock, setIndex: number) => void;
+}) {
+  const g0 = unit[0].group!;
+  const live = session.status === "active";
+  const allTimed = unit.every((b) => b.plan.is_time);
+  const mark = (b: ExerciseBlock) => b.plan.superset_tag ?? `${g0.tag}${(b.group?.index ?? 0) + 1}`;
+  const acts = unit.map((b, k) => setActions(b, gs[k], session, (fn) => updateSets(b.ex.id, fn), (i) => onSetDone(b, i)));
+  const now = current ? groupCurrent(unit.map((b) => ({ id: b.ex.id, sets: b.sets }))) : null;
+  const rows = roundRows(unit.map((b) => ({ id: b.ex.id, sets: b.sets.length })));
+  const rounds = [...new Set(rows.map((r) => r.round))];
+  const weightHead = unit.every((b) => b.plan.is_time || b.ex.equipment === "dumbbell") && !allTimed ? `Per dumbbell ${session.unit}` : `Weight ${session.unit}`;
+  return (
+    <article class="card card--session card--grouped" data-testid="group-card" data-group={g0.tag} data-ex={unit.map((b) => b.ex.id).join(" ")} aria-labelledby={`group-title-${unit[0].ex.id}`}>
+      <div class="l-col l-gap-4">
+        <span class="ex-card__kicker num">
+          Exercises {fmtNum(n)}–{fmtNum(n + unit.length - 1)} of {fmtNum(total)} · rest {fmtNum(g0.rest)} s after each round
+        </span>
+        <h2 class="big-num big-num--36 l-m0" id={`group-title-${unit[0].ex.id}`} tabIndex={-1}>
+          {groupKind(unit.length)} {g0.tag}
+        </h2>
       </div>
+      {unit.map((b, k) => {
+        const target = b.extra ? "" : [targetText(b.plan), rirText(b.plan)].filter(Boolean).join(" · ");
+        return (
+          <div class="l-row l-top l-gap-12" data-testid="group-member" data-ex={b.ex.id}>
+            <div class="l-col l-gap-4 l-grow">
+              <span class="ex-card__group num">
+                {mark(b)}
+                {b.plan.is_main ? " · Main lift" : ""}
+                {b.extra ? " · Added today" : ""}
+                {target ? (
+                  <>
+                    {" · "}
+                    <span data-testid="target">{target}</span>
+                  </>
+                ) : null}
+              </span>
+              <h3 class="t-title l-m0">{b.ex.name_en}</h3>
+              <GuidanceLines block={b} g={gs[k]} live={live} />
+            </div>
+            <a class="btn-icon btn-icon--soft press" href={ytLink(b.ex.name_en)} target="_blank" rel="noopener noreferrer" aria-label={`Form video: ${b.ex.name_en}`} data-testid="form-video">
+              <IconPlay />
+            </a>
+          </div>
+        );
+      })}
+      <div class="l-col l-gap-8">
+        <div class={`set-head${allTimed ? " set-head--timed" : ""}`} aria-hidden="true" hidden={!rows.length}>
+          <span>Set</span>
+          {allTimed ? null : <span>{weightHead}</span>}
+          <span>{allTimed ? "Seconds" : "Reps"}</span>
+          <span>Done</span>
+        </div>
+        {rows.length ? null : <span class="ex-card__meta">No sets logged.</span>}
+        {rounds.map((r) => (
+          <div class="l-col l-gap-4" role="group" aria-label={`Round ${r + 1}`} data-testid={`round-${r + 1}`}>
+            <span class="ex-card__kicker num" aria-hidden="true">
+              Round {fmtNum(r + 1)}
+            </span>
+            {rows
+              .filter((x) => x.round === r)
+              .map((x) => {
+                const k = unit.findIndex((b) => b.ex.id === x.exerciseId);
+                const b = unit[k];
+                const isNow = now?.exerciseId === b.ex.id && now.set === x.set;
+                const who = `${b.ex.name_en}, `;
+                return (
+                  <Fragment key={b.sets[x.set].id}>
+                    <SetRow block={b} i={x.set} mark={mark(b)} who={who} session={session} act={acts[k]} current={isNow} filler={!allTimed} onEdit={(i) => onEdit(b, i)} />
+                    {isNow && !b.plan.is_time ? <RirRow block={b} i={x.set} who={who} act={acts[k]} /> : null}
+                  </Fragment>
+                );
+              })}
+          </div>
+        ))}
+      </div>
+      {unit.map((b, k) => (
+        <div class="l-col l-gap-8" data-testid="group-tools" data-ex={b.ex.id}>
+          <span class="ex-card__group num">
+            {mark(b)} · {b.ex.name_en}
+          </span>
+          {b.ex.cue_en ? (
+            <p class="ex-card__cue" data-testid="cue">
+              {b.ex.cue_en}
+            </p>
+          ) : null}
+          <SetTools block={b} g={gs[k]} session={session} act={acts[k]} />
+        </div>
+      ))}
     </article>
   );
 }

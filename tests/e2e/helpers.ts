@@ -157,6 +157,7 @@ interface AiCall {
   images?: number;
   thinking_replayed?: number;
   question?: string;
+  context?: string;
 }
 
 /** Calls the mock model received, the last one, and the last one of each kind. */
@@ -177,9 +178,11 @@ export async function goTo(page: Page, place: Place) {
   await page.getByTestId(inMe).click();
 }
 
-/* ---------------- active session (SPEC-v8 §6.02): one exercise card at a time ---------------- */
+/* ---------------- active session (SPEC-v8 §6.02): one card at a time (an exercise, or a superset / tri-set) ---------------- */
 
-const card = (page: Page) => page.getByTestId("ex-card");
+const card = (page: Page) => page.locator('[data-testid="ex-card"], [data-testid="group-card"]');
+/** The exercises on the card: one, or a group's members in order (its data-ex holds their ids). */
+const cardIds = async (page: Page) => ((await card(page).getAttribute("data-ex")) ?? "").split(" ");
 
 async function step(page: Page, dir: "prev" | "next") {
   const before = await card(page).getAttribute("data-ex");
@@ -187,28 +190,28 @@ async function step(page: Page, dir: "prev" | "next") {
   await expect(card(page)).not.toHaveAttribute("data-ex", before!);
 }
 
-/** Shows an exercise on the session card with Prev / Next (the card holds one exercise at a time). */
+/** Shows the card that holds an exercise with Prev / Next (one card at a time; a group's members share one). */
 export async function showExercise(page: Page, exerciseId: string) {
   await expect(card(page)).toBeVisible();
-  if ((await card(page).getAttribute("data-ex")) === exerciseId) return;
+  if ((await cardIds(page)).includes(exerciseId)) return;
   while (await page.getByTestId("prev").isEnabled()) {
     await step(page, "prev");
-    if ((await card(page).getAttribute("data-ex")) === exerciseId) return;
+    if ((await cardIds(page)).includes(exerciseId)) return;
   }
-  while ((await card(page).getAttribute("data-ex")) !== exerciseId) {
+  while (!(await cardIds(page)).includes(exerciseId)) {
     if (!(await page.getByTestId("next").isEnabled())) throw new Error(`${exerciseId} is not in the session`);
     await step(page, "next");
   }
 }
 
-/** The active session's exercises in order, read by stepping through the card from the first. */
+/** The active session's exercises in order (a group's members in their order), read by stepping through the cards. */
 export async function sessionOrder(page: Page): Promise<string[]> {
   await expect(card(page)).toBeVisible();
   while (await page.getByTestId("prev").isEnabled()) await step(page, "prev");
-  const ids = [(await card(page).getAttribute("data-ex"))!];
+  const ids = [...(await cardIds(page))];
   while (await page.getByTestId("next").isEnabled()) {
     await step(page, "next");
-    ids.push((await card(page).getAttribute("data-ex"))!);
+    ids.push(...(await cardIds(page)));
   }
   return ids;
 }

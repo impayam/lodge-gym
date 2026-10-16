@@ -148,7 +148,9 @@ test("from now on: Whole program first; it saves his program with that exercise 
 test("just today, with a session open: Only this session first; it goes into that session as an extra; the program is unchanged", async ({ page, baseURL }) => {
   const before = program();
   const id = ulid();
-  const started = zonedToUtcISO(today(), "17:00", TZ);
+  // A minute ago once today's 17:00 is ahead: a save dated in the future would win over the app's Add (the server keeps
+  // the newer one).
+  const started = [zonedToUtcISO(today(), "17:00", TZ), new Date(Date.now() - 60_000).toISOString()].sort()[0];
   const res = await page.request.put(`${baseURL}/api/sessions/${id}`, {
     headers: { Origin: baseURL! },
     data: {

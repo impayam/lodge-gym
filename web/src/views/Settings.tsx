@@ -2,7 +2,8 @@ import { CalendarSettingsCard } from "../components/CalendarSettings";
 import { ProgramDrafts } from "../components/ProgramDrafts";
 import { useEffect, useState } from "preact/hooks";
 import { isValidTimeZone } from "../../../worker/lib/time";
-import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
+import { REST_BETWEEN_SETS_CHOICES, REST_NEXT_EXERCISE_CHOICES, type Settings as SettingsT, type WeekStart } from "../../../worker/lib/types";
+import { REST_DEFAULTS } from "../../../worker/lib/rest";
 import { api, errorText } from "../api";
 import { dateLong, fmtNum, instantShort, plural } from "../format";
 import { fetchUsage, type AiUsage } from "../ai";
@@ -15,6 +16,9 @@ import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
 import { LoadError, Loading } from "../components/States";
 import { logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
+
+/** "45 s", "2 min", "1 min 30 s". */
+const restText = (sec: number) => (sec < 60 ? `${fmtNum(sec)} s` : sec % 60 ? `${fmtNum(Math.floor(sec / 60))} min ${fmtNum(sec % 60)} s` : `${fmtNum(sec / 60)} min`);
 
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
 
@@ -89,6 +93,31 @@ export function Settings() {
             ))}
           </Select>
         </div>
+      </section>
+
+      <h2 class="section-label">Training</h2>
+      <section class="card l-col l-gap-14" aria-label="Training" data-testid="training-settings">
+        <div class="form-field">
+          <label class="form-field__label" for="s-rest-sets">
+            Rest between sets
+          </label>
+          <Select id="s-rest-sets" value={String(st.rest_between_sets_sec ?? REST_DEFAULTS.rest_between_sets_sec)} onChange={(e) => set({ rest_between_sets_sec: Number((e.currentTarget as HTMLSelectElement).value) })}>
+            {REST_BETWEEN_SETS_CHOICES.map((n) => (
+              <option value={String(n)}>{restText(n)}</option>
+            ))}
+          </Select>
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="s-rest-next">
+            Rest before the next exercise
+          </label>
+          <Select id="s-rest-next" value={String(st.rest_next_exercise_sec ?? REST_DEFAULTS.rest_next_exercise_sec)} onChange={(e) => set({ rest_next_exercise_sec: Number((e.currentTarget as HTMLSelectElement).value) })}>
+            {REST_NEXT_EXERCISE_CHOICES.map((n) => (
+              <option value={String(n)}>{restText(n)}</option>
+            ))}
+          </Select>
+        </div>
+        <p class="caption l-m0">Supersets and tri-sets rest as your program sets after each round, and as above after their last round. The timer keeps +30 s and Skip.</p>
       </section>
 
       <h2 class="section-label">Program</h2>

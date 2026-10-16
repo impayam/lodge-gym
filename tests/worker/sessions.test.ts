@@ -48,7 +48,7 @@ describe("bootstrap", () => {
     const res = await client.fetch("/api/bootstrap");
     expect(res.status).toBe(200);
     const b = (await res.json()) as Bootstrap;
-    expect(b.settings).toEqual({ unit: "lb", week_start: "mon", relock_minutes: 0, timezone: "America/Denver" });
+    expect(b.settings).toEqual({ unit: "lb", week_start: "mon", relock_minutes: 0, timezone: "America/Denver", rest_between_sets_sec: 30, rest_next_exercise_sec: 120 });
     expect(b.program.days.map((d) => d.id)).toEqual(["D1", "D2", "D3", "D4"]);
     expect(b.program.days.map((d) => d.name_fa)).toEqual(["روز ۱ – سینه", "روز ۲ – پا", "روز ۳ – پشت", "روز ۴ – ددلیفت"]);
     expect(b.program.days.map((d) => d.exercises.length)).toEqual([6, 6, 6, 7]);
@@ -223,10 +223,21 @@ describe("settings", () => {
   it("updates and validates settings", async () => {
     const res = await client.fetch("/api/settings", { method: "PUT", json: { unit: "kg", week_start: "sat", relock_minutes: 5 } });
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { settings: unknown }).settings).toEqual({ unit: "kg", week_start: "sat", relock_minutes: 5, timezone: "America/Denver" });
+    expect(((await res.json()) as { settings: unknown }).settings).toEqual({ unit: "kg", week_start: "sat", relock_minutes: 5, timezone: "America/Denver", rest_between_sets_sec: 30, rest_next_exercise_sec: 120 });
     expect((await client.fetch("/api/settings", { method: "PUT", json: { timezone: "Mars/Base" } })).status).toBe(400);
     expect((await client.fetch("/api/settings", { method: "PUT", json: { unit: "st" } })).status).toBe(400);
     await client.fetch("/api/settings", { method: "PUT", json: { unit: "lb", week_start: "mon", relock_minutes: 0 } });
+  });
+
+  it("keeps the rest timer's defaults (Settings → Training): only the offered choices", async () => {
+    const res = await client.fetch("/api/settings", { method: "PUT", json: { rest_between_sets_sec: 45, rest_next_exercise_sec: 180 } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { settings: Record<string, unknown> }).settings).toMatchObject({ rest_between_sets_sec: 45, rest_next_exercise_sec: 180 });
+    expect((await client.fetch("/api/settings", { method: "PUT", json: { rest_between_sets_sec: 31 } })).status).toBe(400);
+    expect((await client.fetch("/api/settings", { method: "PUT", json: { rest_next_exercise_sec: 3600 } })).status).toBe(400);
+    expect((await client.fetch("/api/settings", { method: "PUT", json: { rest_between_sets_sec: "30" } })).status).toBe(400);
+    await client.fetch("/api/settings", { method: "PUT", json: { rest_between_sets_sec: 30, rest_next_exercise_sec: 120 } });
+    expect(((await (await client.fetch("/api/bootstrap")).json()) as { settings: Record<string, unknown> }).settings).toMatchObject({ rest_between_sets_sec: 30, rest_next_exercise_sec: 120 });
   });
 });
 

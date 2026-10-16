@@ -136,7 +136,14 @@ export async function attachProgressPhoto(threadId: string, photoId: string): Pr
 export const attachmentSrc = (id: string) => `/api/coach/attachments/${encodeURIComponent(id)}`;
 
 /** Sends a question (the chat is created with the first one) and streams the answer. */
-export function sendMessage(threadId: string, message: { id: string; text: string; attachments: Pick<Attachment, "id" | "width" | "height">[] }, on: (e: CoachEvent) => void) {
+/** Ask Coach from the session screen: the open session and the exercise and set on screen (0-based). */
+export interface SessionRef {
+  id: string;
+  exercise_id: string | null;
+  set: number | null;
+}
+
+export function sendMessage(threadId: string, message: { id: string; text: string; attachments: Pick<Attachment, "id" | "width" | "height">[]; session?: SessionRef }, on: (e: CoachEvent) => void) {
   return post(`/coach/threads/${encodeURIComponent(threadId)}/messages`, message, on);
 }
 

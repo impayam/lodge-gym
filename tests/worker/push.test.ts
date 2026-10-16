@@ -31,7 +31,7 @@ describe("rest-timer push", () => {
     await client.post("/api/push/subscribe", live.sub);
     await client.post("/api/push/subscribe", gone.sub);
     const endsAt = Date.now() + 90_000;
-    expect((await client.post("/api/push/rest", { id: "r1", ends_at: endsAt, label: "Rest after Barbell Bench Press" })).status).toBe(200);
+    expect((await client.post("/api/push/rest", { id: "r1", ends_at: endsAt, label: "Rest · next: set 2 of 4" })).status).toBe(200);
 
     const sent: { url: string; headers: Headers; body: Uint8Array }[] = [];
     await runInDurableObject(stub(), async (obj, state) => {
@@ -54,7 +54,7 @@ describe("rest-timer push", () => {
     expect(req.headers.get("Topic")).toBe("rest");
     expect(JSON.parse(await live.decrypt(req.body))).toEqual({
       title: "Rest is over",
-      body: "Rest after Barbell Bench Press · next set",
+      body: "Next: set 2 of 4",
       tag: "rest",
     });
     expect(((await (await client.fetch("/api/push/key")).json()) as { subscriptions: number }).subscriptions).toBe(1);

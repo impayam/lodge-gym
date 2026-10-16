@@ -69,7 +69,9 @@ test("active session: effort chip, bar and colour; one card with Prev / Next and
   await page.getByTestId("check-bench-0").click();
   await expect(page.getByTestId("check-bench-0")).toHaveAttribute("aria-pressed", "true");
   await expect(rest).toHaveAttribute("data-active", "true");
-  await expect(rest).toContainText("Rest after Barbell Bench Press");
+  // Between sets of one exercise: 30 s by default, and the label says what is next (Payam, 2026-10-16).
+  await expect(rest).toContainText("Rest · next: set 2 of 4");
+  await expect(rest).toContainText(/0:(30|29|28)/);
   await expect(rest.locator(".rest__arc")).toHaveCount(1);
   await expect(page.getByTestId("rir-bench-1")).toBeVisible();
   await expect(page.getByTestId("rir-bench-0")).toHaveCount(0);
@@ -136,7 +138,9 @@ test("active session: effort chip, bar and colour; one card with Prev / Next and
   await page.getByTestId("finish").click();
   await expect(page.getByTestId("session-report")).toBeVisible();
   await page.getByTestId("report-session").click();
-  await expect(card(page)).toHaveCount(6);
+  // Four exercises alone and Superset A on one card.
+  await expect(card(page)).toHaveCount(4);
+  await expect(page.getByTestId("group-card")).toHaveCount(1);
   await expect(page.getByTestId("effort-chip")).toHaveCount(0);
   await expect(page.getByTestId("next")).toHaveCount(0);
   await expect(page.getByTestId("open-report")).toBeVisible();

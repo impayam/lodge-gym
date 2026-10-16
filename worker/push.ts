@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { AppBindings, Env } from "./env";
 import { fail, readJson } from "./http";
 import { generateVapidKeys, sendPush, type PushSubscriptionJSON, type VapidKeys } from "./lib/webpush";
+import { restPushBody } from "./lib/rest";
 
 interface Pending {
   id: string;
@@ -139,7 +140,7 @@ export class RestPush extends DurableObject<Env> {
     const p = await this.ctx.storage.get<Pending>("pending");
     if (p && p.endsAt <= now) {
       await this.ctx.storage.delete("pending");
-      await this.sendNow({ title: "Rest is over", body: p.label ? `${p.label} · next set` : "Time for the next set.", tag: "rest" }, origin);
+      await this.sendNow({ title: "Rest is over", body: restPushBody(p.label), tag: "rest" }, origin);
     }
     const list = await this.reminders();
     const due = Object.entries(list).filter(([, r]) => r.at <= now);
