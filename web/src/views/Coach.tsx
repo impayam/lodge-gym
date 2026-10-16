@@ -254,9 +254,8 @@ export function Coach() {
     }
   };
 
-  // Change on a card: the input starts with what to change ("Change this draft: ", "Change these exercises: ").
-  const changeDraft = (prefix = "Change this draft: ") => {
-    setText(prefix);
+  const changeDraft = () => {
+    setText("Change this draft: ");
     input.current?.focus();
   };
 
@@ -441,7 +440,7 @@ function Typing({ label }: { label: string }) {
   );
 }
 
-function TurnView({ turn, live, failed, onRetry, onChange }: { turn: Turn; live: Live | null; failed: string | null; onRetry: (() => void) | null; onChange: (prefix?: string) => void }) {
+function TurnView({ turn, live, failed, onRetry, onChange }: { turn: Turn; live: Live | null; failed: string | null; onRetry: (() => void) | null; onChange: () => void }) {
   const q = questionText(turn.question.content);
   const images = turn.question.content.filter((b): b is Extract<StoredBlock, { type: "image" }> => b.type === "image");
   const results = new Map(turn.replies.flatMap((r) => r.content).flatMap((b) => (b.type === "tool_result" ? [[b.tool_use_id, b] as const] : [])));

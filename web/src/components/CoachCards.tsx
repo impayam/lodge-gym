@@ -9,8 +9,11 @@ import { ulid } from "../../../worker/lib/ulid";
 import { errorText } from "../api";
 import { dateShort, dayMonth, fmtNum, plural } from "../format";
 import { newGymPlan, streakNote } from "../lib/calendarView";
-import { activeSession } from "../model";
-import { addCoachExtras, allExercises, flash, getState, navigate, openCalendar, refresh, saveGymPlan, useStore } from "../store";
+import { targetKey, targetLabel, type AdditionTarget } from "../../../worker/lib/coach/additionTarget";
+import { inPlan } from "../../../worker/lib/plan";
+import { openPlanFor } from "../model";
+import { addCoachExtras, allExercises, coachTargets, flash, navigate, openCalendar, openPlan, refresh, saveGymPlan, today, useStore } from "../store";
+import { Select } from "./Select";
 import { Bars } from "./Bars";
 import { Columns } from "./Columns";
 import { TimeChart } from "./TimeChart";
@@ -159,7 +162,7 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
             <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-draft" disabled={state === "busy"} onClick={() => void add()}>
               Add to Planner
             </button>
-            <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-draft" onClick={() => onChange()}>
+            <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-draft" onClick={onChange}>
               Change
             </button>
           </div>
@@ -261,47 +264,68 @@ type Addition = {
   last: { date: string; sets: string } | null;
   reason_fa: string;
 };
-type Additions = {
-  target: { kind: "open_session"; session_id: string; date: string; day_id: string; day: string } | { kind: "start_day"; day_id: string; day: string; named: boolean };
-  items: Addition[];
-  dropped: { exercise_id: string; reason: string }[];
-};
+type Additions = { target: AdditionTarget & { label: string }; named_day_id: string | null; items: Addition[]; dropped: { exercise_id: string; reason: string }[] };
 
 const repsText = (x: Pick<Addition, "reps_min" | "reps_max" | "is_time">) =>
   `${x.reps_min === x.reps_max ? fmtNum(x.reps_max) : `${fmtNum(x.reps_min)}–${fmtNum(x.reps_max)}`}${x.is_time ? " s" : ""}`;
+const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /**
- * The coach's exercises for today (Payam, 2026-10-16): each with sets × reps and weight from the app's progression,
- * the step it took, and the coach's reason in Persian. Add puts them into the open session as "Added today" extras, or
- * starts the day with them; nothing changes before the tap, and the program never changes. Change asks the coach again.
+ * The coach's exercises for a session (Payam, 2026-10-16): each with sets × reps and weight from the app's
+ * progression, the step it took, and the coach's reason in Persian. The heading says where they go, chosen by date
+ * from this device's state (a session open today, today's day, or the next planned session); Change picks another.
+ * Nothing changes before Add, and the program never changes.
  */
-function AdditionsCard({ result, onChange }: { result: Additions; onChange: (prefix: string) => void }) {
+function AdditionsCard({ result }: { result: Additions }) {
+  const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
-  const open = activeSession(sessions);
-  const added = Boolean(open && result.items.every((x) => open.sets.some((y) => y.exercise_id === x.exercise_id && y.is_extra)));
+  const plans = useStore((s) => s.plans);
+  useStore((s) => s.gymPlans);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
   const [busy, setBusy] = useState(false);
-  const where = open ? `Into your open session: ${dayName(open.program_day_id, result)}` : `Starts ${result.target.kind === "start_day" ? result.target.day : dayName(result.target.day_id, result)} with these added`;
+  const { target: auto, choices } = coachTargets(result.named_day_id);
+  const target = choices.find((c) => targetKey(c) === picked) ?? auto;
+  const t = today();
+  const dayName = (id: string) => boot.program.days.find((d) => d.id === id)?.name_en ?? id;
+  const label = (x: AdditionTarget) => targetLabel(x, dayName(x.day_id), t);
+  const ids = result.items.map((x) => x.exercise_id);
+  // Already there: every exercise in the open session, or in the day's open plan.
+  const session = target.kind === "open_session" ? sessions[target.session_id] : null;
+  const plan = target.kind === "planned" ? openPlanFor(plans, target.day_id) : null;
+  const added = session ? ids.every((id) => session.sets.some((x) => x.exercise_id === id)) : plan ? ids.every((id) => inPlan(plan, id)) : false;
+
   const add = async () => {
     setBusy(true);
     try {
-      const s = await addCoachExtras(
-        result.items.map((x) => ({ exercise_id: x.exercise_id, sets: x.sets, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null })),
-        result.target.day_id
+      const r = await addCoachExtras(
+        result.items.map((x) => ({ exercise_id: x.exercise_id, sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null })),
+        target
       );
-      flash(`Added ${plural(result.items.length, "exercise")} to ${dayName(s.program_day_id, result)}.`);
+      setChanging(false);
+      flash(r.added ? `Added ${plural(r.added, "exercise")} to ${label(target)}.` : r.missing ? "The exercise library did not load. Try again online." : `They are already in ${label(target)}.`);
     } finally {
       setBusy(false);
     }
   };
   return (
-    <section class="card l-col l-gap-10" data-testid="coach-additions">
-      <div class="card__head">
-        <h2 class="card__title l-m0">Add to today's session</h2>
-        <span class="caption num">{plural(result.items.length, "exercise")}</span>
-      </div>
-      <span class="caption" data-testid="coach-additions-target">
-        {where}
-      </span>
+    <section class="card l-col l-gap-10" data-testid="coach-additions" data-target={target.kind}>
+      <h2 class="card__title l-m0" data-testid="coach-additions-target">
+        Add to {label(target)}
+        {target.kind === "open_session" ? "?" : ""}
+      </h2>
+      {changing ? (
+        <div class="form-field">
+          <label class="form-field__label" for="coach-additions-where">
+            Add to
+          </label>
+          <Select id="coach-additions-where" value={targetKey(target)} onChange={(e) => setPicked((e.currentTarget as HTMLSelectElement).value)}>
+            {choices.map((c) => (
+              <option value={targetKey(c)}>{capital(label(c))}</option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
       <ul class="list-plain">
         {result.items.map((x) => (
           <li class="list-row" data-testid="coach-addition-row" data-ex={x.exercise_id}>
@@ -327,8 +351,8 @@ function AdditionsCard({ result, onChange }: { result: Additions; onChange: (pre
       <span class="caption">Sets, reps and weights from the app's progression; your program does not change.</span>
       {added ? (
         <div class="l-row l-between l-gap-8" data-testid="coach-additions-added">
-          <span class="caption">In today's session.</span>
-          <button type="button" class="clay press btn-sm t-pink" onClick={() => open && navigate("session", open.id)}>
+          <span class="caption">{session ? "In today's session." : "In that day's plan: they are there when you start it."}</span>
+          <button type="button" class="clay press btn-sm t-pink" onClick={() => (session ? navigate("session", session.id) : plan && openPlan(plan.id))}>
             Open
           </button>
         </div>
@@ -337,7 +361,7 @@ function AdditionsCard({ result, onChange }: { result: Additions; onChange: (pre
           <button type="button" class="clay press btn l-grow t-pink" data-testid="coach-add-additions" disabled={busy} onClick={() => void add()}>
             Add
           </button>
-          <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-additions" onClick={() => onChange("Change these exercises: ")}>
+          <button type="button" class="clay press btn l-grow t-muted" data-testid="coach-change-additions" aria-expanded={changing} onClick={() => setChanging(!changing)}>
             Change
           </button>
         </div>
@@ -346,12 +370,7 @@ function AdditionsCard({ result, onChange }: { result: Additions; onChange: (pre
   );
 }
 
-/** A program day's name: the bootstrap's, else the card's own target. */
-function dayName(id: string, result: Additions): string {
-  return getState().boot?.program.days.find((d) => d.id === id)?.name_en ?? (result.target.day_id === id ? result.target.day : id);
-}
-
-export function CoachCard({ name, input, result, messageId, toolUseId, onChange, onAdd }: { name: string; input: unknown; result: unknown; messageId: string; toolUseId: string; onChange: (prefix?: string) => void; onAdd: (m: string, t: string) => Promise<unknown> }) {
+export function CoachCard({ name, input, result, messageId, toolUseId, onChange, onAdd }: { name: string; input: unknown; result: unknown; messageId: string; toolUseId: string; onChange: () => void; onAdd: (m: string, t: string) => Promise<unknown> }) {
   switch (name) {
     case "get_sessions": {
       const r = result as Sessions;
@@ -620,7 +639,7 @@ export function CoachCard({ name, input, result, messageId, toolUseId, onChange,
     case "propose_schedule":
       return <ScheduleCard result={result as Schedule} />;
     case "propose_session_additions":
-      return <AdditionsCard result={result as Additions} onChange={onChange} />;
+      return <AdditionsCard result={result as Additions} />;
     case "propose_program":
       return <DraftCard input={input as Draft} result={result as DraftResult} messageId={messageId} toolUseId={toolUseId} onChange={onChange} onAdd={onAdd} />;
     default:

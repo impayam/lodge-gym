@@ -179,7 +179,9 @@ export function startAiMock(port) {
           pick("biceps") && { exercise_id: pick("biceps").id, reason_fa: "جلوبازو امروز فقط یک حرکت دارد؛ یک حرکت دیگر حجمش را کامل می‌کند" },
           pick("forearms") && { exercise_id: pick("forearms").id, reason_fa: "ساعد را آخر جلسه بزن تا گرفتن میله در حرکات پشت ضعیف نشود" },
         ].filter(Boolean);
-        return void stream(res, [tool("propose_session_additions", { program_day_id: day?.day_id, items })], "tool_use", usage);
+        // "…to my next session" names no day: the app picks the session by date.
+        const named = /next session|جلسه‌ی بعد/i.test(text) ? {} : { program_day_id: day?.day_id };
+        return void stream(res, [tool("propose_session_additions", { ...named, items })], "tool_use", usage);
       }
       return void stream(res, [{ type: "text", text: persian ? "این دو حرکت را بعد از حرکات پشت بزن. وزن‌ها را اپ از سابقه‌ات گذاشته؛ اگر خوب است روی Add بزن." : "Do these two after your back work. The app set the weights from your history; tap Add if they look right." }], "end_turn", usage);
     }

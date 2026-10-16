@@ -1,16 +1,18 @@
 // Coach tool propose_session_additions (Payam, 2026-10-16): at the gym he says "today I'm doing back, add biceps and
-// forearms" and the coach proposes 2–3 exercises for today's session. The model only picks exercises and says why;
-// every number comes from the app: sets and reps from his active program when the exercise is in it, otherwise from
-// his last session with it, and the weight from the session screen's progression (worker/lib/progression.ts
-// lastPerformance + suggest). Without history the weight stays empty. Nothing is added until he taps Add on the card;
-// the items then go into today's session as extras (is_extra, as the 3D picker adds them). The program never changes.
+// forearms" and the coach proposes 2–3 exercises for a session. The model only picks exercises and says why; every
+// number comes from the app: sets and reps from his active program when the exercise is in it, otherwise from his last
+// session with it, and the weight from the session screen's progression (worker/lib/progression.ts lastPerformance +
+// suggest). Without history the weight stays empty. Where they go is chosen by date (./additionTarget.ts) and shown on
+// the card; nothing is added until he taps Add, and Change offers the other sessions. The program never changes.
 
 import { z } from "zod";
 import { nextDay, versionAliases } from "../cycle";
 import { HOLD_SECONDS, scheme } from "../generator/model";
 import { looksTimed } from "../generator/pick";
 import { lastPerformance, suggest, type PastPerformance } from "../progression";
-import type { DayExercise, Exercise, ProgramDay, Unit, WorkoutSession } from "../types";
+import { hm } from "../calendar";
+import type { DayExercise, Exercise, ProgramDay, Unit } from "../types";
+import { additionTargets, targetLabel, type AdditionTarget } from "./additionTarget";
 import type { CoachData, ToolOutcome } from "./tools";
 
 /** Exercises one proposal may hold. */
@@ -20,11 +22,11 @@ export const EXTRA_SETS = 3;
 
 export const PROPOSE_SESSION_ADDITIONS_TOOL = {
   name: "propose_session_additions",
-  description: `Proposes exercises to add to today's session only, as "Added today" extras, when he asks to add exercises for today (for example "today is back, add biceps and forearms"). Give exercise ids from get_library or get_program and one short line in Persian for each (reason_fa). Do not give sets, reps or weights: the app fills them from his program and history with its progression rule, and leaves the weight empty when he has no history with the exercise. program_day_id is the program day he named (an id from get_program); it is the day the app starts if no session is open. Without it the app starts his next day, as on Home. Ids not in the library, repeats and exercises already in that session are dropped, and the result says why. The app shows a card with "Add"; nothing is added before he taps it, and his program never changes. At most ${MAX_ADDITIONS} exercises.`,
+  description: `Proposes exercises to add to a session, when he asks to add exercises for today or for a session (for example "today is back, add biceps and forearms"). Give exercise ids from get_library or get_program and one short line in Persian for each (reason_fa). Do not give sets, reps or weights: the app fills them from his program and history with its progression rule, and leaves the weight empty when he has no history with the exercise. program_day_id: only when he says which day he trains today (an id from get_program). The app picks where they go by date: a session open today; else today (the day he named, or today's planned gym session's day), started when he taps; else his nearest planned gym session (they are put in that day's plan and appear when it starts); else Home's next day. The result says which ("target"). Ids not in the library, repeats and exercises already in that session or day are dropped, and the result says why. The app shows a card with "Add" and "Change" (another session); nothing is added before he taps it, and his program never changes. At most ${MAX_ADDITIONS} exercises.`,
   input_schema: {
     type: "object",
     properties: {
-      program_day_id: { type: "string", description: "A day id from get_program: the day he is training today." },
+      program_day_id: { type: "string", description: "A day id from get_program: the day he says he trains today. Leave it out otherwise." },
       items: {
         type: "array",
         minItems: 1,
@@ -77,10 +79,15 @@ export interface Addition {
   reason_fa: string;
 }
 
+/** The target as the result shows it: the shared rule's target with names and times. */
+export type ShownTarget = AdditionTarget & { day: string; start: string | null; label: string };
+
 export interface SessionAdditions {
   shown: true;
-  /** The open session the items go into, or the day the app starts with them. */
-  target: { kind: "open_session"; session_id: string; date: string; day_id: string; day: string } | { kind: "start_day"; day_id: string; day: string; named: boolean };
+  /** Where the items go by default (his tap confirms it; Change offers the others). */
+  target: ShownTarget;
+  /** The day he said he trains today, as given (the card recomputes the target from it). */
+  named_day_id: string | null;
   items: Addition[];
   dropped: { exercise_id: string; reason: string }[];
 }
@@ -94,10 +101,6 @@ function lastLine(last: PastPerformance): string {
     .map((s) => (s.seconds != null && s.reps == null ? `${fmt(s.seconds)} s` : `${s.weight != null ? fmt(s.weight) : ""}×${s.reps ?? "–"}`))
     .join(", ");
 }
-
-/** The open session (the one Home continues), if any. */
-const openSession = (d: CoachData): WorkoutSession | null =>
-  [...d.sessions].filter((s) => s.status === "active").sort((a, b) => (b.local_date + b.started_at).localeCompare(a.local_date + a.started_at))[0] ?? null;
 
 /** The active program's next day, as Home picks it (worker/lib/cycle.ts nextDay with the version aliases). */
 export function nextProgramDay(d: CoachData): ProgramDay {
@@ -172,21 +175,28 @@ export function additionNumbers(d: CoachData, ex: Exercise, excludeSessionId?: s
   return { sets: plan.sets, reps_min: plan.reps_min, reps_max: plan.reps_max, is_time: plan.is_time, weight, weight_unit: unit, basis, rule, last: last ? { date: last.local_date, sets: lastLine(last) } : null };
 }
 
-/** propose_session_additions: checks the ids, fills the numbers and names the session or day the items go into. */
+/** propose_session_additions: checks the ids, fills the numbers and names the session they go into. */
 export function proposeSessionAdditions(d: CoachData, raw: unknown): ToolOutcome {
   const parsed = input.safeParse(raw ?? {});
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message)).join("; ") };
   const { program_day_id, items } = parsed.data;
-  const days = d.program.days;
+  const days = [...d.program.days].sort((a, b) => a.position - b.position);
   if (program_day_id && !days.some((x) => x.id === program_day_id))
     return { ok: false, error: `Unknown program_day_id "${program_day_id}": use a day id of his active program from get_program, or ask him which day he is training.` };
 
-  const open = openSession(d);
-  const day = open ? null : (days.find((x) => x.id === program_day_id) ?? nextProgramDay(d));
-  const dayName = (id: string) => days.find((x) => x.id === id)?.name_en ?? (d.programs ?? []).flatMap((p) => p.days).find((x) => x.id === id)?.name_en ?? id;
-  // What is already in that session: the open session's exercises, or the day's.
-  const already = new Set(open ? open.sets.map((s) => s.exercise_id) : (day?.exercises.map((x) => x.exercise_id) ?? []));
-  const where = open ? "today's open session" : `${day!.name_en}`;
+  const { target } = additionTargets({
+    today: d.today,
+    sessions: d.sessions,
+    plans: d.calendar?.plans ?? [],
+    dayIds: days.map((x) => x.id),
+    nextDayId: nextProgramDay(d).id,
+    named: program_day_id ?? null,
+  });
+  const dayName = (id: string) => days.find((x) => x.id === id)?.name_en ?? id;
+  const open = target.kind === "open_session" ? d.sessions.find((s) => s.id === target.session_id) : null;
+  // What is already there: the open session's exercises, or the day's.
+  const already = new Set(open ? open.sets.map((s) => s.exercise_id) : (days.find((x) => x.id === target.day_id)?.exercises.map((x) => x.exercise_id) ?? []));
+  const where = open ? "today's open session" : dayName(target.day_id);
 
   const lib = new Map(d.exercises.map((e) => [e.id, e]));
   const out: Addition[] = [];
@@ -200,9 +210,8 @@ export function proposeSessionAdditions(d: CoachData, raw: unknown): ToolOutcome
   }
   if (!out.length) return { ok: false, error: `No exercise could be proposed: ${dropped.map((x) => `${x.exercise_id} (${x.reason})`).join(", ")}.` };
 
-  const target: SessionAdditions["target"] = open
-    ? { kind: "open_session", session_id: open.id, date: open.local_date, day_id: open.program_day_id, day: dayName(open.program_day_id) }
-    : { kind: "start_day", day_id: day!.id, day: day!.name_en, named: Boolean(program_day_id) };
-  const result: SessionAdditions = { shown: true, target, items: out, dropped };
+  const day = dayName(target.day_id);
+  const shown: ShownTarget = { ...target, day, start: target.kind === "open_session" || target.start_min == null ? null : hm(target.start_min), label: targetLabel(target, day, d.today) };
+  const result: SessionAdditions = { shown: true, target: shown, named_day_id: program_day_id ?? null, items: out, dropped };
   return { ok: true, result };
 }

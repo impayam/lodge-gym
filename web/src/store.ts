@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { Category } from "../../worker/lib/category";
-import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, SetEntry, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import { DEFAULT_CALENDAR_SETTINGS, type CalendarSettings, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
-import { liveItems, removeItem, type SessionPlan } from "../../worker/lib/plan";
+import { addItem, inPlan, liveItems, planFromDay, removeItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
+import { additionTargets, type AdditionTarget } from "../../worker/lib/coach/additionTarget";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
 import { cancelPush, schedulePush } from "./push";
@@ -71,6 +72,8 @@ export interface State {
   gymPlans: Record<string, GymPlan>;
   /** The full history, the photo list and the library: absent until first asked for. */
   loads: Partial<Record<LoadName, Load>>;
+  /** Dates of sessions closed automatically (left open past their day), for Home's one-time note. */
+  autoClosed: string[];
 }
 
 let state: State = {
@@ -89,6 +92,7 @@ let state: State = {
   shifts: {},
   gymPlans: {},
   loads: {},
+  autoClosed: [],
 };
 
 const listeners = new Set<() => void>();
@@ -186,13 +190,15 @@ export async function init() {
   });
   window.addEventListener("offline", () => setSync({ online: false }));
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void syncNow();
+    if (document.visibilityState !== "visible") return;
+    void closeStaleSessions();
+    void syncNow();
   });
   setInterval(() => {
     if (state.sync.pending > 0) void syncNow();
   }, 30_000);
 
-  const [boot, loggedIn, sessions, outbox, library, plans, shifts, gymPlans] = await Promise.all([
+  const [boot, loggedIn, sessions, outbox, library, plans, shifts, gymPlans, autoClosed] = await Promise.all([
     ldb.kvGet<BootData>("boot"),
     ldb.kvGet<boolean>("logged_in"),
     ldb.allSessions(),
@@ -201,8 +207,10 @@ export async function init() {
     ldb.allPlans(),
     ldb.allShifts(),
     ldb.allGymPlans(),
+    ldb.kvGet<string[]>("auto_closed"),
   ]);
   setState({
+    autoClosed: autoClosed ?? [],
     boot: boot ?? null,
     sessions: Object.fromEntries(sessions.map((s) => [s.id, s])),
     library: library ?? null,
@@ -219,6 +227,7 @@ export async function init() {
   }
   if (loggedIn && boot) {
     setState({ auth: "ready" });
+    await closeStaleSessions();
     void refresh();
     return;
   }
@@ -239,6 +248,8 @@ export async function refresh() {
     // A Worker from before M13 sends no calendar: keep what this device has.
     if (calendar) await mergeServerCalendar(calendar.shifts, calendar.plans, windowStart, null);
     setState((s) => ({ boot, auth: s.auth === "locked" ? "locked" : "ready" }));
+    // A session another device left open on an earlier day closes here too.
+    await closeStaleSessions();
     setSync({ online: true, lastSync: server_time });
     void syncNow();
   } catch (e) {
@@ -701,49 +712,98 @@ export async function addExtraExercise(sessionId: string, ex: Exercise) {
   await saveSession({ ...s, sets: [...s.sets, ...sets] });
 }
 
-/** One exercise of the coach's "Add to today's session" card (worker/lib/coach/sessionTools.ts Addition). */
+/** One exercise of the coach's card (worker/lib/coach/sessionTools.ts Addition). */
 export interface CoachExtra {
   exercise_id: string;
   sets: number;
+  reps_min: number;
   reps_max: number;
   is_time: boolean;
   weight: number | null;
   weight_unit: Unit | null;
 }
 
-/**
- * The coach's additions for today (Payam, 2026-10-16): into the open session as extras, as the 3D picker adds them
- * (is_extra, after the other extras), or, with no open session, into the day it names (or Home's next day) started
- * now, its open plan first if it has one. Each set is prefilled with the card's reps and its weight when the units
- * match, not checked (as "Copy last" fills a set). The program never changes. Returns the session.
- */
-export async function addCoachExtras(items: CoachExtra[], dayId: string | null): Promise<WorkoutSession> {
+/** Where the coach's exercises can go, from this device's state (worker/lib/coach/additionTarget.ts). */
+export function coachTargets(named: string | null) {
   const boot = state.boot!;
-  let s = activeSession(state.sessions);
+  const days = [...boot.program.days].sort((a, b) => a.position - b.position);
+  return additionTargets({
+    today: today(),
+    sessions: Object.values(state.sessions),
+    plans: Object.values(state.gymPlans),
+    dayIds: days.map((d) => d.id),
+    nextDayId: homeModel(boot, state.sessions, today()).next.dayId,
+    named,
+  });
+}
+
+/**
+ * The coach's exercises, on Payam's tap (2026-10-16), where the card says:
+ * - a session open today: appended as extras, as the 3D picker adds them (is_extra, after the other extras);
+ * - today: the day started now (its open plan first, if it has one) with them as extras;
+ * - a planned session ahead: added to that day's plan in the planner (a new plan copying the day if it has none), so
+ *   they are in the session when it starts.
+ * Sets are prefilled with the card's reps and its weight when the units match, not checked (as "Copy last" fills a
+ * set); a plan item keeps sets and reps, and the session screen suggests the weight. Exercises already there are
+ * skipped. The program never changes.
+ */
+export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget): Promise<{ added: number; missing: number; sessionId: string | null; planId: string | null }> {
+  const boot = state.boot!;
+  // The coach picks from the whole library; this device may only know the exercises it has used.
+  if (items.some((it) => !allExercises().has(it.exercise_id))) await loadLibrary();
+  const lib = allExercises();
+  const missing = items.filter((it) => !lib.has(it.exercise_id)).length;
+  // Nothing it can add: no session is started and no plan is saved.
+  if (missing === items.length) return { added: 0, missing, sessionId: null, planId: null };
+  const now = new Date().toISOString();
+  const day = boot.program.days.find((d) => d.id === target.day_id) ?? null;
+
+  if (target.kind === "planned") {
+    if (!day) return { added: 0, missing, sessionId: null, planId: null };
+    const fresh = ulid();
+    let plan = openPlanFor(state.plans, day.id) ?? planFromDay(day, fresh, now, seqIds(fresh));
+    let added = 0;
+    for (const it of items) {
+      const ex = lib.get(it.exercise_id);
+      if (!ex || inPlan(plan, ex.id)) continue;
+      await rememberExercise(ex);
+      plan = addItem(plan, ex.id, now, ulid(), { sets: it.sets, reps_min: it.reps_min, reps_max: it.reps_max, is_time: it.is_time });
+      added++;
+    }
+    if (added) await savePlan(plan);
+    return { added, missing, sessionId: null, planId: plan.id };
+  }
+
+  await closeStaleSessions();
+  const t = today();
+  const openToday = () => {
+    const a = activeSession(state.sessions);
+    return a && a.local_date === t ? a : null;
+  };
+  let s = (target.kind === "open_session" ? state.sessions[target.session_id] : null) ?? null;
+  if (!s || s.status !== "active") s = openToday();
   if (!s) {
-    const days = boot.program.days;
-    const day = days.find((d) => d.id === dayId) ?? days.find((d) => d.id === homeModel(boot, state.sessions, today()).next.dayId) ?? days[0];
-    const plan = openPlanFor(state.plans, day.id);
-    const now = new Date().toISOString();
+    const start = day ?? boot.program.days.find((d) => d.id === homeModel(boot, state.sessions, t).next.dayId) ?? boot.program.days[0];
+    const plan = openPlanFor(state.plans, start.id);
     if (plan) {
       const started: SessionPlan = { ...plan, status: "started", started_at: now, updated_at: now };
-      s = sessionFromPlan(boot, started, today(), now);
+      s = sessionFromPlan(boot, started, t, now);
       await saveSession(s);
       await savePlan(started);
-    } else s = newSession(boot, day, today());
+    } else s = newSession(boot, start, t);
   }
-  const lib = allExercises();
   let position = Math.max(-1, ...s.sets.filter((x) => x.is_extra).map((x) => x.position ?? 0));
-  const now = new Date().toISOString();
-  const added = [];
+  const sets: SetEntry[] = [];
+  let added = 0;
   for (const it of items) {
     const ex = lib.get(it.exercise_id);
     if (!ex || s.sets.some((x) => x.exercise_id === ex.id)) continue;
     await rememberExercise(ex);
     position += 1;
+    added++;
     const weight = it.weight != null && it.weight_unit === s.unit ? it.weight : null;
     for (let i = 0; i < it.sets; i++)
-      added.push({
+      sets.push({
         id: ulid(),
         exercise_id: ex.id,
         set_index: i,
@@ -757,9 +817,47 @@ export async function addCoachExtras(items: CoachExtra[], dayId: string | null):
         updated_at: now,
       });
   }
-  const next = { ...s, sets: [...s.sets, ...added] };
-  await saveSession(next);
-  return next;
+  await saveSession({ ...s, sets: [...s.sets, ...sets] });
+  return { added, missing, sessionId: s.id, planId: null };
+}
+
+/**
+ * Sessions left open from an earlier day (Payam, 2026-10-16) are finished once their day has ended (local time), as
+ * Finish saves them (the server then writes the session report and the overview), ending at the last done set. A
+ * session without a done set is deleted instead of saved empty. Home shows a one-time note.
+ */
+let closing: Promise<void> | null = null;
+export function closeStaleSessions(): Promise<void> {
+  // Startup, a refresh and the app coming back can ask at once: one pass at a time.
+  closing ??= closeStale().finally(() => (closing = null));
+  return closing;
+}
+
+async function closeStale(): Promise<void> {
+  if (!state.boot) return;
+  const t = today();
+  const stale = Object.values(state.sessions).filter((s) => s.status === "active" && s.local_date < t);
+  if (!stale.length) return;
+  for (const s of stale) {
+    const done = s.sets.filter((x) => x.done);
+    if (!done.length) await removeSession(s.id);
+    else {
+      const last = done.map((x) => x.updated_at).sort().at(-1)!;
+      await saveSession({ ...s, status: "done", ended_at: last > s.started_at ? last : s.started_at });
+    }
+  }
+  const autoClosed = [...new Set([...state.autoClosed, ...stale.map((s) => s.local_date)])].sort();
+  setState({ autoClosed });
+  await ldb.kvSet("auto_closed", autoClosed);
+}
+
+/** Home has shown the note: it is not shown again (it stays on screen until Home closes). */
+export async function autoClosedShown() {
+  await ldb.kvSet("auto_closed", []);
+}
+
+export function clearAutoClosed() {
+  setState({ autoClosed: [] });
 }
 
 /** Removes an extra exercise from the session; only allowed while none of its sets is done. */

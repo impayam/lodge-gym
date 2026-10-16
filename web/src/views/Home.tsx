@@ -2,7 +2,7 @@
 // Last / Today, the progression targets in orange, one main action), the estimated 1RM of the big three, then this
 // week, the other days and recent sessions.
 
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { hm as hmMin, toMin } from "../../../worker/lib/calendar";
 import { liveItems, planMinutes, itemAsDayExercise } from "../../../worker/lib/plan";
 import { addDays, daysBetween, localHM } from "../../../worker/lib/time";
@@ -17,7 +17,7 @@ import { todayPlan } from "../lib/calendarView";
 import { nextRows } from "../lib/next";
 import { e1rmPoints } from "../lib/records";
 import { activeProgramInfo, activeSession, dayInfo, daysPerWeek, exerciseMap, homeModel, newSession, openPlanFor, plannedLabel, programName } from "../model";
-import { calendarSettings, navigate, openPlan, saveSession, today, useStore } from "../store";
+import { autoClosedShown, calendarSettings, clearAutoClosed, navigate, openPlan, saveSession, today, useStore } from "../store";
 import { CalendarStrip } from "./Calendar";
 import { planDay } from "./Planner";
 
@@ -187,6 +187,26 @@ function Hero() {
   );
 }
 
+/**
+ * The one-time note for sessions closed automatically (Payam, 2026-10-16): shown while Home is open, then gone; it is
+ * not shown again on the next launch.
+ */
+function AutoClosedNote() {
+  const dates = useStore((s) => s.autoClosed);
+  useEffect(() => {
+    if (dates.length) void autoClosedShown();
+  }, [dates.length]);
+  useEffect(() => () => clearAutoClosed(), []);
+  if (!dates.length) return null;
+  const list = dates.map((d) => dateShort(d));
+  const text = list.length === 1 ? `Your session from ${list[0]} was closed automatically.` : `Your sessions from ${list.slice(0, -1).join(", ")} and ${list.at(-1)} were closed automatically.`;
+  return (
+    <p class="caption l-m0" role="status" data-testid="auto-closed">
+      {text}
+    </p>
+  );
+}
+
 /** Estimated 1RM of the big three over the last 8 weeks (Payam, 2026-10-14: Bench / Squat / Deadlift). */
 function OneRepMax() {
   const boot = useStore((s) => s.boot)!;
@@ -295,6 +315,7 @@ export function Home() {
         <SyncStatus />
       </header>
 
+      <AutoClosedNote />
       <CalendarStrip />
       <Hero />
       <OneRepMax />
