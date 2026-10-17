@@ -6,6 +6,7 @@ import { addDays, localDate } from "./time";
 import { countsVolume } from "./category";
 import { groupOf, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "./muscles";
 import { weekRange } from "./cycle";
+import { DIRECT_GROUPS } from "./generator/blocks";
 import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, ProgramVersion, Settings, Unit, WorkoutSession } from "./types";
 
 export const LB_PER_KG = 2.20462262;
@@ -124,6 +125,23 @@ export function muscleTargets(d: Pick<ReportData, "program" | "exercises">): Rec
     const e = exMap.get(de.exercise_id);
     if (!e || !countsVolume(e.category)) continue;
     for (const [g, w] of setContribution(e.muscle_primary, e.muscles_secondary)) if (g in t) t[g] += w * de.sets;
+  }
+  return t;
+}
+
+/**
+ * Weekly direct-set targets for forearms and neck (SPEC-v11 Phase B, approved 2026-10-17): the sets the program plans
+ * for exercises whose primary muscle is forearms or neck. Direct, not fractional: rows, pulls and curls count half a set
+ * for the forearms, which would always read as over. Only a group the program trains directly gets a target.
+ */
+export function directTargets(d: Pick<ReportData, "program" | "exercises">): Record<string, number> {
+  const exMap = new Map(d.exercises.map((e) => [e.id, e]));
+  const t: Record<string, number> = {};
+  for (const day of d.program.days) for (const de of day.exercises) {
+    const e = exMap.get(de.exercise_id);
+    if (!e || !countsVolume(e.category)) continue;
+    const g = groupOf(e.muscle_primary);
+    if (g && (DIRECT_GROUPS as readonly string[]).includes(g)) t[g] = (t[g] ?? 0) + de.sets;
   }
   return t;
 }
@@ -283,6 +301,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
   // The week is scored against the program active at its end (the current program for the current week).
   const scored = programOn(d, range.end);
   const targets = muscleTargets({ program: scored.program, exercises: d.exercises });
+  const direct = directTargets({ program: scored.program, exercises: d.exercises });
   const sets = setsPerMuscle(week, c.ex);
   const dayName = dayNames(d);
 
@@ -315,7 +334,7 @@ export function weeklyReport(d: ReportData, anyDateInWeek: string) {
       days: week.map((s) => ({ date: s.local_date, day_id: s.program_day_id, name_en: dayName.get(s.program_day_id) ?? s.program_day_id })),
       total_minutes: mins.reduce((a, b) => a + b, 0),
     },
-    muscles: muscleRows(sets, targets),
+    muscles: muscleRows(sets, targets, direct),
     lifts,
     prs,
     watch: { active_kcal: kcal.length ? round1(kcal.reduce((a, b) => a + b, 0)) : null, hr_avg: hrs.length ? round1(mean(hrs)!) : null, matched, unmatched: week.length - matched },
@@ -370,7 +389,9 @@ export function monthlyReport(d: ReportData, key: string, today: string = monthR
   const days = Math.max(1, Math.round((Date.parse(`${last}T12:00:00Z`) - Date.parse(`${range.start}T12:00:00Z`)) / 86_400_000) + 1);
   const monthSets = setsPerMuscle(month, c.ex);
   const avgWeek = Object.fromEntries(Object.entries(monthSets).map(([g, v]) => [g, { direct: round1((v.direct * 7) / days), fractional: round1((v.fractional * 7) / days) }]));
-  const targets = muscleTargets({ program: programOn(d, range.end).program, exercises: d.exercises });
+  const monthProgram = { program: programOn(d, range.end).program, exercises: d.exercises };
+  const targets = muscleTargets(monthProgram);
+  const direct = directTargets(monthProgram);
 
   const weeks: { start: string; end: string; sessions: number }[] = [];
   for (let w = weekRange(range.start, d.settings.week_start); w.start <= range.end; w = weekRange(addDays(w.start, 7), d.settings.week_start)) {
@@ -422,7 +443,7 @@ export function monthlyReport(d: ReportData, key: string, today: string = monthR
     /** Records this month, by the weekly report's rule. */
     prs: recordsIn(c, month, c.done.filter((s) => s.local_date < range.start)),
     /** Each group's average week this month (sets × 7 / days counted) against its weekly target. */
-    muscles: muscleRows(avgWeek, targets),
+    muscles: muscleRows(avgWeek, targets, direct),
   };
 }
 
@@ -440,13 +461,19 @@ export interface MuscleRow {
   /** Weekly program target; null for muscles the program sets no target for. */
   target: number | null;
   status: BalanceStatus;
+  /** "direct" for forearms and neck with a direct-set target: the target and the status use the direct sets. */
+  basis?: "direct";
 }
 
-/** Every report group: the targeted ones in SPEC §10 order, then the ones without a target. */
-export function muscleRows(sets: Record<string, GroupSets>, targets: Record<string, number>): MuscleRow[] {
+/**
+ * Every report group: the targeted ones in SPEC §10 order, then the ones without a target. Forearms and neck get a
+ * direct-set target when the program trains them directly (`directTargets`).
+ */
+export function muscleRows(sets: Record<string, GroupSets>, targets: Record<string, number>, direct: Record<string, number> = {}): MuscleRow[] {
   return REPORT_GROUPS.map((m) => {
-    const t = m in targets ? targets[m] : null;
     const v = sets[m] ?? { direct: 0, fractional: 0 };
+    if (direct[m]) return { muscle: m, sets: v.direct, fractional: v.fractional, target: direct[m], status: balanceStatus(v.direct, direct[m]), basis: "direct" };
+    const t = m in targets ? targets[m] : null;
     return { muscle: m, sets: v.direct, fractional: v.fractional, target: t, status: t === null ? (v.fractional ? "untracked" : "none") : balanceStatus(v.fractional, t) };
   });
 }
@@ -497,7 +524,8 @@ function period(d: ReportData, c: Ctx, from: string, to: string) {
 export function progressReport(d: ReportData, today: string) {
   const c = ctx(d);
   const first = c.done[0]?.local_date ?? today;
-  const targets = muscleTargets({ program: programOn(d, today).program, exercises: d.exercises });
+  const current = { program: programOn(d, today).program, exercises: d.exercises };
+  const targets = muscleTargets(current);
   const week = weekRange(today, d.settings.week_start);
   const sets = setsPerMuscle(c.done.filter((s) => inRange(s.local_date, week)), c.ex);
   return {
@@ -506,7 +534,7 @@ export function progressReport(d: ReportData, today: string) {
     last4: period(d, c, addDays(today, -27), today),
     balance: {
       week,
-      muscles: muscleRows(sets, targets),
+      muscles: muscleRows(sets, targets, directTargets(current)),
     },
   };
 }

@@ -21,6 +21,7 @@ import {
   mainLifts,
   muscleRows,
   muscleTargets,
+  directTargets,
   plannedSessions,
   programOn,
   setsPerMuscle,
@@ -108,7 +109,7 @@ export const COACH_TOOLS = [
   },
   {
     name: "get_volume",
-    description: `Weekly sets per muscle group (fractional count) against the weekly targets of the program active that week, with the status the Reports screen shows: none, under, on, over or untracked. One row set per week that overlaps the range; the current week is marked partial. At most ${MAX_RANGE_DAYS} days per call.`,
+    description: `Weekly sets per muscle group (fractional count) against the weekly targets of the program active that week, with the status the Reports screen shows: none, under, on, over or untracked. Forearms and neck, when the program trains them directly, have a target in direct sets instead (target_counts: "direct sets"; rows and curls count only half a forearm set). One row set per week that overlaps the range; the current week is marked partial. At most ${MAX_RANGE_DAYS} days per call.`,
     input_schema: RANGE_SCHEMA,
   },
   {
@@ -288,13 +289,14 @@ export function getVolume(d: CoachData, from: string, to: string) {
   return {
     weeks: weeksOver(d, from, to).map((w) => {
       const scored = programOn(d, w.end);
-      const rows = muscleRows(setsPerMuscle(done.filter((s) => s.local_date >= w.start && s.local_date <= w.end), ex), muscleTargets({ program: scored.program, exercises: d.exercises }));
+      const program = { program: scored.program, exercises: d.exercises };
+      const rows = muscleRows(setsPerMuscle(done.filter((s) => s.local_date >= w.start && s.local_date <= w.end), ex), muscleTargets(program), directTargets(program));
       return {
         start: w.start,
         end: w.end,
         partial: d.today <= w.end,
         program: programName(programInfoOf(d, scored.program.id), scored.program.name),
-        groups: rows.map((r) => ({ group: r.muscle, name: GROUP_NAME[r.muscle] ?? r.muscle, direct_sets: r.sets, fractional_sets: round1(r.fractional), target: r.target == null ? null : round1(r.target), status: r.status as BalanceStatus })),
+        groups: rows.map((r) => ({ group: r.muscle, name: GROUP_NAME[r.muscle] ?? r.muscle, direct_sets: r.sets, fractional_sets: round1(r.fractional), target: r.target == null ? null : round1(r.target), status: r.status as BalanceStatus, ...(r.basis ? { target_counts: "direct sets" as const } : {}) })),
       };
     }),
   };

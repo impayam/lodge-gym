@@ -14,10 +14,12 @@ export interface MuscleRow {
   muscle: string;
   /** Direct sets (primary muscle). */
   sets: number;
-  /** Fractional sets; the status compares this number with the target. */
+  /** Fractional sets; the status compares this number with the target (direct sets for a "direct" row). */
   fractional: number;
   target: number | null;
   status: Status;
+  /** Forearms and neck with a direct-set target (SPEC-v11 Phase B). */
+  basis?: "direct";
 }
 
 export const MUSCLE_NAME: Record<string, string> = {
@@ -43,7 +45,9 @@ export const STATUS_NAME: Record<Status, string> = { none: "No sets", under: "Un
 export const STATUS_ICON: Record<Status, string> = { none: "–", under: "▼", on: "✓", over: "▲", untracked: "·" };
 
 const setsText = (r: MuscleRow) =>
-  `${fmtNum(r.sets)} direct · ${fmtNum(r.fractional, 1)} fractional${r.target !== null ? ` of ${fmtNum(r.target)}` : ""} sets · ${STATUS_NAME[r.status]}`;
+  r.basis === "direct"
+    ? `${fmtNum(r.sets)} direct of ${fmtNum(r.target ?? 0)} sets · ${fmtNum(r.fractional, 1)} fractional · ${STATUS_NAME[r.status]}`
+    : `${fmtNum(r.sets)} direct · ${fmtNum(r.fractional, 1)} fractional${r.target !== null ? ` of ${fmtNum(r.target)}` : ""} sets · ${STATUS_NAME[r.status]}`;
 
 /** Names of the drawn regions (canonical muscle keys); the readout adds the group when it differs. */
 const REGION_NAME: Record<RegionKey, string> = {
@@ -161,9 +165,15 @@ export function MuscleMap({ muscles }: { muscles: MuscleRow[] }) {
         {muscles.map((m) => (
           <li data-testid={`muscle-${m.muscle}`} data-status={m.status}>
             <span>{MUSCLE_NAME[m.muscle]}</span>
-            <span class="num" title="direct · fractional / target">
-              {fmtNum(m.sets)} · {fmtNum(m.fractional, 1)} / {m.target === null ? "–" : fmtNum(m.target)}
-            </span>
+            {m.basis === "direct" ? (
+              <span class="num" title="direct / direct target · fractional">
+                {fmtNum(m.sets)} / {fmtNum(m.target ?? 0)} direct · {fmtNum(m.fractional, 1)}
+              </span>
+            ) : (
+              <span class="num" title="direct · fractional / target">
+                {fmtNum(m.sets)} · {fmtNum(m.fractional, 1)} / {m.target === null ? "–" : fmtNum(m.target)}
+              </span>
+            )}
             <span class="balance-list__status">
               {STATUS_ICON[m.status]} {STATUS_NAME[m.status]}
             </span>

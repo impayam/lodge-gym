@@ -179,8 +179,13 @@ export function blockChanges(current: Pick<Program, "days"> | null, rotation: re
       keptDue.push({ exercise_id: s.exercise_id, day: days.findIndex((d) => d.exercises.some((x) => x.exercise_id === s.exercise_id)), reason: s.reason!, weeks: s.weeks });
       continue;
     }
-    const fresh = (days[day]?.exercises ?? []).filter((x) => !curIds.has(x.exercise_id) && !used.has(x.exercise_id));
-    const by = fresh.find((x) => group(x.exercise_id) === group(s.exercise_id)) ?? null;
+    // Its replacement: a new exercise of its group on the same day, else a new one of its muscle (then its group) on
+    // another day; "leaves the program" only when the plan has nothing new for it.
+    const fresh = (list: readonly Pick<PlanExercise, "exercise_id">[]) => list.filter((x) => !curIds.has(x.exercise_id) && !used.has(x.exercise_id));
+    const sameDay = fresh(days[day]?.exercises ?? []);
+    const anyDay = fresh(days.flatMap((d) => d.exercises));
+    const muscle = (id: string) => ex.get(id)?.muscle_primary;
+    const by = sameDay.find((x) => group(x.exercise_id) === group(s.exercise_id)) ?? anyDay.find((x) => muscle(x.exercise_id) === muscle(s.exercise_id)) ?? anyDay.find((x) => group(x.exercise_id) === group(s.exercise_id)) ?? null;
     if (by) used.add(by.exercise_id);
     replaced.push({ exercise_id: s.exercise_id, reason: s.reason!, weeks: s.weeks, by: by?.exercise_id ?? null, day });
   }

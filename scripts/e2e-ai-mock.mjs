@@ -11,7 +11,8 @@
 //                      proposes a draft with one id that is not in the library; a message with a photo gets a short
 //                      visual-estimate answer; "which days" reads get_training_pattern; one more chest exercise on the
 //                      chest day reads get_program and get_library (no cards), then propose_exercise after Seated Cable
-//                      Row; "show me my program" reads get_program with show: true; anything else reads get_volume
+//                      Row; Ask Coach from a due line (its CONTEXT) calls suggest_replacements, then one replace card per
+//                      replacement; "show me my program" reads get_program with show: true; anything else reads get_volume
 //                      for this week (for the last 3 weeks when asked), then answers with text.
 // Tests switch the answers with GET /__mode?report=ok|fail|auth&advice=ok|fail|auth&overview=ok|fail|auth&coach=ok|fail|auth|mismatch
 // (mismatch: the "this week" answer names a chest status other than the one its get_volume card shows)
@@ -192,6 +193,23 @@ export function startAiMock(port) {
     const note = (t) => ({ type: "thinking", thinking: t });
     if (images && !results.length)
       return void stream(res, [{ type: "text", text: persian ? "این یک برآورد دیداری است: شانه‌ها و سینه متعادل دیده می‌شوند. از یک عکس ثابت نمی‌توان فرم را کامل قضاوت کرد." : "This is a visual estimate: shoulders and chest look balanced. One still photo cannot fully judge technique." }], "end_turn", usage);
+    // Ask Coach on a due line of the Program screen (SPEC-v11 Phase B): the CONTEXT names the exercise. The coach calls
+    // suggest_replacements, proposes each replacement as a replace card (propose_exercise with replaces_exercise_id),
+    // then says in Persian which region the exercise trained and why each replacement fits.
+    const due = /due line of the Program screen for .+? \(([^,]+), /.exec(call.context);
+    if (due) {
+      const parsed = all.filter((b) => b.type === "tool_result").map((b) => JSON.parse(typeof b.content === "string" ? b.content : (b.content?.[0]?.text ?? "{}")));
+      const r = parsed.find((x) => Array.isArray(x.replacements));
+      if (!done.has("suggest_replacements")) return void stream(res, [note("ناحیه‌ی این حرکت و جایگزین‌هایش را پیدا می‌کنم."), tool("suggest_replacements", { exercise_id: due[1] })], "tool_use", usage);
+      if (!done.has("propose_exercise") && r?.replacements.length) {
+        const day = r.exercise.days[0]?.day_id;
+        const cards = r.replacements.map((x, i) => ({ type: "tool_use", id: `toolu_e2e_${calls.length}_propose_exercise_${i}`, name: "propose_exercise", input: { program_day_id: day, exercise_id: x.exercise_id, replaces_exercise_id: due[1] } }));
+        return void stream(res, cards, "tool_use", usage);
+      }
+      const region = r?.exercise.main_focus[0]?.label ?? "همان ناحیه";
+      const lines = (r?.replacements ?? []).map((x) => `${x.name}: ${x.change === "different region" ? `ناحیه‌ی ${x.main_focus[0]?.label ?? "دیگر"}` : "همان ناحیه با وسیله‌ی دیگر"}.`);
+      return void stream(res, [{ type: "text", text: `${r?.exercise.name ?? "این حرکت"} این چند هفته روی ${region} کار کرده است. ${lines.join(" ")} یکی را با «Only this session» یا «Whole program» انتخاب کن.` }], "end_turn", usage);
+    }
     // "On my chest day add one exercise for more chest" (Payam, 2026-10-16): his program and the chest exercises (read
     // without cards), then propose_exercise: a chest exercise the day does not have, after Seated Cable Row, with the
     // button he asked for first ("from now on" → Whole program, "just today" → Only this session).

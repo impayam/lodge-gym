@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   balanceStatus,
   convertWeight,
+  directTargets,
   epley,
   liftTrends,
   mainLifts,
   monthKeyOf,
   monthRange,
   monthlyReport,
+  muscleRows,
   muscleTargets,
   programOn,
   volumePerMuscle,
@@ -51,6 +53,41 @@ describe("building blocks", () => {
     expect(balanceStatus(4, 5)).toBe("on");
     expect(balanceStatus(6, 5)).toBe("on");
     expect(balanceStatus(7, 5)).toBe("over");
+  });
+});
+
+describe("forearm and neck direct-set targets (SPEC-v11 Phase B)", () => {
+  // The program trains forearms (4 sets) and neck (2 sets) directly; done this week: 3 wrist-curl sets, no neck work.
+  const withDirect = () => {
+    const d = reportData();
+    const ex = (id: string, name_en: string, muscle_primary: string) => ({ ...d.exercises.find((e) => e.id === "curl")!, id, name_en, muscle_primary, muscles_secondary: [], pattern: "isolation" as const, mechanic: "isolation" as const });
+    d.exercises.push(ex("wrist_curl", "Palms-Up Barbell Wrist Curl", "forearms"), ex("neck_ext", "Lying Neck Extension", "neck"));
+    const day = d.program.days[0];
+    const item = (exercise_id: string, sets: number) => ({ ...day.exercises[day.exercises.length - 1], id: `${day.id}_${exercise_id}`, exercise_id, sets, is_main: false, superset_tag: null });
+    day.exercises.push(item("wrist_curl", 4), item("neck_ext", 2));
+    const s1 = d.sessions.find((s) => s.id === "S1")!;
+    for (let i = 0; i < 3; i++) s1.sets.push({ ...s1.sets[0], id: `S1-w${i}`, exercise_id: "wrist_curl", set_index: i, weight: 45, reps: 15 });
+    return d;
+  };
+
+  it("the target is the program's direct sets for each group it trains directly; no direct work, no target", () => {
+    expect(directTargets(reportData())).toEqual({});
+    expect(directTargets(withDirect())).toEqual({ forearms: 4, neck: 2 });
+    // The fractional targets the AI reports read stay the ten groups.
+    expect(Object.keys(muscleTargets(withDirect()))).toEqual(Object.keys(muscleTargets(reportData())));
+  });
+
+  it("weekly rows compare direct sets with it; the other groups keep the fractional rule", () => {
+    const rows = weeklyReport(withDirect(), "2026-09-23").muscles;
+    // 3 of 4 direct sets is under (below 80 %), though the fractional count (curls and pulls add half sets) is 6.5.
+    expect(rows.find((m) => m.muscle === "forearms")).toEqual({ muscle: "forearms", sets: 3, fractional: 6.5, target: 4, status: "under", basis: "direct" });
+    expect(rows.find((m) => m.muscle === "neck")).toEqual({ muscle: "neck", sets: 0, fractional: 0, target: 2, status: "none", basis: "direct" });
+    expect(rows.find((m) => m.muscle === "chest")!.basis).toBeUndefined();
+    // Half sets from pulls and curls do not count toward the direct target.
+    expect(muscleRows({ forearms: { direct: 1, fractional: 6.5 } }, {}, { forearms: 4 }).find((m) => m.muscle === "forearms")!.status).toBe("under");
+    expect(weeklyReport(reportData(), "2026-09-23").muscles.find((m) => m.muscle === "forearms")!.target).toBeNull();
+    expect(progressReport(withDirect(), "2026-09-23").balance.muscles.find((m) => m.muscle === "neck")!.target).toBe(2);
+    expect(monthlyReport(withDirect(), "2026-09", "2026-09-30").muscles.find((m) => m.muscle === "forearms")!.basis).toBe("direct");
   });
 });
 
