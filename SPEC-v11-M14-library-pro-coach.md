@@ -132,8 +132,9 @@ New table (migration, **STOP**: show SQL):
   (https://pubmed.ncbi.nlm.nih.gov/9189733), Schoenfeld, Ogborn & Krieger 2017 (J Sports Sci 35(11):1073–1082), RP
   forearm guide (https://rpstrength.com/expert-advice/forearm-growth-training-tips),
   https://pubmed.ncbi.nlm.nih.gov/17086765/.
-- **Session length.** Covering all 30 regions with the current 4 days takes about 35 exercises instead of 25, about
-  60 minutes a day: New program defaults to the 75-minute setting.
+- **Session length.** Covering all 30 regions with the current 4 days takes about 40 exercises instead of 25 (the
+  estimate before building was 35): 57–68 minutes a day over 50 seeds, inside the 75-minute setting that New program now
+  defaults to.
 - **Coach.** B1's `get_exercise_history` is served by `get_e1rm_history` and `get_program` (weeks, due, reason, stalled,
   new best); `get_program` adds the block and the regions without a main focus; `get_library` gains the `region` filter
   and returns the region tags. The B2 variety rule is replaced by the rotation rule; the prompt adds the equipment roles
