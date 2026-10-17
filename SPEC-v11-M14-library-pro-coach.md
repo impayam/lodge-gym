@@ -97,6 +97,63 @@ New table (migration, **STOP**: show SQL):
   work carry no region, A3). Propose the region keys, the tagging rules and each rule's evidence level, the same way as
   the A3 table, and wait for Payam's OK before any code or migration.
 
+### Phase B decisions (Payam, 2026-10-17) and how they are built
+- **Regions (30).** Forearm flexors and extensors, neck flexors and extensors join the A3 list (rules and evidence in
+  `worker/lib/regions.ts`). Forearms stay off as "also trained" in rows, pulls and deadlifts. Cable Reverse Wrist Curl no
+  longer tags the brachialis. Neck: the gym has no 4-way neck machine and no head harness, so only plate, bodyweight and
+  isometric exercises; four were added (`seed/library/manual.json`): Lying Neck Extension, Lying Neck Flexion, Isometric
+  Neck Extension (Hand Resistance), Isometric Neck Flexion. The Library shows neck under All only.
+- **Rotation** (`worker/lib/rotation.ts`). Main and secondary lifts: kept at least 6 weeks, due at 6–8 weeks when stalled
+  (the overview's rule: the last 3 sessions did not beat the best before them) or without a new best in their last 2
+  weeks, always due at 8. Accessory, isolation and core: kept at least 3 weeks, due at 3–4 weeks when stalled, always at
+  4. Weeks count from when the exercise entered the program in that role, across programs that kept it; weeks with no
+  training at all do not count. Nothing changes on its own.
+- **Program screen.** One line per due exercise, most overdue first, at most 3, with "Nothing changes until you pick a
+  replacement." Each line has an Ask Coach button: the Coach says which region the exercise trained these weeks, offers
+  2–3 replacements (`suggest_replacements`) with a one-line reason each, and shows each as the one-exercise card in
+  replace mode ("Only this session" / "Whole program").
+- **Blocks.** A block is one accessory period; the seed program is block A and each new program starts the next block
+  (A → B → C → A, `params.block`). Every block covers all 30 regions with at least one main-focus exercise: a region left
+  out in the last block replaces an exercise whose region is covered twice. Within a day, no two exercises share a
+  main-focus region and the equipment.
+- **Equipment.** Barbell: strength and easy load progression, so main lifts stay barbell and only the variation or angle
+  changes (Bench → Incline/Decline, Squat → Front/Pause, Deadlift → Trap Bar/Deficit). Dumbbell and cable: a region, an
+  angle or a stretch, for the region work. Growth is similar across equipment when sets are near failure (moderate
+  evidence), so no equipment is called better for growth. The other exercises of each muscle follow the approved
+  A → B → C table (`EQUIPMENT_MIX` in `worker/lib/generator/blocks.ts`).
+- **Replacing.** A main lift: a close barbell variation of the same pattern. An accessory: nothing used in the last 8
+  weeks, at most one "New to me" exercise per day. A day never changes its main lift and all its accessories at once;
+  exercises that are not due are kept, and the proposal shows "replaces X: N weeks".
+- **Forearm and neck weekly targets (direct sets).** Forearms start at 4 (2 flexors, 2 extensors), neck at 2 (1 + 1) in
+  the first block after the seed program; each later block adds 1 set, up to 8 and 6. Neck work starts light and
+  progresses slowly: 1–3 sets of 15–25 reps, 3–4 reps in reserve, 60 s rest, and the smallest load step (2.5 lb /
+  1.25 kg, never doubled). Reports compare forearm and neck direct sets with the program's direct sets (fractional counts
+  would always read as over: rows and curls add half a forearm set). Sources: Conley et al. 1997
+  (https://pubmed.ncbi.nlm.nih.gov/9189733), Schoenfeld, Ogborn & Krieger 2017 (J Sports Sci 35(11):1073–1082), RP
+  forearm guide (https://rpstrength.com/expert-advice/forearm-growth-training-tips),
+  https://pubmed.ncbi.nlm.nih.gov/17086765/.
+- **PR #25 review (Payam, 2026-10-17).**
+  - A region an exercise alone covers in the program stays the main focus of its replacement: a side-delt exercise is
+    replaced by a side-delt exercise (other equipment, then another angle) unless side delts are covered elsewhere.
+  - The replace card first says what happens to the replaced exercise's own region (kept by the new exercise, still
+    covered by others, or lost) and its muscle group's weekly sets, even when they do not change.
+  - The triceps long head counts as covered only by overhead work, its strong-evidence exercise (`coverRegions`), so
+    every block keeps an overhead extension. When a due exercise's region is filled again, other equipment than the due
+    one comes first within the block's equipment mix (block B: a dumbbell overhead extension for the cable one).
+  - Seven overhead extensions whose names do not say overhead are tagged by review, and Smith Machine Reverse Calf Raises
+    (a shin exercise) carries no region (`seed/library/region-overrides.json`); the generator never picks an exercise
+    without a main-focus region.
+  - The Calendar's contrast check runs at a pinned clock (06:00 Denver, or earlier).
+- **Session length.** Covering all 30 regions with the current 4 days takes about 40 exercises instead of 25 (the
+  estimate before building was 35): 57–68 minutes a day over 50 seeds, inside the 75-minute setting that New program now
+  defaults to.
+- **Coach.** B1's `get_exercise_history` is served by `get_e1rm_history` and `get_program` (weeks, due, reason, stalled,
+  new best); `get_program` adds the block and the regions without a main focus; `get_library` gains the `region` filter
+  and returns the region tags. The B2 variety rule is replaced by the rotation rule; the prompt adds the equipment roles
+  (say why an equipment fits: strength progress or a region, angle or stretch). The weekly review names exercises due
+  now and next week. Not built in Phase B: `get_coverage`, `get_library`'s `new_to_me` and `exclude_ids`, and per-region
+  sets on the draft card (the draft card shows the coverage and same-region warnings instead).
+
 ---
 
 ## Phase C. Photo needs analysis

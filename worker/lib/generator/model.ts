@@ -6,7 +6,7 @@
 // are never both main lifts of one session, full-body and strength weeks have at most two training days in a row, and
 // split days never repeat a muscle's direct work on back-to-back days.
 
-import { TARGET_GROUPS } from "../muscles";
+import { TARGET_GROUPS, type ReportGroup } from "../muscles";
 import type { Pattern } from "../types";
 
 export type TargetGroup = (typeof TARGET_GROUPS)[number];
@@ -32,6 +32,9 @@ export interface GeneratorInput {
   equipment: EquipmentChoice;
   /** Deterministic tie-break between equally good exercises. */
   seed: number;
+  /** The block this program starts (SPEC-v11 Phase B): the server sets it to the current program's block + 1 (the seed
+   *  program is block 1, A). Older programs have none. */
+  block?: number;
 }
 
 /** Allowed days per style (§8.3). */
@@ -63,6 +66,21 @@ export const STYLE_NAME: Readonly<Record<ResolvedStyle, string>> = {
 export const MAX_TWO_IN_A_ROW: ReadonlySet<ResolvedStyle> = new Set(["full_body", "strength"]);
 
 export type DayKind = "full" | "upper" | "lower" | "push" | "pull" | "legs" | "chest" | "back" | "shoulders" | "arms";
+
+/** Groups without a volume target that region coverage and the forearm and neck targets add (Phase B), per day kind:
+ *  traps and neck with the back, forearms with the biceps, adductors and abductors with the legs. */
+export const DAY_EXTRA_GROUPS: Readonly<Record<DayKind, readonly ReportGroup[]>> = {
+  full: ["traps", "forearms", "neck", "adductors", "abductors"],
+  upper: ["traps", "forearms", "neck"],
+  lower: ["adductors", "abductors"],
+  push: [],
+  pull: ["traps", "forearms", "neck"],
+  legs: ["adductors", "abductors"],
+  chest: [],
+  back: ["traps", "neck"],
+  shoulders: ["neck"],
+  arms: ["forearms"],
+};
 
 /** Groups a day may train directly (its accessories and isolation). Adjacent split days share none of them. */
 export const DAY_GROUPS: Readonly<Record<DayKind, readonly TargetGroup[]>> = {
@@ -200,6 +218,15 @@ export function scheme(slot: Slot, strength: boolean): Scheme {
       return { sets: 3, range: [2, 3], reps: [10, 15], rir: [0, 2], rest: 60 };
   }
 }
+
+/**
+ * Neck work (Phase B, approved 2026-10-17): it starts light and progresses slowly: 1–3 sets of 15–25 reps with at
+ * least 3 reps in reserve, and the smallest weight steps (worker/lib/progression.ts).
+ */
+export const NECK_SCHEME: Scheme = { sets: 1, range: [1, 3], reps: [15, 25], rir: [3, 4], rest: 60 };
+
+/** The slot's scheme for an exercise of `group`: neck work has its own. */
+export const schemeFor = (slot: Slot, strength: boolean, group: string | null | undefined): Scheme => (group === "neck" ? NECK_SCHEME : scheme(slot, strength));
 
 /** Seconds of a timed core hold, used instead of reps. */
 export const HOLD_SECONDS: readonly [number, number] = [30, 45];

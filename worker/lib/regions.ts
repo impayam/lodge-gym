@@ -1,4 +1,5 @@
-// Muscle regions (SPEC-v11 M14 A3, approved by Payam 2026-10-16): the 26 region keys, and the reviewed rule table that
+// Muscle regions (SPEC-v11 M14 A3, approved by Payam 2026-10-16; forearms and neck added in Phase B B3, approved
+// 2026-10-17): the 30 region keys, and the reviewed rule table that
 // tags each exercise with the regions it emphasises and how well research supports that ("evidence"). Ideas without
 // support (inner or outer chest, a biceps "peak", shaping where a muscle inserts) are never tagged. Pure: used by the
 // library import, by the Worker when a custom exercise is saved, and by the Library screen.
@@ -39,6 +40,10 @@ export const REGIONS = [
   "core_anti_ext",
   "core_flexion",
   "core_anti_rot",
+  "forearm_flexors",
+  "forearm_extensors",
+  "neck_flexors",
+  "neck_extensors",
 ] as const;
 export type Region = (typeof REGIONS)[number];
 export const isRegion = (v: unknown): v is Region => typeof v === "string" && (REGIONS as readonly string[]).includes(v);
@@ -82,6 +87,10 @@ export const REGION_INFO: Readonly<Record<Region, { muscle: string; label: strin
   core_anti_ext: { muscle: "core", label: "Core, anti-extension", short: "Anti-extension" },
   core_flexion: { muscle: "core", label: "Core, flexion", short: "Flexion" },
   core_anti_rot: { muscle: "core", label: "Core, anti-rotation and obliques", short: "Anti-rotation" },
+  forearm_flexors: { muscle: "forearms", label: "Forearm flexors (wrist flexion and grip)", short: "Flexors" },
+  forearm_extensors: { muscle: "forearms", label: "Forearm extensors (wrist extension)", short: "Extensors" },
+  neck_flexors: { muscle: "neck", label: "Neck flexors (front)", short: "Front" },
+  neck_extensors: { muscle: "neck", label: "Neck extensors (back)", short: "Back" },
 };
 
 /** The facts the rules read. `secondary` muscles tag only through meaningful synergies (see SECONDARY_TAGGED). */
@@ -183,7 +192,30 @@ export const RULES: Readonly<Partial<Record<Muscle, Rule[]>>> = {
     { id: "biceps-pull", when: (_n, p) => p === "v_pull" || p === "h_pull", tags: [["biceps_long", "secondary", "moderate"], ["biceps_short", "secondary", "moderate"]] },
     { id: "biceps-default", when: always, tags: [["biceps_long", "primary", "weak"], ["biceps_short", "primary", "weak"]] },
   ],
-  forearms: [{ id: "forearms-brachialis", when: any("hammer", "reverse"), tags: [["brachialis", "primary", "moderate"]] }],
+  // Forearms (Phase B, approved 2026-10-17). A hammer or reverse curl (elbow flexion) is brachialis work; a reverse
+  // WRIST curl is wrist extension (it was tagged brachialis before: fixed). Grip and holds load the finger flexors.
+  forearms: [
+    { id: "forearms-brachialis", when: (n) => any("hammer", "reverse")(n) && any("curl")(n) && !any("wrist")(n), tags: [["brachialis", "primary", "moderate"]] },
+    { id: "forearm-roller", when: any("roller"), tags: [["forearm_flexors", "primary", "moderate"], ["forearm_extensors", "primary", "moderate"]] },
+    { id: "forearm-rotation", when: (n) => any("rotation", "rotations")(n) || (any("pronation")(n) && any("supination")(n)), tags: [["forearm_flexors", "primary", "weak"], ["forearm_extensors", "primary", "weak"]] },
+    { id: "forearm-pronation", when: any("pronation", "pronator"), tags: [["forearm_flexors", "primary", "weak"]] },
+    { id: "forearm-supination", when: any("supination", "supinator"), tags: [["forearm_extensors", "primary", "weak"]] },
+    { id: "forearm-extension", when: (n) => n.includes(" palms down ") || n.includes(" palm down ") || n.includes(" reverse wrist ") || n.includes(" wrist extension "), tags: [["forearm_extensors", "primary", "strong"]] },
+    { id: "forearm-neutral", when: (n) => any("neutral")(n) && any("wrist")(n), tags: [["forearm_flexors", "secondary", "weak"], ["forearm_extensors", "secondary", "weak"]] },
+    { id: "forearm-grip", when: any("finger", "grip", "gripper", "squeeze", "pinch", "hang", "farmer", "carry", "hold"), tags: [["forearm_flexors", "primary", "moderate"]] },
+    { id: "forearm-flexion", when: (n) => any("wrist")(n) || n.includes(" palms up ") || n.includes(" palm up "), tags: [["forearm_flexors", "primary", "strong"]] },
+    { id: "forearm-default", when: always, tags: [["forearm_flexors", "primary", "weak"]] },
+  ],
+  // Neck (Phase B, approved 2026-10-17): head extension has a growth study (MRI, 12 weeks); flexion has strength data.
+  neck: [
+    { id: "neck-front-back", when: (n) => any("front")(n) && any("back")(n), tags: [["neck_flexors", "primary", "moderate"], ["neck_extensors", "primary", "moderate"]] },
+    { id: "neck-lateral", when: any("side", "lateral"), tags: [["neck_flexors", "secondary", "weak"], ["neck_extensors", "secondary", "weak"]] },
+    { id: "neck-isometric-extension", when: (n) => any("isometric")(n) && any("extension", "back")(n), tags: [["neck_extensors", "primary", "moderate"]] },
+    { id: "neck-isometric-flexion", when: (n) => any("isometric")(n) && any("flexion", "front")(n), tags: [["neck_flexors", "primary", "moderate"]] },
+    { id: "neck-extension", when: (n) => any("extension", "prone")(n) || n.includes(" face down "), tags: [["neck_extensors", "primary", "strong"]] },
+    { id: "neck-flexion", when: (n) => any("flexion", "supine", "tuck")(n) || n.includes(" face up "), tags: [["neck_flexors", "primary", "moderate"]] },
+    { id: "neck-default", when: always, tags: [["neck_flexors", "secondary", "weak"], ["neck_extensors", "secondary", "weak"]] },
+  ],
   quads: [
     { id: "quads-knee-ext", when: any("extension", "sissy", "nordic"), tags: [["quads_knee_ext", "primary", "strong"]] },
     { id: "quads-squat", when: (n, p) => p === "squat" || any("squat")(n), tags: [["quads_squat", "primary", "strong"], ["adductors", "secondary", "moderate"]] },
@@ -217,11 +249,9 @@ export const RULES: Readonly<Partial<Record<Muscle, Rule[]>>> = {
  */
 export const SECONDARY_TAGGED: ReadonlySet<string> = new Set(["chest", "shoulders_front", "shoulders_side", "rear_delts", "back_lats", "back_upper", "traps", "triceps", "biceps", "glutes", "quads", "adductors", "hamstrings"]);
 
-/** Primary muscles without regions in the approved list: their exercises carry no region (wrist curls, neck work). */
-export const NO_REGION_MUSCLES: ReadonlySet<string> = new Set(["forearms", "neck"]);
-
-/** Rules allowed to tag two primary regions of one muscle (reviewed: a plain curl trains both biceps heads). */
-export const TWO_PRIMARY_RULES: ReadonlySet<string> = new Set(["biceps-curl", "biceps-default"]);
+/** Rules allowed to tag two primary regions of one muscle (reviewed: a plain curl trains both biceps heads; the wrist
+ *  roller and wrist rotations both forearm groups; the front-and-back neck isometric both neck groups). */
+export const TWO_PRIMARY_RULES: ReadonlySet<string> = new Set(["biceps-curl", "biceps-default", "forearm-roller", "forearm-rotation", "neck-front-back"]);
 
 /** Reviewed exceptions for named exercises (seed/library/region-overrides.json): their tags replace the rules'. */
 export type RegionOverrides = Record<string, { tags: { region: Region; emphasis: Emphasis; evidence: Evidence }[]; reason: string }>;
@@ -254,4 +284,19 @@ export function regionTags(ex: RegionInput & { id?: string }, overrides: RegionO
 /** The regions of one muscle chip, in the order the chips show them. */
 export function regionsOf(muscle: string): Region[] {
   return REGIONS.filter((r) => REGION_INFO[r].muscle === muscle);
+}
+
+/**
+ * Regions whose coverage needs more than a main-focus tag (Payam, 2026-10-17): the triceps long head counts as covered
+ * only by overhead work, its strong-evidence exercise (the triceps-overhead rule; lying extensions tag it as weak).
+ */
+const COVER_EVIDENCE: Partial<Record<Region, Evidence>> = { triceps_long: "strong" };
+
+/**
+ * The regions an exercise covers for the block's region coverage, the plan check and the Coach's replacements: its
+ * main-focus tags, less those below a region's required evidence.
+ */
+export function coverRegions(tags: readonly { region: Region; emphasis: Emphasis; evidence: Evidence }[]): Region[] {
+  const rank: Record<Evidence, number> = { weak: 0, moderate: 1, strong: 2 };
+  return tags.filter((t) => t.emphasis === "primary" && rank[t.evidence] >= rank[COVER_EVIDENCE[t.region] ?? "weak"]).map((t) => t.region);
 }

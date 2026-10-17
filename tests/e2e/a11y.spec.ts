@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "./fixtures";
 import { goTo, openMore, resetCalendar, resetWorkouts, signIn, sql } from "./helpers";
+import { zonedToUtcISO } from "../../worker/lib/time";
 
 // SPEC-v8 §10: an axe contrast check on all screens. Axe cannot judge text drawn over the library's gradients (card,
 // clay and page fills) and reports it as "incomplete", so every screen is also measured as drawn: each run of text
@@ -34,12 +35,24 @@ const KNOWN: { name: string; floor: number; measured: string; match: (r: Run) =>
 const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
 
 /**
- * The training calendar (SPEC-v10 M13) around the current hour, so the week grid opens on a shift, a planned and a missed
- * session (it opens an hour before now; the hour is kept inside 05:00–20:00 so the blocks stay on the 04:00–24:00 axis).
+ * The Calendar is measured at a pinned time (PR #25 review): 06:00 Denver, or now when that is earlier, so the run
+ * measures the same view at any hour. The week grid opens an hour before now: a run late in the evening scrolled the
+ * 23:00 label onto the grid's bottom edge.
+ */
+function calendarClock(): Date {
+  const now = new Date();
+  const six = new Date(zonedToUtcISO(denver(now), "06:00", "America/Denver"));
+  return six < now ? six : now;
+}
+
+/**
+ * The training calendar (SPEC-v10 M13) around the Calendar's hour, so the week grid opens on a shift, a planned and a
+ * missed session (it opens an hour before that time; the hour is kept inside 05:00–20:00 so the blocks stay on the
+ * 04:00–24:00 axis).
  */
 function seedCalendar() {
   resetCalendar();
-  const now = new Date();
+  const now = calendarClock();
   const today = denver(now);
   const day = (n: number) => denver(new Date(now.getTime() + n * 86_400_000));
   const hour = Math.min(20, Math.max(5, Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Denver", hour: "numeric", hourCycle: "h23" }).format(now))));
@@ -327,6 +340,7 @@ test("contrast: pushed screens, the session and the coach", async ({ page }) => 
   await page.getByTestId("plan-session").click();
   failed.push(...(await contrast(page, "Planner")));
   await page.getByTestId("back").click();
+  await page.clock.setFixedTime(calendarClock());
   await page.getByTestId("cal-open").click();
   failed.push(...(await contrast(page, "Calendar")));
   await page.getByTestId("cal-free").check();

@@ -5,17 +5,27 @@ import type { DayExercise, Equipment, SetEntry, Unit } from "./types";
 export interface ExerciseInfo {
   equipment: Equipment;
   is_lower: boolean;
+  /** Neck work (SPEC-v11 Phase B) progresses by the smallest plate. */
+  muscle_primary?: string;
 }
 
-/** Suggestion increment: barbell/machine/cable upper +5 lb (+2.5 kg), lower +10 lb (+5 kg), dumbbell +5 lb per hand (+2 kg). */
+/** Neck work starts light and progresses slowly (Payam, 2026-10-17): the smallest plate, never a double step. */
+export const NECK_STEP = { lb: 2.5, kg: 1.25 } as const;
+const isNeck = (ex: ExerciseInfo) => ex.muscle_primary === "neck";
+
+/** Suggestion increment: barbell/machine/cable upper +5 lb (+2.5 kg), lower +10 lb (+5 kg), dumbbell +5 lb per hand (+2 kg);
+ *  neck work the smallest plate, +2.5 lb (+1.25 kg). */
 export function weightIncrement(ex: ExerciseInfo, unit: Unit): number {
+  if (isNeck(ex)) return NECK_STEP[unit];
   if (ex.equipment === "dumbbell") return unit === "kg" ? 2 : 5;
   if (ex.is_lower) return unit === "kg" ? 5 : 10;
   return unit === "kg" ? 2.5 : 5;
 }
 
-/** Step used by the −/+ weight buttons. Bodyweight (added load or assistance) uses the upper-body step. */
+/** Step used by the −/+ weight buttons. Bodyweight (added load or assistance) uses the upper-body step; neck work the
+ *  smallest plate. */
 export function stepperIncrement(ex: ExerciseInfo, unit: Unit): number {
+  if (isNeck(ex)) return NECK_STEP[unit];
   if (ex.equipment === "bodyweight") return unit === "kg" ? 2.5 : 5;
   return weightIncrement(ex, unit);
 }
@@ -61,7 +71,8 @@ export const RIR_EASY = 3;
 
 /**
  * Progression (SPEC §7 plus approved RIR rules):
- * - every planned set done at the top of the range with RIR 3+ → double increment ("easy");
+ * - every planned set done at the top of the range with RIR 3+ → double increment ("easy"; never for neck work, which
+ *   is planned at RIR 3+ and progresses by one smallest plate);
  * - every planned set done at the top of the range → one increment;
  * - otherwise (including RIR 0 with missed reps) → same weight.
  */
@@ -69,7 +80,7 @@ export function suggest(plan: Pick<DayExercise, "sets" | "reps_max" | "is_time">
   if (!last) return { kind: "none" };
   const planned = last.sets.slice(0, plan.sets);
   const enough = last.sets.length >= plan.sets;
-  const easyAll = (hit: boolean) => hit && planned.every((s) => s.rir === RIR_EASY);
+  const easyAll = (hit: boolean) => hit && !isNeck(ex) && planned.every((s) => s.rir === RIR_EASY);
   if (plan.is_time) {
     const secs = last.sets.map((s) => s.seconds).filter((v): v is number => v != null);
     if (!secs.length) return { kind: "none" };

@@ -472,14 +472,16 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
           fmt={(n) => fmtNum(n, 1)}
           rows={muscles.map((m) => ({
             key: m.muscle,
-            label: MUSCLE_NAME[m.muscle],
-            value: m.fractional,
+            label: m.basis === "direct" ? `${MUSCLE_NAME[m.muscle]} (direct)` : MUSCLE_NAME[m.muscle],
+            value: m.basis === "direct" ? m.sets : m.fractional,
             mark: m.target,
             direct: m.sets,
             status: m.status,
           }))}
         />
-        <span class="caption">Fractional sets: the primary muscle counts 1 set, each secondary muscle 0.5.</span>
+        <span class="caption">
+          Fractional sets: the primary muscle counts 1 set, each secondary muscle 0.5. Forearms and neck count direct sets against the program's direct sets (rows and curls count only half a forearm set).
+        </span>
       </Card>
       <Consistency starts={calendarStarts("week", range.start, range, null)} sub="Last 5 weeks" />
       {reports}
@@ -718,7 +720,8 @@ function AllView({ reports }: { reports: ComponentChildren }) {
       <Card title="Muscle balance this week" sub={`${dayMonth(r.balance.week.start)} – ${dayMonth(r.balance.week.end)}`} testid="balance">
         <span class="caption">
           Done sets per group vs the program target. Direct counts the primary muscle only; fractional adds 0.5 for each secondary muscle. The target is the program's planned sets, counted the same
-          fractional way. Below 80% of the target (fractional) counts as under, above 120% as over.
+          fractional way. Below 80% of the target (fractional) counts as under, above 120% as over. Forearms and neck, when the program trains them directly, compare direct sets with the program's
+          direct sets.
         </span>
         <MuscleMap muscles={r.balance.muscles} />
       </Card>

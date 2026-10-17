@@ -112,7 +112,7 @@ describe("region SQL and checks", () => {
     ]);
   });
 
-  it("checks: untagged counted exercises, exempt forearm work, and two primary regions of one muscle", () => {
+  it("checks: untagged counted exercises (forearm work included) and two primary regions of one muscle", () => {
     const rows = [
       { id: "a", name_en: "A", muscle_primary: "chest", category: "strength" },
       { id: "b", name_en: "Wrist Curl", muscle_primary: "forearms", category: "strength" },
@@ -120,8 +120,7 @@ describe("region SQL and checks", () => {
       { id: "d", name_en: "Stretch", muscle_primary: "chest", category: "stretching" },
     ];
     const c = regionChecks(rows, new Map([["c", [t("chest_upper"), t("chest_mid")]]]));
-    expect(c.untagged.map((x) => x.id)).toEqual(["a"]);
-    expect(c.exempt.map((x) => x.id)).toEqual(["b"]);
+    expect(c.untagged.map((x) => x.id)).toEqual(["a", "b"]);
     expect(c.doublePrimary).toEqual(["c (C): 2 primary chest regions"]);
   });
 });

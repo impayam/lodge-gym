@@ -65,7 +65,8 @@ test("finish a session with an extra exercise: the after-session report (today's
   // weight and the Apple Health workout it is written 2 hours after the session ends.
   await expect(page.getByTestId("report-screen")).toBeVisible();
   await expect(page.getByTestId("photo-prompt")).toBeVisible();
-  await expect(page.getByTestId("report-waiting")).toHaveText(/^It is written once today's body weight and the Apple Health workout are both in, or at \d{2}:\d{2} at the latest\.$/, { timeout: 30_000 });
+  // The due time is 2 h after the session; after 22:00 it falls on the next day and carries its date ("Sat, Oct 17 00:19").
+  await expect(page.getByTestId("report-waiting")).toHaveText(/^It is written once today's body weight and the Apple Health workout are both in, or at (\w{3}, \w{3} \d{1,2} )?\d{2}:\d{2} at the latest\.$/, { timeout: 30_000 });
   await expect(page.getByTestId("report-summary")).toHaveCount(0);
   await writeNowAndOpen(page);
   await expect(page.getByTestId("photo-prompt")).toHaveCount(0);

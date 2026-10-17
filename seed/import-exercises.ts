@@ -223,7 +223,7 @@ async function main() {
       const s = seedUpdates.find((u) => u.id === e.id);
       return { id: e.id, name_en: e.name_en, muscle_primary: e.muscle_primary, category: "strength" as const, source: "seed" as const, muscles_secondary: s?.muscles_secondary ?? [] };
     });
-    writeFileSync(here("./library/m14/IMPORT-REPORT.md"), m14ReportMarkdown({ screening: m14.screening, files: m14.files, dedupe: m14.dedupe, before: [...seedRows, ...libRows], added, tags, duplicates }) + "\n");
+    writeFileSync(here("./library/m14/IMPORT-REPORT.md"), m14ReportMarkdown({ screening: m14.screening, files: m14.files, dedupe: m14.dedupe, before: [...seedRows, ...libRows], added, tags, duplicates, overrides: m14.overrides }) + "\n");
     console.log(`seed/library/IMPORT-REPORT.md and seed/library/m14/IMPORT-REPORT.md: ${rows.length} library rows (${added.length} from the M14 sources), ${[...tags.values()].reduce((n, x) => n + x.length, 0)} region tags`);
     return;
   }

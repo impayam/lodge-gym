@@ -4,6 +4,7 @@ import type { CalendarSettings, GymPlan, WorkShift } from "./calendar";
 import type { Category } from "./category";
 import type { GeneratorInput } from "./generator/model";
 import type { Region } from "./regions";
+import type { RotationStatus } from "./rotation";
 import type { SessionPlan } from "./plan";
 
 export type Unit = "lb" | "kg";
@@ -241,6 +242,8 @@ export interface Bootstrap {
   /** Training calendar (SPEC-v10 M13): shifts and gym plans from the same 60 days on, and the calendar settings. A
    *  bootstrap cached before M13 has none. */
   calendar?: { shifts: WorkShift[]; plans: GymPlan[]; settings: CalendarSettings };
+  /** Rotation status of every exercise in the active program (SPEC-v11 Phase B). A bootstrap cached before has none. */
+  rotation?: RotationStatus[];
   server_time: string;
 }
 

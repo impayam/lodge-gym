@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppBindings, Env } from "./env";
 import { ApiError, fail, nowISO, readJson } from "./http";
-import { mapExercise, readProgram, readProgramInfos, readProgramVersions } from "./data";
+import { attachRegions, mapExercise, readProgram, readProgramInfos, readProgramVersions, readRegions, readSessions, readSettings } from "./data";
 import {
   EQUIPMENT_CHOICES,
   GeneratorInputError,
@@ -16,7 +16,9 @@ import {
   STYLE_NAME,
   checkPlan,
   dayMinutes,
+  currentBlock,
   generateProgram,
+  nextBlock,
   planFromEdits,
   programVolume,
   toDayExercises,
@@ -26,6 +28,8 @@ import {
   type TargetGroup,
 } from "./lib/generator";
 import { TARGET_GROUPS } from "./lib/muscles";
+import { programRotation } from "./lib/rotation";
+import { addDays, localDate } from "./lib/time";
 import type { Exercise, ProgramVersion } from "./lib/types";
 import { ID_RE, ulid } from "./lib/ulid";
 
@@ -39,6 +43,8 @@ const inputSchema = z.object({
   avoid: z.array(id).max(300),
   equipment: z.enum(EQUIPMENT_CHOICES),
   seed: z.number().int().min(0).max(2_147_483_647),
+  /** Phase B: the block a draft starts (set by /generate; ignored there). */
+  block: z.number().int().min(1).max(1000).optional(),
 });
 
 /** An edited proposal: the generator inputs and, per layout day, the exercises with their slot and sets. */
@@ -68,28 +74,42 @@ const draftSchema = z.object({
 });
 type Draft = z.infer<typeof draftSchema>;
 
+/** Exercises with done sets in the last 8 weeks: a new pick is never one of them (Phase B rotation). */
+export const RECENT_DAYS = 56;
+
 /** What the generator and the approval check need from the database. */
 async function generatorContext(env: Env) {
-  const [exRows, history, { program }, infos] = await Promise.all([
+  const [exRows, regions, { program }, versions, settings, sessions] = await Promise.all([
     env.DB.prepare("SELECT * FROM exercises").all<Record<string, unknown>>(),
-    env.DB.prepare(
-      `SELECT DISTINCT se.exercise_id AS id FROM set_entries se JOIN workout_sessions ws ON ws.id = se.session_id
-       WHERE ws.status = 'done' AND (se.weight IS NOT NULL OR se.reps IS NOT NULL OR se.seconds IS NOT NULL)`
-    ).all<{ id: string }>(),
+    readRegions(env),
     readProgram(env),
-    readProgramInfos(env),
+    readProgramVersions(env),
+    readSettings(env),
+    readSessions(env, "0000-01-01", "9999-12-31"),
   ]);
-  const exercises: Exercise[] = exRows.results.map(mapExercise);
-  const active = infos.find((p) => p.status === "active");
+  const exercises: Exercise[] = attachRegions(exRows.results.map(mapExercise), regions);
+  const active = versions.find((p) => p.status === "active");
+  const today = localDate(settings.timezone);
+  const since = addDays(today, -(RECENT_DAYS - 1));
+  const hasData = (x: { weight: number | null; reps: number | null; seconds: number | null }) => x.weight != null || x.reps != null || x.seconds != null;
+  const done = sessions.filter((s) => s.status === "done");
   // §8.2: priority muscles default to the current program's; the seed program's is chest.
   const currentPriority: readonly TargetGroup[] = active?.params?.priority_muscles ?? SEED_PRIORITY;
-  return { exercises, historyIds: new Set(history.results.map((r) => r.id)), current: program.days.length ? program : null, currentPriority };
+  return {
+    exercises,
+    historyIds: new Set(done.flatMap((s) => s.sets.filter(hasData).map((x) => x.exercise_id))),
+    current: program.days.length ? program : null,
+    currentPriority,
+    rotation: programRotation({ settings, program, programs: versions, exercises, sessions }, today),
+    recentIds: new Set(done.filter((s) => s.local_date >= since).flatMap((s) => s.sets.filter((x) => x.done && hasData(x)).map((x) => x.exercise_id))),
+    block: nextBlock({ block: currentBlock(versions) }),
+  };
 }
 
-/** A stored or submitted program as a plan the check can read (layout days, slot prescriptions). */
-function toPlan(params: GeneratorInput, days: Draft["days"]): Plan {
+/** A stored or submitted program as a plan the check can read (layout days, slot prescriptions; neck work its own). */
+function toPlan(params: GeneratorInput, days: Draft["days"], ex: ReadonlyMap<string, Pick<Exercise, "muscle_primary">>): Plan {
   try {
-    return planFromEdits(params, days);
+    return planFromEdits(params, days, ex);
   } catch (e) {
     if (e instanceof GeneratorInputError) throw new ApiError(400, "invalid_style", e.message);
     throw e;
@@ -98,14 +118,15 @@ function toPlan(params: GeneratorInput, days: Draft["days"]): Plan {
 
 async function checkStored(env: Env, p: ProgramVersion) {
   if (!p.params) throw new ApiError(409, "not_generated", "Only generated programs can be checked.");
-  const plan = toPlan(
-    p.params,
-    p.days.map((d) => ({ exercises: d.exercises.map((x) => ({ exercise_id: x.exercise_id, slot: x.slot ?? "accessory", sets: x.sets, per_leg: x.per_leg, is_time: x.is_time, superset_tag: x.superset_tag })) }))
-  );
   const ctx = await generatorContext(env);
   const exMap = new Map(ctx.exercises.map((e) => [e.id, e]));
+  const plan = toPlan(
+    p.params,
+    p.days.map((d) => ({ exercises: d.exercises.map((x) => ({ exercise_id: x.exercise_id, slot: x.slot ?? "accessory", sets: x.sets, per_leg: x.per_leg, is_time: x.is_time, superset_tag: x.superset_tag })) })),
+    exMap
+  );
   const targets = weeklyTargets(programVolume(ctx.current ?? { days: [] }, exMap), ctx.currentPriority, p.params.priority_muscles);
-  return checkPlan(plan, exMap, targets);
+  return checkPlan(plan, exMap, targets, { block: p.params.block });
 }
 
 /** Makes `programId` the active program: the old one is archived and its activation closed; a new activation opens. */
@@ -123,12 +144,12 @@ export const programRoutes = new Hono<AppBindings>();
 /** Every program with its days, exercises and activations, newest first. */
 programRoutes.get("/", async (c) => c.json({ programs: await readProgramVersions(c.env) }));
 
-/** A proposal for the inputs; nothing is stored. */
+/** A proposal for the inputs; nothing is stored. It starts the block after the current program's (Phase B). */
 programRoutes.post("/generate", async (c) => {
   const input = await readJson(c, inputSchema);
   const ctx = await generatorContext(c.env);
   try {
-    return c.json({ proposal: generateProgram(input, ctx) });
+    return c.json({ proposal: generateProgram({ ...input, block: ctx.block }, ctx) });
   } catch (e) {
     if (e instanceof GeneratorInputError) return fail(c, 400, "invalid_style", e.message);
     throw e;
@@ -138,12 +159,12 @@ programRoutes.post("/generate", async (c) => {
 /** Saves an edited proposal as a draft (or replaces a draft with the same id). Approved programs never change. */
 programRoutes.post("/", async (c) => {
   const draft = await readJson(c, draftSchema);
-  const plan = toPlan(draft.params, draft.days);
   const existing = (await readProgramVersions(c.env, [draft.id]))[0];
   if (existing && existing.status !== "draft") return fail(c, 409, "not_draft", "This program is already approved and can no longer change.");
-  const ids = [...new Set(plan.days.flatMap((d) => d.exercises.map((x) => x.exercise_id)))];
-  const known = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM exercises WHERE id IN (${ids.map(() => "?").join(", ")})`).bind(...ids).first<{ n: number }>();
-  if ((known?.n ?? 0) !== ids.length) return fail(c, 400, "unknown_exercise", "An exercise is not in the library.");
+  const ids = [...new Set(draft.days.flatMap((d) => d.exercises.map((x) => x.exercise_id)))];
+  const known = await c.env.DB.prepare(`SELECT id, muscle_primary FROM exercises WHERE id IN (${ids.map(() => "?").join(", ")})`).bind(...ids).all<{ id: string; muscle_primary: string }>();
+  if (known.results.length !== ids.length) return fail(c, 400, "unknown_exercise", "An exercise is not in the library.");
+  const plan = toPlan(draft.params, draft.days, new Map(known.results.map((r) => [r.id, r])));
   const now = nowISO();
   const name = `${STYLE_NAME[plan.style]} · ${plan.days_per_week} days`;
   const stmts = [

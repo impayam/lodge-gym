@@ -10,6 +10,8 @@ import { fakeJpeg } from "../fixtures/jpeg";
 import { mockAnthropicStream, type StreamReply } from "../fixtures/anthropic-mock";
 import type { ExerciseChange } from "../../worker/lib/coach/exerciseTool";
 import { Client, resetAuth, setupOwner } from "./helpers";
+import { mapExercise } from "../../worker/data";
+import { regionTags } from "../../worker/lib/regions";
 
 // SPEC-v9 M12 Coach chat on the Worker. The Anthropic API is mocked in every test (streamed replies).
 let client: Client;
@@ -204,6 +206,75 @@ describe("coach answers (SPEC-v9 M12)", () => {
     }
   });
 
+  it("Ask Coach from a due line (Phase B): the CONTEXT names the exercise with its rotation and region tags; suggest_replacements and a replace card follow", async () => {
+    // The library import tags every exercise and fills the seed rows' pattern and mechanic in production; this test
+    // database has the bare seed rows, so the chest rows get production's values and every row its tags by the same rules.
+    const chest = { bench: ["h_push", "compound"], incline_bb: ["h_push", "compound"], incline_db: ["h_push", "compound"], dips: ["v_push", "compound"], fly: ["isolation", "isolation"] };
+    await env.DB.batch(Object.entries(chest).map(([id, [pattern, mechanic]]) => env.DB.prepare("UPDATE exercises SET pattern = ?, mechanic = ? WHERE id = ?").bind(pattern, mechanic, id)));
+    const library = (await env.DB.prepare("SELECT * FROM exercises").all<Record<string, unknown>>()).results.map(mapExercise);
+    const tags = library.flatMap((e) => regionTags(e).map((t) => env.DB.prepare("INSERT OR IGNORE INTO exercise_regions (exercise_id, region_key, emphasis, evidence, note) VALUES (?, ?, ?, ?, 'test')").bind(e.id, t.region, t.emphasis, t.evidence)));
+    await env.DB.batch(tags);
+    // The seed has no other chest isolation exercise: two custom ones, a low-to-high fly (upper chest) and a dumbbell fly.
+    const custom = { "01K0ROTATIONUPPERFLY00000A": { name_en: "Low-to-High Cable Fly", equipment: "cable" }, "01K0ROTATIONDBFLY000000000": { name_en: "Dumbbell Fly", equipment: "dumbbell" } };
+    for (const [id, x] of Object.entries(custom)) expect((await client.fetch(`/api/exercises/${id}`, { method: "PUT", json: { ...x, muscle_primary: "chest", muscles_secondary: [], pattern: "isolation", archived: false } })).status).toBe(200);
+    onTestFinished(async () => {
+      const ids = Object.keys(custom).map((id) => `'${id}'`).join(", ");
+      await env.DB.batch([
+        env.DB.prepare(`DELETE FROM day_exercises WHERE exercise_id IN (${ids})`),
+        env.DB.prepare(`DELETE FROM exercise_regions WHERE note = 'test' OR exercise_id IN (${ids})`),
+        env.DB.prepare(`DELETE FROM exercises WHERE id IN (${ids})`),
+        env.DB.prepare(`UPDATE exercises SET pattern = NULL, mechanic = NULL WHERE id IN (${Object.keys(chest).map((id) => `'${id}'`).join(", ")})`),
+      ]);
+    });
+    mock = mockAnthropicStream([
+      { blocks: [{ type: "tool_use", id: "toolu_r", name: "suggest_replacements", input: { exercise_id: "fly" } }] },
+      { blocks: [{ type: "text", text: "این حرکت روی وسط سینه کار کرده است." }] },
+    ]);
+    const thread = ulid();
+    const res = await client.post(`/api/coach/threads/${thread}/messages`, { id: ulid(), text: "Cable Chest Fly برای تعویض آماده است.", attachments: [], rotation: { exercise_id: "fly" } });
+    expect(res.status).toBe(200);
+    await res.text();
+    const saved = await rows(thread);
+    const context = (JSON.parse(saved[0].content_json) as { text: string }[]).at(-1)!.text;
+    expect(context).toContain("He tapped Ask Coach on the due line of the Program screen for Cable Chest Fly (fly, cable); the app wrote his question. Answer in Persian.");
+    expect(context).toMatch(/Rotation: accessory, isolation or core work \(the 3–4 week rule\); \d+ training weeks? in his program/);
+    expect(context).toMatch(/Its main focus \(region tags\): Middle chest \(\w+ evidence\)/);
+    const result = saved.flatMap((r) => JSON.parse(r.content_json) as { type: string; tool_use_id?: string; content?: string; is_error?: boolean }[]).find((b) => b.type === "tool_result" && b.tool_use_id === "toolu_r")!;
+    expect(result.is_error).toBeFalsy();
+    const r = JSON.parse(result.content!) as { exercise: { exercise_id: string }; replacements: { exercise_id: string; change: string }[] };
+    expect(r.exercise.exercise_id).toBe("fly");
+    // A different region first (the upper chest), then the same region with other equipment.
+    expect(r.replacements.map((x) => [x.exercise_id, x.change])).toEqual([
+      ["01K0ROTATIONUPPERFLY00000A", "different region"],
+      ["01K0ROTATIONDBFLY000000000", "different equipment"],
+    ]);
+
+    // The pick, as a replace card: the place's numbers; Whole program saves a draft with it in the fly's place.
+    const pick = r.replacements[0].exercise_id;
+    mock.restore();
+    mock = mockAnthropicStream([
+      { blocks: [{ type: "tool_use", id: "toolu_p", name: "propose_exercise", input: { program_day_id: "D3", exercise_id: pick, replaces_exercise_id: "fly" } }] },
+      { blocks: [{ type: "text", text: "یکی را انتخاب کن." }] },
+    ]);
+    const t2 = ulid();
+    const res2 = await client.post(`/api/coach/threads/${t2}/messages`, { id: ulid(), text: "?", attachments: [] });
+    const ev = events(await res2.text());
+    const card = ev.find((e) => e.type === "card" && e.name === "propose_exercise") as { result: ExerciseChange } | undefined;
+    expect(card!.result.replaces).toMatchObject({ exercise_id: "fly", days: [{ id: "D3" }] });
+    const assistant = (await rows(t2)).find((x) => x.role === "assistant" && x.content_json.includes("toolu_p"))!;
+    const draft = await client.post("/api/coach/drafts", { message_id: assistant.id, tool_use_id: "toolu_p" });
+    expect(draft.status).toBe(200);
+    const { program_id } = (await draft.json()) as { program_id: string };
+    const ids = (await env.DB.prepare("SELECT x.exercise_id FROM day_exercises x JOIN program_days d ON d.id = x.day_id WHERE d.program_id = ?").bind(program_id).all<{ exercise_id: string }>()).results.map((x) => x.exercise_id);
+    expect(ids).toContain(pick);
+    expect(ids).not.toContain("fly");
+    // The active program did not change.
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM day_exercises x JOIN program_days d ON d.id = x.day_id JOIN programs p ON p.id = d.program_id WHERE p.active = 1 AND x.exercise_id = 'fly'").first<{ n: number }>())!.n).toBe(1);
+    // A bad rotation ref is refused.
+    const bad = await client.post(`/api/coach/threads/${ulid()}/messages`, { id: ulid(), text: "?", attachments: [], rotation: { exercise_id: "fly", extra: 1 } });
+    expect(bad.status).toBe(400);
+  });
+
   it("exercises for today: the app's numbers and target on the card, unknown ids dropped and told; nothing saved, program unchanged", async () => {
     const count = async (sql: string) => (await env.DB.prepare(sql).first<{ n: number }>())!.n;
     const before = {
@@ -259,7 +330,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
       expect(b.thinking).toEqual({ type: "adaptive", display: "updates", block_binding: { prefix_mismatch_behavior: "drop_block" } });
       expect(b.stream).toBe(true);
       expect(b.system).toEqual([{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }]);
-      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "propose_exercise", "propose_session_additions", "propose_program"]);
+      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "suggest_replacements", "propose_exercise", "propose_session_additions", "propose_program"]);
       expect(b.messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
       for (const beta of COACH_BETAS) expect(c.headers["anthropic-beta"]).toContain(beta);
     }

@@ -168,7 +168,9 @@ export function BalanceStage({ muscles, text, fallback }: { muscles: MuscleRow[]
               </span>
               <span class="num">
                 {st.row?.target != null
-                  ? `${fmtNum(st.row.fractional, 1)} / ${fmtNum(st.row.target)} sets this week`
+                  ? st.row.basis === "direct"
+                    ? `${fmtNum(st.row.sets)} / ${fmtNum(st.row.target)} direct sets this week`
+                    : `${fmtNum(st.row.fractional, 1)} / ${fmtNum(st.row.target)} sets this week`
                   : `${fmtNum(st.row?.fractional ?? 0, 1)} sets this week, no target`}
               </span>
             </span>

@@ -14,7 +14,7 @@ Names and facts are taken from every source; descriptions, instructions and medi
 | Liftosaur | `a7a402c` | Names and facts only (app code AGPL-3.0, not used) | 402 | 61 | 219 | 34 | 16 | 72 |
 | exercemus | `0ee5b74` | Names and facts only | 872 | 271 | 597 | 0 | 0 | 4 |
 
-Rows added from the M14 sources: **423**. Library after the import: **1200** exercises (777 before).
+Rows added from the M14 sources: **423**. Library after the import: **1204** exercises (781 before).
 
 ## Rows added per category
 
@@ -47,7 +47,7 @@ Rows added from the M14 sources: **423**. Library after the import: **1200** exe
 | adductors | 11 | 1 | 4 | 16 |
 | abductors | 6 | 1 | 2 | 9 |
 | lower_back | 19 | 0 | 3 | 22 |
-| neck | 6 | 0 | 2 | 8 |
+| neck | 6 | 4 | 2 | 12 |
 
 ## Per region (exercises that count toward volume)
 
@@ -56,75 +56,59 @@ Tagged by the reviewed rule table (worker/lib/regions.ts); stretching and cardio
 | Region | Label | Primary | Any emphasis |
 |---|---|---|---|
 | chest_upper | Upper chest | 28 | 108 |
-| chest_mid | Middle chest | 53 | 180 |
+| chest_mid | Middle chest | 53 | 178 |
 | chest_lower | Lower chest | 21 | 109 |
-| shoulders_front | Front delts | 92 | 264 |
+| shoulders_front | Front delts | 92 | 262 |
 | shoulders_side | Side delts | 23 | 56 |
 | rear_delts | Rear delts | 25 | 148 |
 | back_lats | Lats (vertical pull) | 60 | 202 |
 | back_upper | Upper back (horizontal pull) | 73 | 172 |
 | traps | Traps | 19 | 113 |
-| triceps_long | Triceps long head | 18 | 55 |
-| triceps_lateral_medial | Triceps lateral and medial heads | 72 | 281 |
+| triceps_long | Triceps long head | 25 | 56 |
+| triceps_lateral_medial | Triceps lateral and medial heads | 65 | 281 |
 | biceps_long | Biceps long head | 44 | 219 |
 | biceps_short | Biceps short head | 44 | 173 |
-| brachialis | Brachialis | 36 | 83 |
+| brachialis | Brachialis | 35 | 82 |
 | quads_squat | Quads (squat pattern) | 125 | 184 |
 | quads_knee_ext | Quads (knee extension) | 4 | 4 |
 | hamstrings_hinge | Hamstrings (hip hinge) | 39 | 94 |
 | hamstrings_curl | Hamstrings (leg curl) | 10 | 10 |
 | glutes_ext | Glutes (hip extension) | 38 | 235 |
 | glutes_abd | Glutes (abduction) | 4 | 4 |
-| calves_gastroc | Calves, gastrocnemius (straight knee) | 22 | 27 |
-| calves_soleus | Calves, soleus (bent knee) | 5 | 27 |
+| calves_gastroc | Calves, gastrocnemius (straight knee) | 21 | 26 |
+| calves_soleus | Calves, soleus (bent knee) | 5 | 26 |
 | adductors | Adductors | 3 | 110 |
 | core_anti_ext | Core, anti-extension | 14 | 14 |
 | core_flexion | Core, flexion | 73 | 73 |
 | core_anti_rot | Core, anti-rotation and obliques | 32 | 32 |
+| forearm_flexors | Forearm flexors (wrist flexion and grip) | 21 | 22 |
+| forearm_extensors | Forearm extensors (wrist extension) | 9 | 10 |
+| neck_flexors | Neck flexors (front) | 4 | 5 |
+| neck_extensors | Neck extensors (back) | 4 | 5 |
 
 | Emphasis and evidence | Tags |
 |---|---|
-| primary moderate | 307 |
-| primary strong | 624 |
-| primary weak | 46 |
+| primary moderate | 313 |
+| primary strong | 650 |
+| primary weak | 50 |
 | secondary moderate | 962 |
-| secondary strong | 804 |
-| secondary weak | 234 |
-
-### No region: main muscle has no region in the approved list (forearms, neck) (28)
-
-- Cable Wrist Curl (forearms)
-- Dumbbell Lying Pronation (forearms)
-- Dumbbell Lying Supination (forearms)
-- Finger Curls (forearms)
-- Isometric Neck Exercise - Front And Back (neck)
-- Isometric Neck Exercise - Sides (neck)
-- Lying Face Down Plate Neck Resistance (neck)
-- Lying Face Up Plate Neck Resistance (neck)
-- Palms-Down Dumbbell Wrist Curl Over A Bench (forearms)
-- Palms-Down Wrist Curl Over A Bench (forearms)
-- Palms-Up Barbell Wrist Curl Over A Bench (forearms)
-- Palms-Up Dumbbell Wrist Curl Over A Bench (forearms)
-- Plate Pinch (forearms)
-- Seated Dumbbell Palms-Down Wrist Curl (forearms)
-- Seated Dumbbell Palms-Up Wrist Curl (forearms)
-- Seated One-Arm Dumbbell Palms-Down Wrist Curl (forearms)
-- Seated One-Arm Dumbbell Palms-Up Wrist Curl (forearms)
-- Seated Palm-Up Barbell Wrist Curl (forearms)
-- Seated Palms-Down Barbell Wrist Curl (forearms)
-- Seated Two-Arm Palms-Up Low-Pulley Wrist Curl (forearms)
-- Standing Palms-Up Barbell Behind The Back Wrist Curl (forearms)
-- Wrist Rotations with Straight Bar (forearms)
-- Cable Behind-the-Back Wrist Curl (forearms)
-- Dumbbell Neutral-Grip Wrist Curl (forearms)
-- Smith Machine Behind-the-Back Wrist Curl (forearms)
-- Smith Machine Seated Wrist Curl (forearms)
-- Dumbbell Finger Curl (forearms)
-- Machine Hand Gripper (forearms)
+| secondary strong | 802 |
+| secondary weak | 236 |
 
 ### No region although counted (must be empty) (0)
 
 None.
+
+### Reviewed region exceptions (seed/library/region-overrides.json) (8)
+
+- Dumbbell One-Arm Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Kneeling Cable Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Seated Triceps Press: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Smith Machine Reverse Calf Raises: no region. Lifts the toes: a tibialis anterior (shin) exercise, not a calf exercise. The region list has no shin region, so it carries none (Payam, PR #25 review, 2026-10-17).
+- Standing Dumbbell Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Standing Low-Pulley One-Arm Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Standing One-Arm Dumbbell Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Standing Towel Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
 
 ### Two primary regions of one muscle outside the reviewed rules (must be empty) (0)
 
@@ -3792,7 +3776,7 @@ Only from open-licence sources, each image's own licence and author stored with 
 - Weighted Squat (other)
 - Wrist Roller (other)
 
-## Hand-written exercises (source 'manual', our own instructions, no media) (37)
+## Hand-written exercises (source 'manual', our own instructions, no media) (41)
 
 - `manual-dumbbell-front-raise` Dumbbell Front Raise (shoulders_front)
 - `manual-single-arm-cable-lateral-raise` Single-Arm Cable Lateral Raise (shoulders_side)
@@ -3831,4 +3815,8 @@ Only from open-licence sources, each image's own licence and author stored with 
 - `manual-pause-squat` Pause Squat (quads)
 - `manual-heel-elevated-goblet-squat` Heel-Elevated Goblet Squat (quads)
 - `manual-cable-hip-abduction` Cable Hip Abduction (abductors)
+- `manual-lying-neck-extension` Lying Neck Extension (neck)
+- `manual-lying-neck-flexion` Lying Neck Flexion (neck)
+- `manual-isometric-neck-extension` Isometric Neck Extension (Hand Resistance) (neck)
+- `manual-isometric-neck-flexion` Isometric Neck Flexion (Hand Resistance) (neck)
 

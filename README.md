@@ -105,8 +105,10 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Muscle balance: under < 80 % of the weekly program target, on target 80–120 %, over > 120 %, applied to the
   **fractional** number. The weekly target of a group is the program's own fractional volume (SPEC-v2 §7.4, decided
   2026-10-12): each planned set counts 1 for its primary group and 0.5 for each secondary group, so following the
-  program exactly is on target everywhere. Traps, forearms, lower back, adductors, abductors and neck have no target
-  and show their sets only.
+  program exactly is on target everywhere. Traps, lower back, adductors and abductors have no target and show their
+  sets only. Forearms and neck (SPEC-v11 Phase B): when the program trains them directly, their target is the
+  program's direct sets and the status compares the done **direct** sets (rows and curls add half a forearm set, so the
+  fractional number would always read as over); otherwise they have no target.
 - Muscle map (Reports → Progress, SPEC-v6 §8): the picker's 3D model (same scene, mapping and lazy loading). Every
   mapped muscle takes the status of its report group, in the dark theme's status colours (the stage is dark in both
   themes): under amber, on target green, over orange, trained without a target teal, no sets this week muted;
@@ -164,10 +166,12 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   as one decision file per source (`seed/library/m14/<source>.json`: include with our row, exclude with a reason, or
   duplicate of an existing id) and `seed/library/m14/dedupe-review.json` (every probable duplicate marked `same` or
   `different`; change a line there to change the decision). Nothing is merged and existing ids never change.
-- Region tags (`exercise_regions`, migration `0013_exercise_regions.sql`): 26 regions under the muscle chips, each tag
+- Region tags (`exercise_regions`, migration `0013_exercise_regions.sql`): 30 regions under the muscle chips, each tag
   with emphasis (main focus / also trained) and evidence (strong / moderate / weak), from the reviewed rule table in
   `worker/lib/regions.ts`; `seed/library/region-overrides.json` replaces the rules for a named exercise. The import
-  tags every library exercise, a custom exercise is tagged on save. Forearm and neck work have no region (yet).
+  tags every library exercise, a custom exercise is tagged on save. Forearm flexors and extensors and neck flexors and
+  extensors were added in SPEC-v11 Phase B; neck work is plate, bodyweight or isometric only (no neck machine or head
+  harness at the gym).
 - `seed/library/duplicate-images.json` lists exercises whose two images are the same picture; the import keeps one.
 - The import also snapshots each source to R2 (`library/sources/<source>/snapshots/`) and copies the stored images to
   `library/sources/<source>/images/` (manifest `library/sources/manifest.json`), resumable like the free-exercise-db
@@ -191,6 +195,16 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   slot's range. Approving archives the old program; History shows the program timeline, groups sessions by program and
   can switch back to an archived program (a new activation; history stays). Switching twice within 3 weeks shows a
   notice. No intro week, no light week; weights continue from the last sessions.
+- Phase B (SPEC-v11, approved 2026-10-17): each new program starts the next block (A → B → C, `params.block`; the seed
+  program is A). The generator keeps exercises that are not due (`worker/lib/rotation.ts`) and replaces due ones; main
+  lifts stay barbell and change only their variation; the other exercises follow the block's equipment mix per muscle
+  (`worker/lib/generator/blocks.ts`). Every block covers all 30 regions with a main-focus exercise (a missing region
+  replaces a doubled one; the triceps long head counts only with an overhead extension), no day has two exercises with
+  the same main-focus region and equipment, and forearms and
+  neck get their weekly direct sets (4 and 2 in the first block, +1 per block, up to 8 and 6; neck 15–25 reps, 3–4 RIR,
+  the smallest load step). New program defaults to 75 minutes, the length the 30 regions need on 4 days. The proposal
+  shows the block, its region coverage and "replaces X: N weeks". The Program screen lists due exercises (at most 3)
+  with an Ask Coach button.
 - Tests: property tests over every style × days × session length × 50 seeds on the real library
   (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
   ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
@@ -362,6 +376,14 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   (isolation or a lighter variation today, or the heavy lift another day) and leaves the choice to Payam. It never
   refuses a request or removes an exercise because of it, and a draft keeps every exercise he asked for. The planner's
   Get advice uses the same wording and never suggests removing an exercise for recovery.
+- Rotation (SPEC-v11 Phase B): `get_program` and `get_e1rm_history` give each exercise's weeks in the program, whether
+  it is due and why, the block and the regions without a main focus. Ask Coach on a due line of the Program screen sends
+  the exercise with the question: the coach says which region it trained, calls `suggest_replacements` (2–3 library
+  exercises for a different region of the same muscle first, then other equipment; a region the exercise alone covers
+  stays the main focus of every replacement; main lifts get close barbell variations; each with its region, the gap it
+  fills and why its equipment fits) and shows each as the one-exercise card
+  in replace mode: "Only this session" moves today's undone sets to the new exercise, "Whole program" saves a draft
+  with it in the old one's place. The card first says what happens to the replaced exercise's region and muscle group. The weekly review names exercises due now and next week.
 - `propose_program` shows a draft card (ids not in the library are dropped and named). **Add to Planner** saves it as
   an inactive program (`generated_by = 'coach'`) under Me → Program → Drafts; approving it there is a separate tap.
   The active program is never changed by the coach.
@@ -437,3 +459,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   `GET /api/reviews`; read-only `GET /api/report-timeline` and `GET /api/overviews/:id` (History → Reports timeline,
   approved in the PR review); `[vars]` `OVERVIEW_EFFORT`, `OVERVIEW_MAX_TOKENS`; the backup export adds
   `training_overviews`.
+- Rotation and blocks (SPEC-v11 Phase B, listed for approval in its PR; no migration): `rotation` in `/api/bootstrap`
+  (weeks, due and reason per exercise of the active program); `params.block` on generated programs (inside the existing
+  `programs.params` JSON); `rotation: { exercise_id }` on `POST /api/coach/threads/:id/messages` (Ask Coach from a due
+  line); Coach tool `suggest_replacements` and `replaces_exercise_id` on `propose_exercise`; report muscle rows carry
+  `basis: "direct"` for forearms and neck with a direct-set target, and `get_volume` rows `target_counts`.

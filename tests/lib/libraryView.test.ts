@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SetEntry, WorkoutSession } from "../../worker/lib/types";
-import { inGroup, LIBRARY_GROUPS, rowFacts } from "../../web/src/lib/libraryView";
+import { inGroup, LIBRARY_GROUPS, regionChipLabel, regionsForGroup, rowFacts } from "../../web/src/lib/libraryView";
 
 const at = "2026-10-01T10:00:00.000Z";
 function session(id: string, date: string, sets: Partial<SetEntry>[], unit: "lb" | "kg" = "lb", status: "done" | "active" = "done"): WorkoutSession {
@@ -59,5 +59,11 @@ describe("Library view (SPEC-v8 §6.05)", () => {
   it("row numbers convert to the display unit", () => {
     const facts = rowFacts([session("K", "2026-10-01", [{ exercise_id: "incline_db", weight: 20, reps: 10 }], "kg")], "lb", new Set());
     expect(facts.get("incline_db")).toEqual({ value: 44.1, label: "last × 10" });
+  });
+
+  it("region chips: Arms holds triceps, biceps and the two forearm regions; neck regions show under All only (Phase B)", () => {
+    expect(regionsForGroup("arms")).toEqual(["triceps_long", "triceps_lateral_medial", "biceps_long", "biceps_short", "brachialis", "forearm_flexors", "forearm_extensors"]);
+    expect(regionChipLabel("forearm_extensors", "arms")).toBe("Forearm extensors");
+    for (const g of LIBRARY_GROUPS) expect(regionsForGroup(g.key).some((r) => r.startsWith("neck_")), g.key).toBe(false);
   });
 });

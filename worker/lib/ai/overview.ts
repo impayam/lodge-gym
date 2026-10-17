@@ -11,6 +11,7 @@ import { liveItems, type SessionPlan } from "../plan";
 import { activeSince, balanceStatus, convertWeight, epley, firstActivation, liftTrends, mainLifts, muscleTargets, plannedSessions, programOn, setsPerMuscle, type BalanceStatus, type LiftTrend, type ReportData } from "../reports";
 import { TARGET_GROUPS } from "../muscles";
 import { addDays } from "../time";
+import { dueList, dueText, programRotation } from "../rotation";
 import type { Exercise, SetEntry, Unit, WorkoutSession } from "../types";
 import { buildMotivation, MOTIVATION_MAX, PRAISE_FA, type MotivationInput, type WeekKey, type WeekPhase } from "./motivation";
 import { numbersIn, onlySupplied, suppliedNumbers, type Supplied } from "./numbers";
@@ -58,6 +59,9 @@ export interface OverviewInput {
   skipped: { name: string; day: string; skipped: number; of: number }[];
   /** The weekly motivational line's facts (worker/lib/ai/motivation.ts); null when there is nothing to report. */
   motivation: MotivationInput | null;
+  /** Rotation (SPEC-v11 Phase B): exercises of the active program due for a change now, and those due after one more
+   *  training week. */
+  rotation: { due_now: { name: string; reason: string }[]; due_next_week: { name: string; weeks: number; changes_by: number }[] };
 }
 
 /** A done set as compact text: "135×5 RIR 2", "45 s", "×8" (bodyweight). */
@@ -197,6 +201,16 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
     drops,
     skipped,
     motivation: buildMotivation(d, today, previousOverviews),
+    rotation: rotationFacts(d, today, name),
+  };
+}
+
+/** The rotation lines of the weekly review: due now (most overdue first) and due after one more training week. */
+function rotationFacts(d: ReportData, today: string, name: (id: string) => string): OverviewInput["rotation"] {
+  const list = programRotation(d, today);
+  return {
+    due_now: dueList(list).map((s) => ({ name: name(s.exercise_id), reason: dueText(s) })),
+    due_next_week: list.filter((s) => s.due_next_week).map((s) => ({ name: name(s.exercise_id), weeks: s.weeks, changes_by: s.max })),
   };
 }
 
@@ -376,6 +390,7 @@ Rules:
 - consistency_fa: sessions done per week against sessions_planned, and any pattern in skipped. Planned sessions count from totals.since (the first program activation or the window's start, whichever is later), each day with the program active that day: weeks before it plan none, and totals compare the sessions done and planned since totals.since.
 - focus_next: 1–3 concrete priorities for the coming sessions, for strength and balance.
 - warnings: only real issues: stalls, drops, pain or injury in a note. Usually none.
+- rotation: his exercises change on a plan (main and secondary lifts after 6–8 weeks, the others after 3–4). When rotation.due_now or rotation.due_next_week is not empty, one focus_next item names the exercises due for a change now and those due next week (names only, or weeks exactly as given), and says the Program screen shows them. Nothing changes on its own: never say an exercise was changed.
 - Never suggest a deload, a light week or less volume, unless a session note says he is tired. This is his stated preference.
 - No medical advice; if a note mentions pain, suggest rest or seeing a professional, nothing more.
 - motivation_fa: one or two short Persian sentences built only from the motivation block (null when it is null). Weeks run Monday to Sunday. Follow motivation.phase:

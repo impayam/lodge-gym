@@ -129,13 +129,18 @@ export function programEntry(d: CoachData, exerciseId: string): DayExercise | nu
  * - not in the program, done before: his last session's set count and top reps, and the same progression on them;
  * - never done: three sets (as the 3D picker adds them), the generator's rep range for the exercise's kind
  *   (accessory 8–12, isolation 10–15, core 10–15; timed holds 30–45 s), and no weight.
+ * `place`: the program entry it takes the place of (a replacement, Phase B): its sets and rep range, with the
+ * progression on his last session with the new exercise.
  */
-export function additionNumbers(d: CoachData, ex: Exercise, excludeSessionId?: string): Omit<Addition, "exercise_id" | "name" | "reason_fa"> {
+export function additionNumbers(d: CoachData, ex: Exercise, excludeSessionId?: string, place?: Pick<DayExercise, "sets" | "reps_min" | "reps_max" | "is_time">): Omit<Addition, "exercise_id" | "name" | "reason_fa"> {
   const last = lastPerformance(ex.id, d.sessions, excludeSessionId);
   const entry = programEntry(d, ex.id);
   let plan: Pick<DayExercise, "sets" | "reps_min" | "reps_max" | "is_time">;
   let basis: AdditionBasis;
-  if (entry) {
+  if (place) {
+    plan = { sets: place.sets, reps_min: place.reps_min, reps_max: place.reps_max, is_time: place.is_time };
+    basis = "program";
+  } else if (entry) {
     plan = { sets: entry.sets, reps_min: entry.reps_min, reps_max: entry.reps_max, is_time: entry.is_time };
     basis = "program";
   } else if (last) {
