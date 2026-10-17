@@ -141,7 +141,7 @@ test("every long screen ends with its last control fully above the tab bar and c
   await seedSessions(page, baseURL!);
   await page.reload();
   await expect(page.getByTestId("next-card")).toBeVisible();
-  const screens = [...TABS, "Reports", "Settings", "Program", "Photos", "AI reports", "Backup", "Planner", "Apple Watch", "New program"] as const;
+  const screens = [...TABS, "Reports", "Settings", "My training", "Program", "Photos", "AI reports", "Backup", "Planner", "Apple Watch", "New program"] as const;
   for (const screen of screens) {
     await open(page, screen);
     await page.waitForTimeout(1000);

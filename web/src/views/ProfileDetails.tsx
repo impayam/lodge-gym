@@ -28,6 +28,7 @@ import { daysPerWeek } from "../model";
 import { fetchFile, reportCard, shareOrDownload } from "../share";
 import { getState, loadAllHistory, photoSrc, today, useStore } from "../store";
 import { poseLabel } from "./Photos";
+import { FRAMING_LABEL } from "../../../worker/lib/photoGroups";
 
 type Week = ReturnType<typeof weeklyReport>;
 type Month = ReturnType<typeof monthlyReport>;
@@ -592,7 +593,7 @@ function MonthView() {
         </Card>
         {r.photos.length
           ? r.photos.map((p) => (
-              <Card title={`${poseLabel(p!.pose)}: first and last photo`}>
+              <Card title={`${poseLabel(p!.pose)}${p!.framing ? ` · ${FRAMING_LABEL[p!.framing]}` : ""}: first and last photo`}>
                 <div class="l-grid-2 l-gap-8">
                   {[p!.first, p!.last].map((ph: Photo) => (
                     <figure class="photo-thumb l-m0">

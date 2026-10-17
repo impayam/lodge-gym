@@ -193,6 +193,8 @@ export interface HealthWorkout {
 }
 
 export type Pose = "front" | "side" | "back" | "other";
+/** How a photo is framed (migration 0015): head to feet, or head to waist (a mirror shot); null when not known. */
+export type Framing = "full" | "upper";
 
 /** Progress photo metadata (SPEC §8); the images live in R2. */
 export interface Photo {
@@ -200,6 +202,8 @@ export interface Photo {
   session_id: string | null;
   local_date: string;
   pose: Pose;
+  /** From the guide camera's pose check; null for library photos and older ones. */
+  framing: Framing | null;
   width: number;
   height: number;
   bytes: number;

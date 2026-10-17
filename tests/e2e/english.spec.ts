@@ -47,7 +47,7 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   await check("session");
   // The active session is full screen (SPEC-v8 §5): leave it before using the tab bar.
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  for (const tab of ["History", "Library", "Photos", "Reports", "Profile", "Program", "Settings", "AI reports", "Backup"]) {
+  for (const tab of ["History", "Library", "Photos", "Reports", "Profile", "Program", "My training", "Settings", "AI reports", "Backup"]) {
     await goTo(page, tab as Place);
     await page.waitForLoadState("networkidle");
     await check(tab);

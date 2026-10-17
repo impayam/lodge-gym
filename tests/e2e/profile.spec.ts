@@ -58,12 +58,13 @@ async function shoot(page: Page, name: string, full = true) {
 
 const view = <T,>(page: Page, fn: string) => page.evaluate(`(${fn})(window.__anatomy.view)`) as Promise<T>;
 
-/** Takes WebGL away, so the body falls back to the drawn figures. */
+/** Takes WebGL away (until `window.__giveWebGL = true`), so the body falls back to the note and Retry. */
 const noWebGL = (page: Page) =>
   page.addInitScript(() => {
     const get = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
-      return /webgl/.test(type) ? null : (get as (...a: unknown[]) => RenderingContext | null).call(this, type, ...rest);
+      const off = /webgl/.test(type) && !(window as { __giveWebGL?: boolean }).__giveWebGL;
+      return off ? null : (get as (...a: unknown[]) => RenderingContext | null).call(this, type, ...rest);
     } as typeof get;
   });
 
@@ -92,7 +93,8 @@ test("four tabs; Profile in order; the gear lists Program, Planner, Photos and S
   await page.getByTestId("profile-gear").click();
   const sheet = page.getByTestId("gear-sheet");
   await expect(sheet).toBeVisible();
-  await expect(sheet.locator(".list-row .t-title")).toHaveText(["Program", "Planner", "Photos", "Settings"]);
+  await expect(sheet.locator(".list-row .t-title")).toHaveText(["Program", "Planner", "My training", "Photos", "Settings"]);
+  await expect(page.getByTestId("profile-gear")).toHaveAccessibleName("More: Program, Planner, My training, Photos, Settings");
   await settled(sheet);
   await shoot(page, "gear", false);
   await page.getByTestId("gear-program").click();
@@ -144,20 +146,28 @@ test("My body: the shared 3D body, today pink, this week violet, the rest dark; 
   await shoot(page, "my-body", false);
 });
 
-test("My body without WebGL: the drawn figures in the same tints", async ({ page, baseURL }) => {
+test("My body without WebGL: only the 3D unavailable note and Retry, no drawn figure; Retry loads the 3D body", async ({ page, baseURL }) => {
   sql(`INSERT INTO settings (key, value) VALUES ('week_start', '${weekStartWithYesterday()}') ON CONFLICT (key) DO UPDATE SET value = excluded.value`);
   await noWebGL(page);
   await page.goto("/");
   await twoDays(page, baseURL!);
   await page.reload();
   await goTo(page, "Profile");
-  await expect(page.getByTestId("anatomy-fallback")).toContainText("3D unavailable");
-  const fig = page.getByTestId("body-figures");
-  await expect(fig.locator('path.body-region[data-muscle="chest"]').first()).toHaveAttribute("data-tint", "--pink");
-  await expect(fig.locator('path.body-region[data-muscle="quads"]').first()).toHaveAttribute("data-tint", "--violet");
-  await expect(fig.locator('path.body-region[data-muscle="calves"]').first()).toHaveAttribute("data-tint", "--model-none");
-  await fig.locator('path.body-region[data-muscle="quads"]').first().click();
-  await expect(page.getByTestId("body3d-card")).toContainText("4 sets this week, 0 today");
+  const body = page.getByTestId("my-body");
+  await expect(body.getByTestId("anatomy-fallback")).toContainText("3D unavailable.");
+  await expect(body.getByTestId("anatomy-retry")).toBeVisible();
+  // No drawn front / back figure anywhere, no legend of a body that is not shown.
+  await expect(page.locator("svg path.body-region, .body-figure, [data-testid='body-figures']")).toHaveCount(0);
+  await expect(body.getByTestId("body-legend")).toHaveCount(0);
+  await expect(body.locator("canvas")).toHaveCount(0);
+  await body.scrollIntoViewIfNeeded();
+  await shoot(page, "my-body-fallback", false);
+  // Retry with WebGL back: the 3D body loads in place.
+  await page.evaluate(() => ((window as { __giveWebGL?: boolean }).__giveWebGL = true));
+  await body.getByTestId("anatomy-retry").click();
+  await expect(body.getByTestId("body3d")).toHaveAttribute("data-mode", "3d", { timeout: 20_000 });
+  await expect(body.getByTestId("anatomy-fallback")).toHaveCount(0);
+  await expect(body.getByTestId("body-legend")).toBeVisible();
 });
 
 test("Set goal: the empty diamond first; corners and chips choose up to two; Save changes nothing in the program; Ask Coach asks for a program", async ({ page, baseURL }) => {
@@ -318,6 +328,44 @@ const fakeCamera = (page: Page) =>
     };
   });
 
+/**
+ * A stand-in for the pose model (the fake camera shows no real body): 33 landmarks of a body standing on the default
+ * guide lines, full body (head 0.07, soles 0.93) or upper body (head 0.10, waist 0.90, ankles out of view), or too
+ * close, or off centre; "none" finds nobody. Switched with `window.__poseMode`.
+ */
+const fakePose = (page: Page, mode: "full" | "upper" | "near" | "right" | "none" = "full") =>
+  page.addInitScript((start) => {
+    const w = window as unknown as { __poseMode: string; __poseFake: (c: HTMLCanvasElement) => { x: number; y: number; visibility: number }[] | null };
+    w.__poseMode = start;
+    w.__poseFake = () => {
+      const m = w.__poseMode;
+      if (m === "none") return null;
+      const upper = m === "upper";
+      const top = upper ? 0.1 : m === "near" ? 0.02 : 0.07;
+      const h = upper ? 0.8 / 0.42 : m === "near" ? 0.98 : 0.86;
+      const cx = m === "right" ? 0.64 : 0.5;
+      const lms = Array.from({ length: 33 }, () => ({ x: cx, y: top + 0.5 * h, visibility: 0.9 }));
+      const at = (i: number, dx: number, y: number, v = 0.9) => (lms[i] = { x: cx + dx, y: top + y * h, visibility: v });
+      at(0, 0, 0.075);
+      at(11, 0.06, 0.185);
+      at(12, -0.06, 0.185);
+      at(23, 0.04, 0.5);
+      at(24, -0.04, 0.5);
+      for (const [i, dx, y] of [
+        [27, 0.03, 0.96],
+        [28, -0.03, 0.96],
+        [29, 0.03, 0.985],
+        [30, -0.03, 0.985],
+        [31, 0.04, 1],
+        [32, -0.04, 1],
+      ])
+        at(i, dx, y, upper ? 0.1 : 0.9);
+      return lms;
+    };
+  }, mode);
+
+const poseMode = (page: Page, mode: "full" | "upper" | "near" | "right" | "none") => page.evaluate((m) => ((window as unknown as { __poseMode: string }).__poseMode = m), mode);
+
 const tiltTo = (page: Page, beta: number) =>
   page.evaluate((b) => {
     const e = new Event("deviceorientation");
@@ -327,6 +375,7 @@ const tiltTo = (page: Page, beta: number) =>
 
 test("guide camera: outline with head and feet lines, level, timer, burst of 3, keep one; settings remembered per pose", async ({ page }) => {
   await fakeCamera(page);
+  await fakePose(page, "full");
   await page.goto("/");
   await goTo(page, "Profile");
   await page.getByTestId("profile-take-photo").click();
@@ -345,6 +394,7 @@ test("guide camera: outline with head and feet lines, level, timer, burst of 3, 
     expect(feet).toBeGreaterThan(head + 250);
     expect(feet).toBeLessThan(400);
     await expect(cam.getByTestId("camera-outline")).toBeVisible();
+    await expect(cam.getByTestId("camera-hint")).toHaveAttribute("data-hint", "ok");
     await settled(cam);
     await shoot(page, `camera-${p}`, false);
   }
@@ -368,9 +418,13 @@ test("guide camera: outline with head and feet lines, level, timer, burst of 3, 
   await expect(cam.getByTestId("camera-count")).toHaveText("3");
   await expect(cam.getByTestId("camera-pick").getByTestId("camera-shot")).toHaveCount(3, { timeout: 10_000 });
   await shoot(page, "camera-pick", false);
+  // Each shot says how it sits on the lines.
+  await expect(cam.getByTestId("camera-shot").nth(1)).toHaveAttribute("data-hint", "ok");
+  await expect(cam.getByTestId("camera-shot").nth(1)).toHaveAttribute("data-framing", "full");
+  await expect(cam.getByTestId("camera-shot-hint").nth(1)).toHaveText("On the lines.");
   await cam.getByTestId("camera-shot").nth(1).click();
   await expect(cam).toHaveCount(0);
-  await expect.poll(() => sql("SELECT pose FROM photos"), { timeout: 20_000 }).toEqual([{ pose: "side" }]);
+  await expect.poll(() => sql("SELECT pose, framing FROM photos"), { timeout: 20_000 }).toEqual([{ pose: "side", framing: "full" }]);
 
   // Opening again: the side pose with its 3 s timer and, now, its ghost.
   await page.getByTestId("profile-take-photo").click();
@@ -379,6 +433,176 @@ test("guide camera: outline with head and feet lines, level, timer, burst of 3, 
   await expect(cam.getByTestId("camera-ghost")).toBeVisible();
   await cam.getByTestId("camera-pose-front").click();
   await expect(cam.getByTestId("camera-timer-5")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("guide camera: the pose check finds the framing (ankles in frame: full body, else upper body) and switches the lines, outline, ghost and saved framing; hints before keeping", async ({ page }) => {
+  sql("DELETE FROM photos");
+  await page.addInitScript(() => localStorage.setItem("camera:tips", "1"));
+  await fakeCamera(page);
+  await fakePose(page, "full");
+  await page.goto("/");
+  await goTo(page, "Profile");
+  await page.getByTestId("profile-take-photo").click();
+  const cam = page.getByTestId("guide-camera");
+  const live = cam.getByTestId("camera-live");
+  await expect(live).toHaveAttribute("data-phase", "live");
+  await cam.getByTestId("camera-pose-front").click();
+  await expect(live).toHaveAttribute("data-check", "ready");
+  await expect(live).toHaveAttribute("data-framing", "full");
+  await expect(cam.getByTestId("camera-framing")).toHaveText("Full body");
+  await expect(cam.getByTestId("camera-feet-line")).toHaveCount(1);
+  await expect(cam.getByTestId("camera-waist-line")).toHaveCount(0);
+  const fullOutline = await cam.getByTestId("camera-outline").locator("path").getAttribute("d");
+  await expect(cam.getByTestId("camera-hint")).toHaveText("On the lines.");
+  await settled(cam);
+  await shoot(page, "camera-full-body", false);
+
+  // Too close, then off centre: one hint at a time.
+  await poseMode(page, "near");
+  await expect(cam.getByTestId("camera-hint")).toHaveAttribute("data-hint", "back");
+  await expect(cam.getByTestId("camera-hint")).toHaveText("Step back a bit: head and feet on the lines.");
+  await poseMode(page, "right");
+  await expect(cam.getByTestId("camera-hint")).toHaveAttribute("data-hint", "left");
+
+  // A mirror shot (ankles out of view): after three readings in a row the guide becomes head and waist.
+  await poseMode(page, "upper");
+  await expect(live).toHaveAttribute("data-framing", "upper", { timeout: 5_000 });
+  await expect(cam.getByTestId("camera-framing")).toHaveText("Upper body");
+  await expect(cam.getByTestId("camera-waist-line")).toHaveCount(1);
+  await expect(cam.getByTestId("camera-feet-line")).toHaveCount(0);
+  expect(await cam.getByTestId("camera-outline").locator("path").getAttribute("d")).not.toBe(fullOutline);
+  await expect(cam.getByTestId("camera-hint")).toHaveText("On the lines.");
+  // Each framing keeps its own line size: the upper guide's starts at 80 %.
+  await expect(cam.getByTestId("camera-scale")).toHaveValue("80");
+  await settled(cam);
+  await shoot(page, "camera-upper-body", false);
+
+  // Keep an upper-body front photo: saved with its framing.
+  await cam.getByTestId("camera-timer-0").click();
+  await cam.getByTestId("camera-shutter").click();
+  await expect(cam.getByTestId("camera-shot")).toHaveCount(3, { timeout: 10_000 });
+  await expect(cam.getByTestId("camera-shot").first()).toHaveAttribute("data-framing", "upper");
+  await cam.getByTestId("camera-shot").first().click();
+  await expect(cam).toHaveCount(0);
+  await expect.poll(() => sql("SELECT pose, framing FROM photos"), { timeout: 20_000 }).toEqual([{ pose: "front", framing: "upper" }]);
+
+  // Next time the front pose opens in upper body (its saved framing) with that photo as the ghost; a full-body
+  // reading switches the guide back, and the upper-body photo is no ghost for a full-body one.
+  await poseMode(page, "upper");
+  await page.getByTestId("profile-take-photo").click();
+  await expect(live).toHaveAttribute("data-framing", "upper");
+  await expect(cam.getByTestId("camera-ghost")).toBeVisible();
+  await poseMode(page, "full");
+  await expect(live).toHaveAttribute("data-framing", "full", { timeout: 5_000 });
+  await expect(cam.getByTestId("camera-ghost")).toHaveCount(0);
+  await expect(cam.getByTestId("camera-ghost-toggle")).toBeDisabled();
+
+  // Nobody in the frame: the hint says so and the framing stays.
+  await poseMode(page, "none");
+  await expect(cam.getByTestId("camera-hint")).toHaveText("No one in the frame yet.");
+  await expect(live).toHaveAttribute("data-framing", "full");
+  // A shot without a body is kept with the framing the check held.
+  await cam.getByTestId("camera-timer-0").click();
+  await cam.getByTestId("camera-shutter").click();
+  await expect(cam.getByTestId("camera-shot")).toHaveCount(3, { timeout: 10_000 });
+  await expect(cam.getByTestId("camera-shot").first()).toHaveAttribute("data-framing", "full");
+  await expect(cam.getByTestId("camera-shot-hint")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+});
+
+test("Before · After pairs only photos of the same pose and the same framing", async ({ page }) => {
+  const add = (id: string, daysAgo: number, pose: string, framing: string | null) =>
+    sql(
+      `INSERT INTO photos (id, session_id, local_date, pose, framing, r2_key, thumb_r2_key, width, height, bytes, created_at) VALUES ('${id}', NULL, date('now', '-${daysAgo} days'), '${pose}', ${framing ? `'${framing}'` : "NULL"}, 'photos/${id}/full.jpg', 'photos/${id}/thumb.jpg', 1200, 1600, 1, '${new Date().toISOString()}')`
+    );
+  sql("DELETE FROM photos");
+  add("01BAFULL0000000000000000A1", 30, "front", "full");
+  add("01BAUPPR0000000000000000A2", 20, "front", "upper");
+  add("01BALIBR0000000000000000A3", 10, "front", null);
+  await page.goto("/");
+  await goTo(page, "Profile");
+  const card = page.getByTestId("before-after");
+  // Three front photos, each framed differently: nothing to compare.
+  await expect(card).toContainText("Two photos of the same pose and framing show here side by side.");
+  add("01BAUPPR0000000000000000A4", 2, "front", "upper");
+  await page.reload();
+  await goTo(page, "Profile");
+  await expect(card.locator(".card__head .caption")).toHaveText("Front · Upper body · 18 days apart");
+  await expect(card.getByRole("img", { name: /^Before: Front/ })).toHaveCount(1);
+  sql("DELETE FROM photos");
+});
+
+test("guide camera with the real pose model: loads from the app's own files under the CSP, finds a full body, then an upper body", async ({ page, baseURL }) => {
+  test.setTimeout(240_000);
+  // A human figure for the camera: the app's own 3D body, rendered whole (front) and captured.
+  await page.goto("/");
+  await goTo(page, "Profile");
+  const stage = page.getByTestId("body3d");
+  await expect(stage).toHaveAttribute("data-mode", "3d", { timeout: 60_000 });
+  await expect.poll(() => view<boolean>(page, "(v) => v.moving()"), { timeout: 10_000 }).toBe(false);
+  const figure = `data:image/png;base64,${(await stage.locator("canvas").screenshot()).toString("base64")}`;
+
+  // Anything the CSP refuses (scripts, WebAssembly, fetches). Playwright's screenshots add a style element of their own
+  // (to hide the caret), which the CSP refuses too: that one is not the app's.
+  const blocked: string[] = [];
+  page.on("console", (m) => {
+    if (/Content Security Policy|Refused to/i.test(m.text()) && !/Refused to apply a stylesheet/.test(m.text())) blocked.push(m.text());
+  });
+  // Every file comes from the app itself (no CDN): the model, the WebAssembly runtime and its loader.
+  const origin = new URL(baseURL!).origin;
+  const outside: string[] = [];
+  const pose: string[] = [];
+  page.on("request", (r) => {
+    const u = r.url();
+    if (!u.startsWith(origin) && !u.startsWith("data:") && !u.startsWith("blob:")) outside.push(u);
+    if (/\/pose\/|vision_wasm|poseModel/.test(u)) pose.push(new URL(u).pathname);
+  });
+  // The camera films the figure: whole, as when someone else takes the photo, or from the head to below the waist,
+  // as in a mirror (`window.__camMode`).
+  await page.addInitScript((src) => {
+    localStorage.setItem("camera:tips", "1");
+    const w = window as unknown as { __camMode: "full" | "upper" };
+    w.__camMode = "full";
+    const canvas = document.createElement("canvas");
+    canvas.width = 480;
+    canvas.height = 640;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    img.src = src;
+    setInterval(() => {
+      ctx.fillStyle = "rgb(30, 30, 30)";
+      ctx.fillRect(0, 0, 480, 640);
+      if (!img.complete || !img.height) return;
+      const k = (w.__camMode === "full" ? 600 : 1400) / img.height;
+      ctx.drawImage(img, (480 - img.width * k) / 2, w.__camMode === "full" ? 20 : 40, img.width * k, img.height * k);
+    }, 50);
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: async () => (canvas as unknown as { captureStream(fps: number): MediaStream }).captureStream(20) } });
+  }, figure);
+  await page.goto("/");
+  await goTo(page, "Profile");
+  await page.getByTestId("profile-take-photo").click();
+  const cam = page.getByTestId("guide-camera");
+  const live = cam.getByTestId("camera-live");
+  await expect(live).toHaveAttribute("data-phase", "live");
+  await expect(live).toHaveAttribute("data-check", "ready", { timeout: 90_000 });
+  expect(await page.evaluate(() => (window as unknown as { __pose: { model: boolean } }).__pose.model)).toBe(true);
+  await expect(live).toHaveAttribute("data-framing", "full", { timeout: 10_000 });
+  await expect(cam.getByTestId("camera-feet-line")).toHaveCount(1);
+  await expect(cam.getByTestId("camera-hint")).not.toHaveAttribute("data-hint", "none", { timeout: 10_000 });
+  await settled(cam);
+  await shoot(page, "camera-real-full-body", false);
+
+  await page.evaluate(() => ((window as unknown as { __camMode: string }).__camMode = "upper"));
+  await expect(live).toHaveAttribute("data-framing", "upper", { timeout: 15_000 });
+  await expect(cam.getByTestId("camera-waist-line")).toHaveCount(1);
+  await expect(cam.getByTestId("camera-framing")).toHaveText("Upper body");
+  await expect(cam.getByTestId("camera-hint")).not.toHaveAttribute("data-hint", "none");
+  await shoot(page, "camera-real-upper-body", false);
+  expect(await page.evaluate(() => (window as unknown as { __pose: { runs: number } }).__pose.runs)).toBeGreaterThan(5);
+
+  expect(blocked).toEqual([]);
+  expect(outside).toEqual([]);
+  expect(pose).toEqual(expect.arrayContaining(["/pose/pose_landmarker_lite.task", expect.stringMatching(/^\/assets\/vision_wasm_internal-[\w-]+\.wasm$/), expect.stringMatching(/^\/assets\/vision_wasm_internal-[\w-]+\.js$/)]));
 });
 
 test("guide camera: without camera access, a clear note and the iPhone camera instead", async ({ page }) => {

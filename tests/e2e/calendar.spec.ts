@@ -380,9 +380,9 @@ test("plan by tap on an empty time; drag the plan to another day and time; edit 
   await expect.poll(() => count("SELECT COUNT(*) AS n FROM gym_plans"), { timeout: 20_000 }).toBe(0);
 });
 
-test("Settings: the defaults work untouched; a changed reminder time and a closed day are saved and synced", async ({ page }) => {
+test("My training → Calendar: the defaults work untouched; a changed reminder time and a closed day are saved and synced", async ({ page }) => {
   await page.goto("/");
-  await goTo(page, "Settings");
+  await goTo(page, "My training");
   const card = page.getByTestId("calendar-settings");
   await expect(card.locator("#cal-wake")).toHaveValue("07:00");
   await expect(card.locator("#cal-earliest")).toHaveValue("08:00");

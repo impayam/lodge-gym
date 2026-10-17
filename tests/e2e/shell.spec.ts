@@ -57,7 +57,7 @@ test("four icon tabs: labels for VoiceOver, the indicator follows the tab, the C
   }
 });
 
-test("Profile's gear holds Program, Planner, Photos and Settings; Settings opens AI reports and Backup; each comes back", async ({ page }) => {
+test("Profile's gear holds Program, Planner, My training, Photos and Settings; Settings opens AI reports and Backup; each comes back", async ({ page }) => {
   // Body weight from this test only (other tests log body weight at the end of their sessions).
   sql("DELETE FROM body_metrics");
   sql(`INSERT INTO body_metrics (id, local_date, kind, value, unit, source, received_at) VALUES
@@ -78,6 +78,7 @@ test("Profile's gear holds Program, Planner, Photos and Settings; Settings opens
 
   for (const [place, check] of [
     ["Program", () => expect(page.getByTestId("program-name")).toBeVisible()],
+    ["My training", () => expect(page.getByTestId("calendar-settings")).toBeVisible()],
     ["Settings", () => expect(page.getByTestId("open-watch")).toBeVisible()],
     ["Photos", () => expect(page.getByRole("group", { name: "Photo pose" })).toBeVisible()],
     ["AI reports", () => expect(page.getByTestId("ai-settings")).toBeVisible()],
@@ -93,6 +94,16 @@ test("Profile's gear holds Program, Planner, Photos and Settings; Settings opens
   await goTo(page, "Settings");
   await expect(page.getByTestId("ai-settings")).toHaveCount(0);
   await expect(page.getByTestId("backups")).toHaveCount(0);
+  // Settings keeps only the app; the rest timer and the calendar are on My training (Payam, 2026-10-17).
+  await expect(page.getByTestId("training-settings")).toHaveCount(0);
+  await expect(page.getByTestId("calendar-settings")).toHaveCount(0);
+  await expect(page.getByTestId("settings").locator(".section-label")).toHaveText(["Program", "Connections", "AI and data", "Devices", "Rest-timer notification", "Sync", "About"]);
+  await goTo(page, "My training");
+  await expect(page.getByRole("heading", { name: "My training", level: 1 })).toBeVisible();
+  await expect(page.getByTestId("my-training").locator(".section-label")).toHaveText(["Training", "Calendar"]);
+  await expect(page.getByTestId("training-settings").locator("#s-rest-sets")).toBeVisible();
+  await page.getByTestId("back").click();
+  await expect(page.getByTestId("profile")).toBeVisible();
   // The planner opens the next program day's plan.
   await goTo(page, "Profile");
   await page.getByTestId("profile-gear").click();

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { BODY_GOAL_BADGE, goalsFromSettings, paceSentence, paceStatus, slotGoal, trainingLabel, type Goals } from "../../worker/lib/goals";
 import { latestSizes, sizeChange, type BodyMeasurement } from "../../worker/lib/measurements";
 import { afterSessionLine, baselineWindow, bodyLine, diamond, profile, regionsDone, type ProfileData } from "../../worker/lib/profile";
-import type { Exercise, SetEntry, WorkoutSession } from "../../worker/lib/types";
+import { beforeAfter, photoGroups } from "../../worker/lib/photoGroups";
+import type { Exercise, Photo, SetEntry, WorkoutSession } from "../../worker/lib/types";
+import { FRAMING_STREAK, framingOf, framingStart, LM, nextFraming, poseHint, readPose, type Landmark } from "../../web/src/lib/pose";
 import { exercises, reportData } from "../fixtures/report-data";
-import { cameraSettings, DEFAULT_CAMERA, isLevel, outline, tilt } from "../../web/src/lib/camera";
+import { cameraSettings, clipBelow, DEFAULT_CAMERA, FRAME_H, isLevel, outline, tilt, WAIST_Y } from "../../web/src/lib/camera";
 
 // SPEC-v12 M15 (decisions by Payam 2026-10-17): goals, the pace of the body goal, body sizes, the Living Diamond's
 // normalization and the after-session line; and the guide camera's pure parts (SPEC-v10.1).
@@ -179,8 +181,23 @@ describe("after-session line", () => {
 describe("guide camera (pure parts)", () => {
   it("settings fall back to the defaults when missing or out of range", () => {
     expect(cameraSettings(null)).toEqual(DEFAULT_CAMERA);
-    expect(cameraSettings({ facing: "user", timer: 10, scale: 2, offset: -1, ghost: false })).toEqual({ facing: "user", timer: 10, scale: 0.95, offset: -0.08, ghost: false });
-    expect(cameraSettings({ timer: 7 }).timer).toBe(DEFAULT_CAMERA.timer);
+    expect(cameraSettings({ facing: "user", timer: 10, ghost: false, framing: "upper", fit: { full: { scale: 2, offset: -1 }, upper: { scale: 0.75, offset: 0.02 } } })).toEqual({
+      facing: "user",
+      timer: 10,
+      ghost: false,
+      framing: "upper",
+      fit: { full: { scale: 0.95, offset: -0.08 }, upper: { scale: 0.75, offset: 0.02 } },
+    });
+    expect(cameraSettings({ timer: 7, framing: "half" })).toMatchObject({ timer: DEFAULT_CAMERA.timer, framing: "full" });
+  });
+  it("settings saved before the pose check (one scale and offset) become the full-body fit", () => {
+    expect(cameraSettings({ facing: "user", timer: 3, scale: 0.9, offset: 0.04, ghost: true })).toEqual({
+      facing: "user",
+      timer: 3,
+      ghost: true,
+      framing: "full",
+      fit: { full: { scale: 0.9, offset: 0.04 }, upper: DEFAULT_CAMERA.fit.upper },
+    });
   });
   it("tilt: upright is beta 90; past 3° is not level; no reading is null", () => {
     expect(tilt(90)).toBe(0);
@@ -194,12 +211,124 @@ describe("guide camera (pure parts)", () => {
   it("the outline sits between the head line and the feet line, centred, and follows size and position", () => {
     const o = outline("front", { scale: 0.8, offset: 0 });
     expect(o.headY).toBe(40);
-    expect(o.feetY).toBe(360);
+    expect(o.baseY).toBe(360);
+    expect(o.base).toBe("feet");
     expect(o.head.cx).toBe(150);
     expect(o.head.cy - o.head.r).toBeCloseTo(o.headY + 0.005 * 320, 1);
     const lower = outline("front", { scale: 0.8, offset: 0.05 });
     expect(lower.headY).toBe(60);
     expect(outline("side", { scale: 0.8, offset: 0 }).d).not.toBe(o.d);
     expect(outline("back", { scale: 0.8, offset: 0 }).d).toBe(o.d);
+  });
+  it("upper body: the head and waist lines span the fit; the outline is cut at the waist and drawn larger", () => {
+    const up = outline("front", { scale: 0.8, offset: 0 }, "upper");
+    expect([up.headY, up.baseY, up.base]).toEqual([40, 360, "waist"]);
+    const ys = [...up.d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => Number(m[2]));
+    expect(Math.max(...ys)).toBeCloseTo(360, 0);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(40);
+    // The head is drawn for a body of (0.8 × 400) / 0.42 = 762 px, against 320 px for the full body.
+    expect(up.head.r).toBeCloseTo(0.06 * ((0.8 * FRAME_H) / WAIST_Y), 0);
+    expect(up.head.r).toBeGreaterThan(outline("front", { scale: 0.8, offset: 0 }).head.r * 2);
+    expect(outline("side", { scale: 0.8, offset: 0 }, "upper").d).not.toBe(up.d);
+  });
+  it("clipBelow keeps the part of a polygon above the cut, with the crossing points", () => {
+    expect(clipBelow([[0, 0], [1, 0], [1, 1], [0, 1]], 0.5)).toEqual([[0, 0], [1, 0], [1, 0.5], [0, 0.5]]);
+  });
+});
+
+/** 33 landmarks of a standing body: head top at `top`, soles at `top + h`, centred on `cx`; ankles out of view if `upper`. */
+function body({ top = 0.07, h = 0.86, cx = 0.5, upper = false }: { top?: number; h?: number; cx?: number; upper?: boolean } = {}): Landmark[] {
+  const lms: Landmark[] = Array.from({ length: 33 }, () => ({ x: cx, y: top + 0.5 * h, visibility: 0.9 }));
+  const at = (i: number, dx: number, y: number, visibility = 0.9) => (lms[i] = { x: cx + dx, y: top + y * h, visibility });
+  at(LM.nose, 0, 0.075);
+  at(LM.shoulderL, 0.06, 0.185);
+  at(LM.shoulderR, -0.06, 0.185);
+  at(LM.hipL, 0.04, 0.5);
+  at(LM.hipR, -0.04, 0.5);
+  for (const [i, dx, y] of [
+    [LM.ankleL, 0.03, 0.96],
+    [LM.ankleR, -0.03, 0.96],
+    [LM.heelL, 0.03, 0.985],
+    [LM.heelR, -0.03, 0.985],
+    [LM.toeL, 0.04, 1],
+    [LM.toeR, -0.04, 1],
+  ] as const)
+    at(i, dx, y, upper ? 0.1 : 0.9);
+  return lms;
+}
+
+describe("pose check (PR #26 review): framing, head, feet and waist, hints", () => {
+  it("ankles in the frame: full body; ankles out of view or below the frame: upper body", () => {
+    expect(framingOf(body())).toBe("full");
+    expect(framingOf(body({ upper: true }))).toBe("upper");
+    // A mirror shot from close: the model guesses the ankles far below the picture.
+    expect(framingOf(body({ top: 0.05, h: 1.9 }))).toBe("upper");
+  });
+  it("reads the head top, the soles or the waist, and the centre line", () => {
+    const full = readPose(body())!;
+    expect(full.framing).toBe("full");
+    expect(full.top).toBeCloseTo(0.07, 2);
+    expect(full.base).toBeCloseTo(0.93, 2);
+    expect(full.cx).toBeCloseTo(0.5, 3);
+    const upper = readPose(body({ top: 0.1, h: 0.8 / 0.42, upper: true }))!;
+    expect(upper.framing).toBe("upper");
+    expect(upper.top).toBeCloseTo(0.1, 2);
+    expect(upper.base).toBeCloseTo(0.9, 1);
+  });
+  it("no body: no landmarks, too few, or no head", () => {
+    expect(readPose(null)).toBeNull();
+    expect(readPose(body().slice(0, 20))).toBeNull();
+    const headless = body();
+    headless[LM.nose] = { ...headless[LM.nose], visibility: 0.1 };
+    expect(readPose(headless)).toBeNull();
+  });
+  it("the framing switches only after three readings in a row; nobody in the frame keeps it", () => {
+    const up = readPose(body({ upper: true }));
+    const full = readPose(body());
+    let s = framingStart("full");
+    s = nextFraming(s, up);
+    s = nextFraming(s, up);
+    expect(s.framing).toBe("full");
+    s = nextFraming(s, null);
+    s = nextFraming(s, up);
+    s = nextFraming(s, up);
+    expect(s.framing).toBe("full");
+    s = nextFraming(s, up);
+    expect(s).toEqual({ framing: "upper", detected: true, streak: null });
+    s = nextFraming(s, full);
+    expect(s.framing).toBe("upper");
+    expect(nextFraming(framingStart("upper"), null)).toEqual(framingStart("upper"));
+    expect(nextFraming(framingStart("full"), full)).toEqual({ framing: "full", detected: true, streak: null });
+    expect(FRAMING_STREAK).toBe(3);
+  });
+  it("one hint at a time: nobody, framing, distance, left / right, then the phone's height", () => {
+    const guide = { framing: "full" as const, headY: 0.07, baseY: 0.93 };
+    expect(poseHint(null, guide).key).toBe("none");
+    expect(poseHint(readPose(body()), guide)).toEqual({ key: "ok", text: "On the lines." });
+    expect(poseHint(readPose(body({ upper: true })), guide).key).toBe("framing");
+    expect(poseHint(readPose(body({ top: 0.02, h: 0.98 })), guide)).toEqual({ key: "back", text: "Step back a bit: head and feet on the lines." });
+    expect(poseHint(readPose(body({ top: 0.15, h: 0.7 })), guide).key).toBe("closer");
+    expect(poseHint(readPose(body({ cx: 0.62 })), guide).key).toBe("left");
+    expect(poseHint(readPose(body({ cx: 0.38 })), guide).key).toBe("right");
+    expect(poseHint(readPose(body({ top: 0.0 })), guide).key).toBe("raise");
+    expect(poseHint(readPose(body({ top: 0.12 })), guide).key).toBe("lower");
+    const upperGuide = { framing: "upper" as const, headY: 0.1, baseY: 0.9 };
+    expect(poseHint(readPose(body({ top: 0.1, h: 0.8 / 0.42, upper: true })), upperGuide).key).toBe("ok");
+    expect(poseHint(readPose(body({ top: 0.05, h: 1.1 / 0.42, upper: true })), upperGuide).text).toBe("Step back a bit: head and waist on the lines.");
+  });
+});
+
+describe("which photos are compared (PR #26 review)", () => {
+  const ph = (id: string, date: string, pose: Photo["pose"], framing: Photo["framing"]): Photo => ({ id, session_id: null, local_date: date, pose, framing, width: 1, height: 1, bytes: 1, created_at: `${date}T10:00:00.000Z` });
+  it("Before · After: the newest two of one pose AND one framing; no framing pairs only with no framing", () => {
+    expect(beforeAfter([ph("a", "2026-10-01", "front", "full"), ph("b", "2026-10-10", "front", "upper")])).toBeNull();
+    expect(beforeAfter([ph("a", "2026-10-01", "front", null), ph("b", "2026-10-10", "front", "full")])).toBeNull();
+    const list = [ph("a", "2026-09-01", "front", "upper"), ph("b", "2026-10-01", "front", "upper"), ph("c", "2026-10-05", "front", "full"), ph("d", "2026-10-12", "front", "upper")];
+    expect(beforeAfter(list)!.map((p) => p.id)).toEqual(["b", "d"]);
+    expect(beforeAfter([ph("a", "2026-10-01", "side", "full"), ph("b", "2026-10-03", "side", "full"), ph("c", "2026-10-02", "front", null), ph("d", "2026-10-04", "front", null)])!.map((p) => p.id)).toEqual(["c", "d"]);
+    expect(photoGroups(list).map((g) => [g.pose, g.framing, g.photos.length])).toEqual([
+      ["front", "full", 1],
+      ["front", "upper", 3],
+    ]);
   });
 });

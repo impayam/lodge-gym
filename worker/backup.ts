@@ -18,7 +18,7 @@ export async function buildExport(env: Env) {
       "SELECT id, external_key, activity_type, started_at, ended_at, duration_sec, active_kcal, total_kcal, hr_avg, hr_max, matched_session_id, received_at FROM health_workouts ORDER BY started_at"
     ).all(),
     readBodyMetrics(env, "0000-01-01", "9999-12-31"),
-    env.DB.prepare("SELECT id, session_id, local_date, pose, width, height, bytes, created_at FROM photos ORDER BY local_date, created_at").all(),
+    env.DB.prepare("SELECT id, session_id, local_date, pose, framing, width, height, bytes, created_at FROM photos ORDER BY local_date, created_at").all(),
     env.DB.prepare("SELECT * FROM exercises WHERE source = 'custom' ORDER BY id").all<Record<string, unknown>>(),
     readProgramVersions(env),
     readAllPlans(env),

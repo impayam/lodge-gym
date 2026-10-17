@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import { daysBetween } from "../../../worker/lib/time";
+import { FRAMING_LABEL } from "../../../worker/lib/photoGroups";
 import type { Photo, Pose } from "../../../worker/lib/types";
 import { dateLong, dateShort, fmtNum } from "../format";
 import { IconCamera } from "../components/PulseIcons";
@@ -19,6 +20,8 @@ export const POSES: [Pose, string][] = [
   ["other", "Other"],
 ];
 export const poseLabel = (p: Pose) => POSES.find(([k]) => k === p)?.[1] ?? p;
+/** "Front · Upper body"; the pose alone when the framing is not known (library and older photos). */
+export const photoLabel = (p: Photo) => `${poseLabel(p.pose)}${p.framing ? ` · ${FRAMING_LABEL[p.framing]}` : ""}`;
 
 /** Camera + library pickers for one pose. Used by the gallery and the post-session prompt. */
 export function PhotoPicker({ pose, date, sessionId, onDone, compact, startCamera }: { pose: Pose; date: string; sessionId: string | null; onDone?: (n: number) => void; compact?: boolean; startCamera?: boolean }) {
@@ -114,7 +117,7 @@ function Compare({ a, b }: { a: Photo; b: Photo }) {
         <img src={photoSrc(p, "full")} alt={alt} />
       </span>
       <figcaption class="caption num">
-        {dateShort(p.local_date)} · {poseLabel(p.pose)}
+        {dateShort(p.local_date)} · {photoLabel(p)}
       </figcaption>
     </figure>
   );
@@ -155,9 +158,9 @@ function Viewer({ p, onClose }: { p: Photo; onClose: () => void }) {
   const pending = useStore((s) => Boolean(s.pendingPhotos[p.id]));
   return (
     <section class="card l-col l-gap-10" data-testid="viewer" aria-label="Photo">
-      <img class="photo-full" src={photoSrc(p, "full")} alt={`${poseLabel(p.pose)} photo, ${dateLong(p.local_date)}`} />
+      <img class="photo-full" src={photoSrc(p, "full")} alt={`${photoLabel(p)} photo, ${dateLong(p.local_date)}`} />
       <span class="ex-card__meta num">
-        {dateLong(p.local_date)} · {poseLabel(p.pose)} {pending ? <span class="badge">queued for upload</span> : null}
+        {dateLong(p.local_date)} · {photoLabel(p)} {pending ? <span class="badge">queued for upload</span> : null}
       </span>
       <div class="l-row l-gap-8">
         <button type="button" class="clay press btn t-muted l-grow" onClick={onClose}>
@@ -281,7 +284,7 @@ export function Photos({ compare = false, open: openFirst }: { compare?: boolean
             {list.map((p) => (
               <button type="button" class="photo-thumb press" aria-pressed={comparing ? picked.includes(p.id) : undefined} data-testid="photo" onClick={() => tap(p)}>
                 <span class="photo-thumb__frame well">
-                  <img src={photoSrc(p, "thumb")} alt={`${poseLabel(p.pose)} photo, ${dateLong(p.local_date)}`} loading="lazy" />
+                  <img src={photoSrc(p, "thumb")} alt={`${photoLabel(p)} photo, ${dateLong(p.local_date)}`} loading="lazy" />
                 </span>
                 <span>
                   {poseLabel(p.pose)}

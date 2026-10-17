@@ -1,7 +1,8 @@
 // The one shared 3D body (SPEC-v12 M15 §3.3): every screen that shows the body renders this component, so a later
 // redesign of the body (its look, levels, growth) lands here and in ../lib/anatomy3d.ts, and every screen follows.
 // It owns the lazy load of the model, the 10 s timeout, dispose, Front / Back, the area zoom with "← Body", the
-// "Drag to turn" hint and the fallback (the drawn front and back figures in the same tints, or only a note).
+// "Drag to turn" hint and the fallback ("3D unavailable." and Retry; no drawn figure, a proper fallback is for the
+// native app).
 //
 // Callers give the colour of each muscle as a token name (`tints`), what a tap in a close-up shows (`card`) and,
 // for the exercise picker, a handle to zoom from its area chips. Unmapped tissue stays dark (the view draws it).
@@ -13,9 +14,8 @@ import type { Muscle } from "../../../worker/lib/muscles";
 import type { AnatomyView } from "../lib/anatomy3d";
 import type { TintToken } from "../lib/anatomy-status";
 import { token } from "../lib/tokens";
-import { BACK, BACK_DETAIL, FRONT, FRONT_DETAIL, SILHOUETTE, VIEW_H, VIEW_W, bothSides, mirrorPath, type HalfRegion, type RegionKey } from "./bodyMap";
 
-/** SPEC-v6 §5: a model that has not loaded after 10 s gives way to the fallback. */
+/** SPEC-v6 §5: a model that has not loaded after 10 s gives way to the fallback (the note and Retry). */
 const LOAD_TIMEOUT_MS = 10_000;
 
 export type { TintToken };
@@ -63,7 +63,6 @@ export function Body3D({
   onPlace,
   card,
   legend,
-  figures = false,
   fallbackNote = "3D unavailable.",
   fallbackExtra,
   handle,
@@ -80,9 +79,8 @@ export function Body3D({
   onPlace?: (p: BodyPlace) => void;
   /** What a tap on a muscle in a close-up shows; null: nothing. */
   card?: (muscle: Muscle) => BodyCard | null;
+  /** Shown under the 3D body (not with the fallback). */
   legend?: ComponentChildren;
-  /** Without the model: the drawn figures in the same tints (Profile) instead of only the note (the picker's chips). */
-  figures?: boolean;
   fallbackNote?: string;
   /** Shown under the fallback note (the picker's ← Body). */
   fallbackExtra?: ComponentChildren;
@@ -104,6 +102,8 @@ export function Body3D({
   };
   const [place, setPlaceState] = useState<BodyPlace>(initial);
   const [hint, setHint] = useState(!hintDone.has(hintKey));
+  // Retry after the fallback loads the model again (a new attempt runs the load effect again).
+  const [attempt, setAttempt] = useState(0);
   const placeRef = useRef(place);
   placeRef.current = place;
   const tintsRef = useRef(tints);
@@ -174,7 +174,7 @@ export function Body3D({
       view?.dispose();
       view3d.current = null;
     };
-  }, []);
+  }, [attempt]);
 
   // New numbers (a set done, a sync): new colours, without reloading the model.
   const tintKey = tints ? [...tints].map(([m, k]) => `${m}:${k}`).join(",") : "";
@@ -197,12 +197,21 @@ export function Body3D({
   if (mode === "fallback")
     return (
       <>
-        <div class="stage__off" data-testid="anatomy-fallback">
-          {fallbackNote}
+        <div class="stage__off l-row l-between l-gap-10" data-testid="anatomy-fallback" role="status">
+          <span>{fallbackNote}</span>
+          <button
+            type="button"
+            class="clay press btn-sm btn--fit t-muted"
+            data-testid="anatomy-retry"
+            onClick={() => {
+              setMode("loading");
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Retry
+          </button>
         </div>
         {fallbackExtra ?? (back ? <div class="l-row">{back}</div> : null)}
-        {figures ? <Figures tints={tints} card={card} id={ids.card} /> : null}
-        {figures ? legend : null}
       </>
     );
 
@@ -256,51 +265,4 @@ export function Body3D({
   );
 }
 
-/* ---------------- the drawn fallback: front and back figures in the same tints ---------------- */
-
-const FRONT_REGIONS = bothSides(FRONT);
-const BACK_REGIONS = bothSides(BACK);
-const FRONT_LINES = [...FRONT_DETAIL, ...FRONT_DETAIL.map(mirrorPath)];
-const BACK_LINES = [...BACK_DETAIL, ...BACK_DETAIL.map(mirrorPath)];
-
-function Figure({ regions, lines, tints, title, picked, onPick }: { regions: HalfRegion[]; lines: string[]; tints?: ReadonlyMap<Muscle, TintToken>; title: string; picked: RegionKey | null; onPick: (k: RegionKey) => void }) {
-  return (
-    <figure class="body-figure">
-      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label={title}>
-        <path d={SILHOUETTE} class="body-figure__body" />
-        {regions.map((r) => (
-          <path d={r.d} class="body-region" style={{ fill: `var(${tints?.get(r.key) ?? "--model-muscle"})` }} data-muscle={r.key} data-tint={tints?.get(r.key) ?? ""} onClick={() => onPick(r.key)} />
-        ))}
-        {lines.map((d) => (
-          <path d={d} class="body-figure__detail" />
-        ))}
-        {picked ? regions.filter((r) => r.key === picked).map((r) => <path d={r.d} class="body-figure__sel" data-selected={r.key} />) : null}
-      </svg>
-      <figcaption>{title}</figcaption>
-    </figure>
-  );
-}
-
 const dataAttrs = (d: Record<string, string> | undefined) => Object.fromEntries(Object.entries(d ?? {}).map(([k, v]) => [`data-${k}`, v]));
-
-function Figures({ tints, card, id }: { tints?: ReadonlyMap<Muscle, TintToken>; card?: (muscle: Muscle) => BodyCard | null; id: string }) {
-  const [picked, setPicked] = useState<RegionKey | null>(null);
-  const shown = picked && card ? card(picked as Muscle) : null;
-  return (
-    <div class="l-col l-gap-8" data-testid="body-figures">
-      <div class="body-figures">
-        <Figure regions={FRONT_REGIONS} lines={FRONT_LINES} tints={tints} title="Front" picked={picked} onPick={setPicked} />
-        <Figure regions={BACK_REGIONS} lines={BACK_LINES} tints={tints} title="Back" picked={picked} onPick={setPicked} />
-      </div>
-      <div aria-live="polite">
-        {shown ? (
-          <div class="callout l-row l-between l-gap-10" data-testid={id} data-muscle={picked!} {...dataAttrs(shown.data)}>
-            {shown.body}
-          </div>
-        ) : (
-          <span class="caption">Tap a muscle.</span>
-        )}
-      </div>
-    </div>
-  );
-}

@@ -116,8 +116,9 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   body a tap zooms to that muscle's area (as in the picker); in the close-up a tap shows a card with the muscle, its
   group and "done / target sets this week" (fractional) with the status icon and label; "← Body" goes back. The legend
   and the list under the map carry icon and label, so status is never colour alone; the list is the accessible
-  alternative. Without WebGL 2, or when the model fails or takes over 10 s, a "3D unavailable" note shows with the
-  drawn front and back figures (one region per canonical muscle key, tapping a region selects its group).
+  alternative. Without WebGL 2, or when the model fails or takes over 10 s, only a "3D unavailable." note shows with
+  Retry (as in the exercise picker); no drawn figure ships (PR #26 review, 2026-10-17: a proper fallback is for the
+  native app).
 - Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
   secondary muscle (decided 2026-10-12).
 - Only strength work counts (decided 2026-10-12): exercises whose `category` (migration `0005_exercise_category.sql`)
@@ -213,7 +214,11 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 ## Goals, Profile and body sizes (SPEC-v12 M15, decisions by Payam 2026-10-17)
 
 - Four tabs: Train, History, Library, Profile (Reports and Me merged into Profile). The gear on Profile lists Program,
-  Planner, Photos and Settings; AI reports and Backup open from Settings.
+  Planner, My training, Photos and Settings; AI reports and Backup open from Settings.
+- My training (`web/src/views/MyTraining.tsx`, PR #26 review): the rest timer (Rest between sets, Rest before the next
+  exercise) and the whole Calendar group (wake up, earliest suggestion, travel, shifts, reminder, gym hours, preferred
+  times), moved out of Settings unchanged (same settings keys and API). Settings keeps the app: units, week start,
+  Face ID lock, time zone, Program, Apple Watch, AI and data, Devices, rest-timer notification, Sync, About, Sign out.
 - Goals: a training goal of one or two of Growth, Strength, Endurance, Power and a body goal of Gain, Maintain or Cut,
   stored as the settings keys `goal_training`, `goal_body`, `goal_set_at` (`PUT /api/settings`, offline through the
   outbox). The generator's slot schemes follow the goal (`worker/lib/goals.ts`, `goalScheme` in
@@ -225,9 +230,19 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   Reports: Week, Month, All).
 - Body sizes: `body_measurements` (migration 0014), `PUT`/`DELETE /api/body/measurements/:id`, Log sizes and All sizes
   on Profile. The Coach reads them with `get_body`.
-- Photos: the in-app guide camera (SPEC-v10.1, `web/src/components/GuideCamera.tsx`): outline with head and feet lines
-  per pose, ghost of the last photo, level from the motion sensor, timer and burst of 3, settings remembered per pose.
-  No on-device pose detection.
+- Photos: the in-app guide camera (SPEC-v10.1, `web/src/components/GuideCamera.tsx`): outline with two guide lines
+  per pose, ghost of the last photo of the same pose and framing, level from the motion sensor, timer and burst of 3,
+  settings remembered per pose.
+- Pose check (PR #26 review): MediaPipe Pose Landmarker lite (Apache-2.0, `web/public/pose/POSE-SOURCE.md`, SHA-256
+  pinned in `web/src/lib/pose-asset.ts` and checked by `npm run build`) on the phone's CPU, loaded on first use of the
+  camera and kept by the service worker (model 5.8 MB, WebAssembly runtime 11.8 MB, about 3.4 MB compressed, code
+  0.5 MB; nothing in the install, nothing sent anywhere). Ankles in the frame is a full-body photo (head and feet on
+  the lines), otherwise an upper-body one (a mirror shot, head and waist on the lines); the framing switches after three
+  readings in a row (`web/src/lib/pose.ts`). Lines, outline, ghost and each framing's line size follow it, and the
+  framing is remembered per pose. One hint at a time ("Step back a bit", "Move left a bit", "Raise the phone a
+  little", "On the lines.") live and under each burst shot. The kept photo is saved with its framing
+  (`photos.framing`, migration 0015; NULL for library and older photos). Before · After and the month report's first
+  and last photo compare only photos of the same pose and framing (`worker/lib/photoGroups.ts`).
 
 ## Body-map exercise picker (SPEC-v3 M9b, 3D model SPEC-v6)
 
@@ -437,9 +452,6 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 
 ## Artwork and credits
 
-- Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
-  drawn and mirrored in code, so the figures are symmetric by construction. No third-party artwork or icon set is
-  used, so no external licence applies.
 - Exercise images: free-exercise-db (Unlicense), wger (each image's own licence and author, shown under it) and
   everkinetic (CC BY-SA 4.0), copied into the private R2 bucket (see "Exercise library"); credited in Settings → About.
 - 3D anatomy model of the exercise picker: Body Anatomy 3D Viewer by hpfrei (github.com/hpfrei/body-anatomy-3d-viewer,

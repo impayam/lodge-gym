@@ -322,7 +322,7 @@ test("contrast: the four tabs", async ({ page }) => {
 test("contrast: the screens in Profile's gear and Settings", async ({ page }) => {
   test.setTimeout(300_000);
   const failed: string[] = [];
-  for (const place of ["Settings", "Program", "Photos", "AI reports", "Backup"] as const) {
+  for (const place of ["Settings", "My training", "Program", "Photos", "AI reports", "Backup"] as const) {
     await goTo(page, place);
     failed.push(...(await contrast(page, place)));
   }

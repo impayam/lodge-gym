@@ -1,10 +1,11 @@
 // Profile tab (SPEC-v12 M15 §3; Payam's decisions 2026-10-17): Reports and Me in one page, top to bottom: the line
 // after the last session, My body (the shared 3D body tinted today / this week / rest, the latest sizes, Log sizes and
 // the body goal's pace), My goal (the Living Diamond), This week's tiles, the AI reports, Before · After, and Details
-// (everything else Reports held, closed). The gear at the top opens a short list: Program, Planner, Photos, Settings.
+// (everything else Reports held, closed). The gear at the top opens a short list: Program, Planner, My training, Photos, Settings.
 
 import { useEffect, useState } from "preact/hooks";
 import { BODY_GOAL_NAME, trainingLabel, type TrainingGoal } from "../../../worker/lib/goals";
+import { FRAMING_LABEL, beforeAfter } from "../../../worker/lib/photoGroups";
 import type { Muscle } from "../../../worker/lib/muscles";
 import { groupOf } from "../../../worker/lib/muscles";
 import type { Profile as ProfileData } from "../../../worker/lib/profile";
@@ -17,7 +18,7 @@ import { Body3D } from "../components/Body3D";
 import { BodyCard } from "../components/BodyCard";
 import { CornerPanel, Diamond } from "../components/Diamond";
 import { GuideCamera } from "../components/GuideCamera";
-import { IconChevron, IconPlanner, IconProgram, IconSettings } from "../components/PulseIcons";
+import { IconBarbell, IconChevron, IconPlanner, IconProgram, IconSettings } from "../components/PulseIcons";
 import { IconCamera } from "../components/PulseIcons";
 import { Sheet } from "../components/Sheet";
 import { SizeTiles, SizesSheet } from "../components/Sizes";
@@ -34,7 +35,7 @@ import { ProfileDetails, ThisWeek, useReport } from "./ProfileDetails";
 
 const signed = (n: number, digits = 1) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmtNum(Math.abs(n), digits)}`;
 
-/** The gear's list: Program, Planner, Photos, Settings (Payam, 2026-10-17). */
+/** The gear's list: Program, Planner, My training, Photos, Settings (Payam, 2026-10-17). */
 function GearSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
@@ -64,8 +65,9 @@ function GearSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div class="card card--list">
         {row("gear-program", <IconProgram />, "t-pink", "Program", `${programName(activeProgramInfo(boot))}, active`, () => navigate("program"))}
         {next ? row("gear-planner", <IconPlanner />, "t-orange", "Planner", `Plan the next session: ${next.name_en}`, () => planDay(next)) : null}
+        {row("gear-training", <IconBarbell />, "t-orange", "My training", "Rest timer, calendar, gym hours, reminders", () => navigate("training"))}
         {row("gear-photos", <IconCamera />, "t-violet", "Photos", "Progress photos, compare two dates", () => openPhotos())}
-        {row("gear-settings", <IconSettings />, "t-muted", "Settings", "Units, training, AI reports, backup, Apple Watch", () => navigate("settings"))}
+        {row("gear-settings", <IconSettings />, "t-muted", "Settings", "Units, Face ID, AI reports, backup, Apple Watch", () => navigate("settings"))}
       </div>
     </Sheet>
   );
@@ -125,7 +127,6 @@ function MyBody({ profile }: { profile: ProfileData | null }) {
       <Body3D
         tints={tints}
         size="profile"
-        figures
         hintKey="profile"
         card={card}
         label={`Your body: ${[...day.set].map((g) => MUSCLE_NAME[g] ?? g).join(", ") || "nothing"} trained today, ${[...week.set].filter((g) => !day.set.has(g)).map((g) => MUSCLE_NAME[g] ?? g).join(", ") || "nothing else"} earlier this week`}
@@ -289,15 +290,6 @@ function MyGoal({ profile, error, retry }: { profile: ProfileData | null; error:
   );
 }
 
-/** The newest two photos of one pose (front first), for Before · After. */
-export function beforeAfter(photos: readonly Photo[]): [Photo, Photo] | null {
-  for (const pose of ["front", "side", "back", "other"] as Pose[]) {
-    const list = photos.filter((p) => p.pose === pose).sort((a, b) => (b.local_date + b.created_at).localeCompare(a.local_date + a.created_at));
-    if (list.length >= 2) return [list[1], list[0]];
-  }
-  return null;
-}
-
 function BeforeAfter() {
   const photos = useStore((s) => s.photos);
   const [pos, setPos] = useState(50);
@@ -314,7 +306,8 @@ function BeforeAfter() {
         </h2>
         {pair ? (
           <span class="caption num">
-            {poseLabel(pair[0].pose)} · {fmtNum(daysBetween(pair[0].local_date, pair[1].local_date))} days apart
+            {poseLabel(pair[0].pose)}
+            {pair[0].framing ? ` · ${FRAMING_LABEL[pair[0].framing]}` : ""} · {fmtNum(daysBetween(pair[0].local_date, pair[1].local_date))} days apart
           </span>
         ) : null}
       </div>
@@ -331,7 +324,7 @@ function BeforeAfter() {
           </div>
         </>
       ) : (
-        <p class="caption l-m0">Two photos of the same pose show here side by side. Take them with the guide camera so they line up.</p>
+        <p class="caption l-m0">Two photos of the same pose and framing show here side by side. Take them with the guide camera so they line up.</p>
       )}
       <div class="l-row l-gap-8">
         <button type="button" class="clay press btn btn--fit t-pink l-grow" data-testid="profile-take-photo" onClick={() => setCamera(true)}>
@@ -361,7 +354,7 @@ export function Profile() {
           <h1 class="h-page">Profile</h1>
           {since ? <span class="page-head__sub">Training since {dayMonth(since)}</span> : null}
         </div>
-        <button type="button" class="clay press btn-icon t-muted" aria-label="More: Program, Planner, Photos, Settings" data-testid="profile-gear" onClick={() => setGear(true)}>
+        <button type="button" class="clay press btn-icon t-muted" aria-label="More: Program, Planner, My training, Photos, Settings" data-testid="profile-gear" onClick={() => setGear(true)}>
           <IconSettings size={22} />
         </button>
       </header>

@@ -9,6 +9,7 @@ import { countsVolume } from "./category";
 import { groupOf, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "./muscles";
 import { weekRange } from "./cycle";
 import { DIRECT_GROUPS } from "./generator/blocks";
+import { photoGroups } from "./photoGroups";
 import type { BodyMetric, Exercise, HealthWorkout, Photo, Pose, Program, ProgramVersion, Settings, Unit, WorkoutSession } from "./types";
 
 export const LB_PER_KG = 2.20462262;
@@ -423,12 +424,10 @@ export function monthlyReport(d: ReportData, key: string, today: string = monthR
       return { date, value, ma7: round1(mean(window)!) };
     });
 
-  const photos = (["front", "side", "back", "other"] as Pose[])
-    .map((pose) => {
-      const list = d.photos.filter((p) => p.pose === pose && inRange(p.local_date, range)).sort((a, b) => (a.local_date + a.created_at).localeCompare(b.local_date + b.created_at));
-      return list.length >= 2 ? { pose, first: list[0], last: list[list.length - 1] } : null;
-    })
-    .filter(Boolean);
+  // First and last photo of each pose and framing in the month (only those are compared, PR #26 review).
+  const photos = photoGroups(d.photos.filter((p) => inRange(p.local_date, range)))
+    .filter((g) => g.photos.length >= 2)
+    .map((g) => ({ pose: g.pose, framing: g.framing, first: g.photos[0], last: g.photos[g.photos.length - 1] }));
 
   const mins = month.map(minutes).filter((v): v is number => v != null);
   const kcal = month.map((s) => watchForSession(d, s.id)?.kcal).filter((v): v is number => v != null);

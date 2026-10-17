@@ -24,7 +24,7 @@ export async function loadReportData(env: Env): Promise<ReportData> {
        FROM health_workouts WHERE matched_session_id IS NOT NULL`
     ).all<HealthWorkout>(),
     readBodyMetrics(env, "0000-01-01", "9999-12-31"),
-    env.DB.prepare("SELECT id, session_id, local_date, pose, width, height, bytes, created_at FROM photos").all<Photo>(),
+    env.DB.prepare("SELECT id, session_id, local_date, pose, framing, width, height, bytes, created_at FROM photos").all<Photo>(),
     readGoals(env),
     readMeasurements(env),
   ]);

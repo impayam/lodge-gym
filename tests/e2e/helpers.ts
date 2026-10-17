@@ -174,8 +174,8 @@ export async function aiCalls(): Promise<{ calls: number; last: AiCall | null; b
 
 /** Where goTo can go: a tab, a screen in Profile's gear list (SPEC-v12 M15 §3.0), one under Settings, or Profile's
  *  Details (everything the Reports tab held). */
-export type Place = "Train" | "History" | "Library" | "Profile" | "Reports" | "Photos" | "Program" | "Settings" | "AI reports" | "Backup";
-const IN_GEAR: Partial<Record<Place, string>> = { Photos: "gear-photos", Program: "gear-program", Settings: "gear-settings" };
+export type Place = "Train" | "History" | "Library" | "Profile" | "Reports" | "Photos" | "Program" | "My training" | "Settings" | "AI reports" | "Backup";
+const IN_GEAR: Partial<Record<Place, string>> = { Photos: "gear-photos", Program: "gear-program", "My training": "gear-training", Settings: "gear-settings" };
 const IN_SETTINGS: Partial<Record<Place, string>> = { "AI reports": "open-ai", Backup: "open-backup" };
 
 /** Opens a tab from the tab bar, a screen from Profile's gear, a Settings screen, or Profile's Details (Reports). */

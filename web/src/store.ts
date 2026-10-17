@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { Category } from "../../worker/lib/category";
-import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, SetEntry, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, Framing, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, SetEntry, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import { DEFAULT_CALENDAR_SETTINGS, type CalendarSettings, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
@@ -665,13 +665,15 @@ function photoUploaded(id: string) {
 }
 
 /** Resizes, strips metadata, stores locally and queues the upload. */
-export async function addPhoto(file: Blob, pose: Pose, localDateStr: string, sessionId: string | null) {
+/** `framing` comes from the guide camera's pose check (null from the library, or when it found no one). */
+export async function addPhoto(file: Blob, pose: Pose, localDateStr: string, sessionId: string | null, framing: Framing | null = null) {
   const processed = await processPhoto(file);
   const photo: Photo = {
     id: ulid(),
     session_id: sessionId,
     local_date: localDateStr,
     pose,
+    framing,
     width: processed.width,
     height: processed.height,
     bytes: processed.full.size,

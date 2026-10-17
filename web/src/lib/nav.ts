@@ -10,6 +10,7 @@ export type ViewName =
   | "sizes"
   | "program"
   | "settings"
+  | "training"
   | "ai"
   | "backup"
   | "session"
@@ -53,9 +54,10 @@ export function tabAfter(view: ViewName, current: TabName): TabName {
  */
 export function backTarget(view: ViewName, tab: TabName): ViewName | null {
   switch (view) {
-    // Profile's gear list (Program, Planner, Photos, Settings), Set goal and the sizes list.
+    // Profile's gear list (Program, Planner, My training, Photos, Settings), Set goal and the sizes list.
     case "program":
     case "settings":
+    case "training":
     case "photos":
     case "goal":
     case "sizes":

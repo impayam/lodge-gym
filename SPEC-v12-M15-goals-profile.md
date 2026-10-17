@@ -104,3 +104,9 @@ Each corner's length = normalized progress vs a baseline; Claude Code proposes t
 7. Photos: the in-app guide camera of SPEC-v10.1 (getUserMedia works in the iOS Home Screen app).
 8. Profile's top-right button is a gear; it opens a short list: Program, Planner, Photos, Settings.
 9. Weekly cap of 20 fractional sets per muscle; no session time limit (the per-session cap of 10 stays).
+
+## 10. PR #26 review (Payam, 2026-10-17)
+1. The drawn 2D front/back figures are gone everywhere: without the 3D model (no WebGL, error or 10 s timeout) the shared body shows only "3D unavailable." with Retry, on Profile and in the exercise picker. A proper fallback is for the native app.
+2. Guide camera: the on-device pose check of SPEC-v10.1 is built with MediaPipe Pose Landmarker lite (model 5.8 MB + runtime 11.8 MB, self-hosted, loaded on first use). The framing is found from the pose without a choice: ankles in the frame = full body (head and feet on the lines), otherwise upper body (head and waist on the lines, a mirror shot). Guide lines, outline, ghost and the saved framing follow it per pose. Photos store `framing` (migration 0015, shown to Payam; not applied to production without his OK). Before · After compares only photos of the same pose and the same framing.
+3. Mirror shots: the pose model cannot tell a mirror shot from a direct one reliably (STOP answered in the PR; the un-flip waits for Payam's decision).
+4. Settings split: Profile's gear lists Program, Planner, My training, Photos, Settings. My training (ViewName `training`, Back → Profile) holds the Training and Calendar groups unchanged; Settings keeps only the app.

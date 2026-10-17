@@ -25,7 +25,7 @@ describe("tabs", () => {
 
 describe("back", () => {
   it("goes to Profile from its gear list (Program, Photos, Settings), Set goal and the sizes list", () => {
-    for (const v of ["program", "settings", "photos", "goal", "sizes"] as ViewName[]) expect(backTarget(v, "profile"), v).toBe("profile");
+    for (const v of ["program", "settings", "training", "photos", "goal", "sizes"] as ViewName[]) expect(backTarget(v, "profile"), v).toBe("profile");
   });
 
   it("goes to the tab a report, plan, the Coach or the Calendar was opened from", () => {
@@ -59,7 +59,7 @@ describe("chrome", () => {
 
   it("the Coach button is on the four tab screens only", () => {
     expect(TABS.every((t) => showsCoachButton(t.name) && isTabRoot(t.name))).toBe(true);
-    for (const v of ["session", "coach", "report", "settings", "calendar"] as ViewName[]) expect(showsCoachButton(v), v).toBe(false);
+    for (const v of ["session", "coach", "report", "settings", "training", "calendar"] as ViewName[]) expect(showsCoachButton(v), v).toBe(false);
   });
 });
 

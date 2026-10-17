@@ -22,6 +22,7 @@ import { AllReports, SavedReport } from "./views/ReportsTimeline";
 import { Session } from "./views/Session";
 import { SessionReportScreen } from "./views/SessionReport";
 import { Settings } from "./views/Settings";
+import { MyTraining } from "./views/MyTraining";
 import { Watch } from "./views/Watch";
 
 /** Client-side re-lock after N minutes in the background (SPEC §4.4). */
@@ -116,6 +117,8 @@ export function App() {
       <Program />
     ) : view.name === "settings" ? (
       <Settings />
+    ) : view.name === "training" ? (
+      <MyTraining />
     ) : view.name === "ai" ? (
       <AiReports />
     ) : view.name === "backup" ? (

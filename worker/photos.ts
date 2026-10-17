@@ -20,13 +20,15 @@ const createSchema = z.object({
   session_id: z.string().regex(ID_RE).nullable().optional(),
   local_date: z.string().regex(DATE_RE),
   pose: z.enum(["front", "side", "back", "other"]),
+  // Older app versions send none (migration 0015).
+  framing: z.enum(["full", "upper"]).nullable().optional(),
   width: z.number().int().min(1).max(10_000),
   height: z.number().int().min(1).max(10_000),
   bytes: z.number().int().min(1).max(MAX_FULL),
   created_at: z.string().max(40).optional(),
 });
 
-const COLUMNS = "id, session_id, local_date, pose, width, height, bytes, created_at";
+const COLUMNS = "id, session_id, local_date, pose, framing, width, height, bytes, created_at";
 
 export const photoRoutes = new Hono<AppBindings>();
 
@@ -43,12 +45,12 @@ photoRoutes.post("/", async (c) => {
     if (!s) return fail(c, 400, "unknown_session", "The session for this photo was not found.");
   }
   await c.env.DB.prepare(
-    `INSERT INTO photos (id, session_id, local_date, pose, r2_key, thumb_r2_key, width, height, bytes, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO photos (id, session_id, local_date, pose, framing, r2_key, thumb_r2_key, width, height, bytes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (id) DO UPDATE SET session_id = excluded.session_id, local_date = excluded.local_date, pose = excluded.pose,
-       width = excluded.width, height = excluded.height, bytes = excluded.bytes`
+       framing = excluded.framing, width = excluded.width, height = excluded.height, bytes = excluded.bytes`
   )
-    .bind(p.id, p.session_id ?? null, p.local_date, p.pose, keyFor(p.id, "full"), keyFor(p.id, "thumb"), p.width, p.height, p.bytes, p.created_at ?? nowISO())
+    .bind(p.id, p.session_id ?? null, p.local_date, p.pose, p.framing ?? null, keyFor(p.id, "full"), keyFor(p.id, "thumb"), p.width, p.height, p.bytes, p.created_at ?? nowISO())
     .run();
   return c.json({ id: p.id, upload: { full: `/api/photos/${p.id}/blob?size=full`, thumb: `/api/photos/${p.id}/blob?size=thumb` } });
 });
