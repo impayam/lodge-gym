@@ -143,8 +143,24 @@ export interface SessionRef {
   set: number | null;
 }
 
-export function sendMessage(threadId: string, message: { id: string; text: string; attachments: Pick<Attachment, "id" | "width" | "height">[]; session?: SessionRef }, on: (e: CoachEvent) => void) {
+/** Ask Coach from a due line on the Program screen (SPEC-v11 Phase B): the exercise that is due for a change. */
+export interface RotationRef {
+  exercise_id: string;
+}
+
+export function sendMessage(threadId: string, message: { id: string; text: string; attachments: Pick<Attachment, "id" | "width" | "height">[]; session?: SessionRef; rotation?: RotationRef }, on: (e: CoachEvent) => void) {
   return post(`/coach/threads/${encodeURIComponent(threadId)}/messages`, message, on);
+}
+
+/** The question a due line's Ask Coach asks for Payam: the Coach takes it once it opens, in a new chat. */
+let pendingAsk: { text: string; rotation: RotationRef } | null = null;
+export function askCoachAbout(text: string, rotation: RotationRef) {
+  pendingAsk = { text, rotation };
+}
+export function takePendingAsk(): { text: string; rotation: RotationRef } | null {
+  const p = pendingAsk;
+  pendingAsk = null;
+  return p;
 }
 
 /** Answers the last question again after "Answer failed". */

@@ -13,6 +13,7 @@
 import { weekday } from "../time";
 import type { Unit, WeekStart } from "../types";
 import { sessionLines, type SessionFacts } from "./sessionContext";
+import { rotationLines, type RotationFacts } from "./rotationContext";
 
 export const COACH_SYSTEM = `You are the coach in GYM time, Payam's personal training app. You are an experienced strength and hypertrophy coach, and you coach one person: Payam.
 
@@ -106,6 +107,8 @@ export interface ContextFacts {
   program: { name: string; since: string | null } | null;
   /** Asked from the session screen (Ask Coach): what he is doing now. */
   session?: SessionFacts | null;
+  /** Asked from a due line on the Program screen (Phase B): the due exercise's rotation facts and region tags. */
+  rotation?: RotationFacts | null;
 }
 
 /** The CONTEXT block appended to one of Payam's messages. */
@@ -117,5 +120,6 @@ export function contextBlock(f: ContextFacts): string {
     `Weight unit: ${f.unit}. Weeks start on ${WEEK_START[f.week_start]}.`,
     program,
     ...(f.session ? sessionLines(f.session) : []),
+    ...(f.rotation ? rotationLines(f.rotation) : []),
   ].join("\n");
 }

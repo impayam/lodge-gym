@@ -20,7 +20,9 @@ import {
   questionText,
   retryAnswer,
   sendMessage,
+  takePendingAsk,
   type Attachment,
+  type RotationRef,
   type SessionRef,
   type CoachEvent,
   type CoachMessage,
@@ -117,6 +119,8 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
   const [attachments, setAttachments] = useState<(Attachment & { uploading?: boolean })[]>([]);
   const [knows, setKnows] = useState(false);
   const [picker, setPicker] = useState(false);
+  /** The due exercise a due line's question is about, until that question is sent. */
+  const [rotation, setRotation] = useState<RotationRef | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
@@ -146,6 +150,16 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
     void loadAllHistory();
     // In the session: this session's chat again, when there is one.
     if (sessionId && sessionChats.has(sessionId)) void open(sessionChats.get(sessionId)!);
+    // A due line's Ask Coach (Phase B): its question in the new chat the Coach opens with, sent at once; offline it
+    // waits in the composer.
+    const ask = inSession ? null : takePendingAsk();
+    if (ask) {
+      if (canSend) void send(ask.text, ask.rotation);
+      else {
+        setText(ask.text);
+        setRotation(ask.rotation);
+      }
+    }
   }, []);
   // The newest message stays in view while an answer streams in, and when a chat opens (in the session: in the sheet).
   useEffect(() => {
@@ -224,11 +238,18 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
     await finish(id);
   };
 
-  const send = async (question = text) => {
+  const send = async (question = text, about = rotation) => {
     const q = question.trim();
     if ((!q && !attachments.length) || live || attachments.some((a) => a.uploading)) return;
     const id = currentId;
-    const message = { id: ulid(), text: q, attachments: attachments.map(({ id: a, width, height }) => ({ id: a, width, height })), ...(inSession ? { session: inSession.session() } : {}) };
+    const message = {
+      id: ulid(),
+      text: q,
+      attachments: attachments.map(({ id: a, width, height }) => ({ id: a, width, height })),
+      ...(inSession ? { session: inSession.session() } : {}),
+      ...(about ? { rotation: about } : {}),
+    };
+    setRotation(null);
     const optimistic: CoachMessage = {
       id: message.id,
       role: "user",

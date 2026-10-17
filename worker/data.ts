@@ -28,6 +28,7 @@ import {
 } from "./lib/types";
 import { isCategory } from "./lib/category";
 import { REGIONS, isRegion } from "./lib/regions";
+import { programRotation } from "./lib/rotation";
 import { readPlans } from "./plans";
 import { queueAfterSession, reportsMayBeReady } from "./aiReports";
 import { ID_RE, ulid } from "./lib/ulid";
@@ -329,18 +330,23 @@ dataRoutes.get("/bootstrap", async (c) => {
   const today = localDate(settings.timezone);
   const from = addDays(today, -60);
   const to = addDays(today, 1);
-  const [{ program, other_days }, programs, exercises, sessions, watch, body, review, plans, calendar] = await Promise.all([
+  // Every session is read once: the rotation status (Phase B) counts weeks since an exercise entered the program; the
+  // app gets the last 60 days.
+  const [{ program, other_days }, versions, exercises, allSessions, watch, body, review, plans, calendar] = await Promise.all([
     readProgram(c.env),
-    readProgramInfos(c.env),
+    readProgramVersions(c.env),
     readExercises(c.env),
-    readSessions(c.env, from, to),
+    readSessions(c.env, "0000-01-01", "9999-12-31"),
     readWatchForSessions(c.env, from, to),
     readBodyMetrics(c.env, from, to),
     readLatestReview(c.env),
     readPlans(c.env, from, to),
     readCalendar(c.env, today, from),
   ]);
-  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, calendar, server_time: nowISO() };
+  const programs: ProgramInfo[] = versions.map(({ days: _days, ...info }) => info);
+  const sessions = allSessions.filter((s) => s.local_date >= from && s.local_date <= to);
+  const rotation = programRotation({ settings, program, programs: versions, exercises, sessions: allSessions }, today);
+  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, calendar, rotation, server_time: nowISO() };
   return c.json(payload);
 });
 
