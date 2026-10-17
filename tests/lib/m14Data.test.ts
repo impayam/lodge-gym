@@ -115,10 +115,22 @@ describe("the same picture twice (seed/library/duplicate-images.json)", () => {
 
 describe("region tags on the whole library", () => {
   const tags = new Map<string, RegionTag[]>(pool.map((r) => [r.id, regionTags({ ...r, id: r.id }, overrides)]));
-  const checks = regionChecks(pool, tags);
+  const checks = regionChecks(pool, tags, overrides);
 
   it("every exercise that counts toward volume has a region, forearm and neck work included (Phase B)", () => {
     expect(checks.untagged).toEqual([]);
+  });
+
+  it("PR #25 review: the shin's reverse calf raise carries no region by review; seven overhead extensions tag the long head", () => {
+    expect(checks.reviewedNone.map((x) => x.id)).toEqual(["fedb-Smith_Machine_Reverse_Calf_Raises"]);
+    const overhead = Object.entries(overrides).filter(([, o]) => o.tags.some((t) => t.region === "triceps_long"));
+    expect(overhead.length).toBe(7);
+    for (const [id] of overhead) expect(tags.get(id), id).toEqual([
+      { region: "triceps_long", emphasis: "primary", evidence: "strong", note: "reviewed" },
+      { region: "triceps_lateral_medial", emphasis: "secondary", evidence: "moderate", note: "reviewed" },
+    ]);
+    // Every long-head exercise with strong evidence is overhead work.
+    for (const r of pool) if (tags.get(r.id)?.some((t) => t.region === "triceps_long" && t.emphasis === "primary" && t.evidence === "strong")) expect(/overhead|behind|french/i.test(r.name_en) || r.id in overrides, r.name_en).toBe(true);
   });
 
   it("no exercise has two primary regions of one muscle outside the reviewed rules; stretching and cardio carry none", () => {

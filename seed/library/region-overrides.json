@@ -1,1 +1,111 @@
-{}
+{
+  "fedb-Smith_Machine_Reverse_Calf_Raises": {
+    "tags": [],
+    "reason": "Lifts the toes: a tibialis anterior (shin) exercise, not a calf exercise. The region list has no shin region, so it carries none (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Dumbbell_One-Arm_Triceps_Extension": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Seated_Triceps_Press": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Standing_Dumbbell_Triceps_Extension": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Standing_One-Arm_Dumbbell_Triceps_Extension": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Standing_Low-Pulley_One-Arm_Triceps_Extension": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Kneeling_Cable_Triceps_Extension": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  },
+  "fedb-Standing_Towel_Triceps_Extension": {
+    "tags": [
+      {
+        "region": "triceps_long",
+        "emphasis": "primary",
+        "evidence": "strong"
+      },
+      {
+        "region": "triceps_lateral_medial",
+        "emphasis": "secondary",
+        "evidence": "moderate"
+      }
+    ],
+    "reason": "An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17)."
+  }
+}

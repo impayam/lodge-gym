@@ -21,8 +21,8 @@ import { scheme } from "../generator/model";
 import { looksPerLeg, looksTimed } from "../generator/pick";
 import { programName } from "../programRules";
 import { addItem, planFromDay, planMinutes, seqIds } from "../plan";
-import { TARGET_GROUPS } from "../muscles";
-import { REGION_INFO } from "../regions";
+import { groupOf, isTargetGroup, TARGET_GROUPS } from "../muscles";
+import { coverRegions, REGION_INFO, type Region } from "../regions";
 import { regionCoverage } from "../generator/check";
 import { GROUP_NAME } from "../ai/report";
 import type { DayExercise, Exercise, ProgramDay } from "../types";
@@ -185,12 +185,24 @@ const SAID_BY_SETS = new Set(["under_target", "over_target"]);
  * change leaves without a main-focus exercise); and the spacing advice for the groups
  * the change adds to two adjacent days.
  */
-export function changeNotes(d: CoachData, beforeDays: CleanDraft["days"], afterDays: CleanDraft["days"], dayIndex: number, minutes: [number, number], plannedDates?: ReadonlyMap<number, string>): string[] {
+export function changeNotes(
+  d: CoachData,
+  beforeDays: CleanDraft["days"],
+  afterDays: CleanDraft["days"],
+  dayIndex: number,
+  minutes: [number, number],
+  plannedDates?: ReadonlyMap<number, string>,
+  replaced?: Exercise
+): string[] {
   const was = scoreDraft(d, beforeDays, d.today, plannedDates);
   const now = scoreDraft(d, afterDays, d.today, plannedDates);
-  const groups = TARGET_GROUPS.filter((g) => round1(now.planned[g]) !== round1(was.planned[g])).sort((a, b) => now.planned[b] - was.planned[b] - (now.planned[a] - was.planned[a]));
+  const changed = TARGET_GROUPS.filter((g) => round1(now.planned[g]) !== round1(was.planned[g])).sort((a, b) => now.planned[b] - was.planned[b] - (now.planned[a] - was.planned[a]));
+  // A replacement always shows its own muscle group first, changed or not (Payam, PR #25 review).
+  const own = replaced ? groupOf(replaced.muscle_primary) : null;
+  const groups = own && isTargetGroup(own) ? [own, ...changed.filter((g) => g !== own)] : changed;
   const sets = groups.map((g) => {
     const target = round1(was.targets[g] ?? 0);
+    if (round1(now.planned[g]) === round1(was.planned[g])) return `${GROUP_NAME[g] ?? g}: ${fmt(now.planned[g])} sets a week, unchanged${target ? ` (target ${fmt(target)})` : ""}.`;
     return `${GROUP_NAME[g] ?? g}: ${fmt(now.planned[g])} sets a week with this change (now ${fmt(was.planned[g])}${target ? `; target ${fmt(target)}` : ""}).`;
   });
   const longer = minutes[1] - minutes[0];
@@ -204,7 +216,21 @@ export function changeNotes(d: CoachData, beforeDays: CleanDraft["days"], afterD
   const coveredIn = (days: CleanDraft["days"]) => new Set(regionCoverage(days, ex).filter((c) => c.exercises.length).map((c) => c.region));
   const before = coveredIn(beforeDays);
   const after = coveredIn(afterDays);
-  const lost = [...before].filter((r) => !after.has(r)).map((r) => REGION_INFO[r].label);
+  // A replacement first says what happens to the replaced exercise's own main-focus regions: kept by the new
+  // exercise, still covered by others, or lost (Payam, PR #25 review: the card shows the region being replaced).
+  const ownRegions = replaced ? (coverRegions(replaced.regions).length ? coverRegions(replaced.regions) : replaced.regions.filter((r) => r.emphasis === "primary").map((r) => r.region)) : [];
+  const afterRows = regionCoverage(afterDays, ex);
+  const name = (id: string) => ex.get(id)?.name_en ?? id;
+  const beforeIds = new Set(beforeDays.flatMap((day) => day.exercises.map((x) => x.exercise_id)));
+  const regions = ownRegions.map((r: Region) => {
+    const by = afterRows.find((c) => c.region === r)?.exercises ?? [];
+    const head = `${REGION_INFO[r].label} (main focus of ${replaced!.name_en})`;
+    const keeper = by.find((id) => !beforeIds.has(id));
+    if (keeper) return `${head}: ${name(keeper)} keeps it as its main focus.`;
+    if (by.length) return `${head}: still the main focus of ${by.map(name).join(", ")}.`;
+    return `${head}: no main-focus exercise with this change.`;
+  });
+  const lost = [...before].filter((r) => !after.has(r) && !ownRegions.includes(r)).map((r) => REGION_INFO[r].label);
   const coverage = lost.length ? [`No main-focus exercise with this change for: ${lost.join(", ")}.`] : [];
   const spacing = now.spacing.flatMap((f) => {
     const prev = was.spacing.find((w) => w.kind === f.kind && w.pair[0] === f.pair[0] && w.pair[1] === f.pair[1]);
@@ -212,7 +238,7 @@ export function changeNotes(d: CoachData, beforeDays: CleanDraft["days"], afterD
     const groups = f.groups.filter((g) => !prev?.groups.includes(g));
     return groups.length ? [spacingMessage({ ...f, groups })] : [];
   });
-  return [...sets, ...length, ...added, ...coverage, ...spacing];
+  return [...regions, ...sets, ...length, ...added, ...coverage, ...spacing];
 }
 
 /** propose_exercise: checks the day, the exercise and the place, fills the numbers and works out the change's notes. */
@@ -296,7 +322,7 @@ function proposeReplacement(
       name: old.name_en,
       days: a.ordered.flatMap((x, i) => (x.exercises.some((y) => y.exercise_id === old.id) ? [{ id: x.id, name: x.name_en, position: i + 1 }] : [])),
     },
-    notes: changeNotes(d, a.days, next, a.dayIndex, [day.est_minutes, day.est_minutes], a.plannedDates),
+    notes: changeNotes(d, a.days, next, a.dayIndex, [day.est_minutes, day.est_minutes], a.plannedDates, old),
   };
   return { ok: true, result };
 }

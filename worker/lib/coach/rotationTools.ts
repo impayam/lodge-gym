@@ -3,6 +3,9 @@
 // suggests 2–3 replacements; Payam picks one through the one-exercise card (propose_exercise with
 // replaces_exercise_id: "Only this session" or "Whole program"). The app picks the candidates by the rotation rules:
 //   - a different region of the same muscle (for a muscle with one region: the same region with other equipment);
+//   - a region the exercise is the only main focus of in his program stays the main focus of the replacement
+//     (Payam, PR #25 review: a side-delt exercise is replaced by a side-delt exercise unless side delts are covered
+//     elsewhere; the triceps long head keeps an overhead exercise, the only one that covers it: `coverRegions`);
 //   - a main lift stays a barbell variation that can be loaded heavy (main lifts stay barbell); a secondary lift stays
 //     a compound lift of the same pattern; other work stays the same kind (isolation, core);
 //   - nothing he used in the last 8 weeks and nothing in his program already;
@@ -18,7 +21,7 @@ import { blockLetter, blockMix, currentBlock, equipKind, EQUIPMENT_ROLES, mixFam
 import { regionCoverage } from "../generator/check";
 import { EQUIPMENT_OK, isOlympicLift, mainLiftOk, sourceRank, type Candidate } from "../generator/pick";
 import { groupOf } from "../muscles";
-import { REGION_INFO, type Region } from "../regions";
+import { coverRegions, REGION_INFO, type Region } from "../regions";
 import { bestSet } from "../reports";
 import { dueText, programRotation, type RotationStatus } from "../rotation";
 import { addDays } from "../time";
@@ -33,7 +36,7 @@ export const RECENT_DAYS = 56;
 export const SUGGEST_REPLACEMENTS_TOOL = {
   name: "suggest_replacements",
   description:
-    "Replacements for one exercise of his active program that is due for a change (the due line on the Program screen) or that he wants to change: up to 3 from the library, chosen by the app's rotation rules. Each trains a different region of the same muscle (for a muscle with one region: the same region with other equipment); a main lift stays a barbell variation; nothing he used in the last 8 weeks. Each comes with its main-focus regions, the regions it fills that have no main-focus exercise in his program now, what changes (region or equipment), the equipment's role and whether he has done it. The result also gives the exercise's own rotation facts (weeks in the program, due and why), its region tags and, for loaded lifts, its e1RM trend since it entered the program. Then call propose_exercise once per replacement with replaces_exercise_id.",
+    "Replacements for one exercise of his active program that is due for a change (the due line on the Program screen) or that he wants to change: up to 3 from the library, chosen by the app's rotation rules. Each trains a different region of the same muscle (for a muscle with one region: the same region with other equipment, then another angle); a region no other exercise of his program covers (only_main_focus_for) stays the main focus of every replacement, so the triceps long head keeps an overhead exercise; a main lift stays a barbell variation; nothing he used in the last 8 weeks. Each comes with its main-focus regions, the regions of the old exercise it keeps (keeps_main_focus), the regions it fills that have no main-focus exercise in his program now, what changes (region, equipment or angle), the equipment's role and whether he has done it. The result also gives the exercise's own rotation facts (weeks in the program, due and why), its region tags and, for loaded lifts, its e1RM trend since it entered the program. Then call propose_exercise once per replacement with replaces_exercise_id.",
   input_schema: {
     type: "object",
     properties: { exercise_id: { type: "string", description: "An exercise id of his active program, from get_program or the CONTEXT block." } },
@@ -100,7 +103,11 @@ export function suggestReplacements(d: CoachData, raw: unknown): ToolOutcome {
   const coverage = regionCoverage(days.map((day) => ({ exercises: day.exercises.filter((x) => x.exercise_id !== old.id) })), new Map(d.exercises.map((e) => [e.id, e])));
   const gaps = new Set(coverage.filter((c) => !c.exercises.length).map((c) => c.region));
 
-  const oldRegions = old.regions.filter((r) => r.emphasis === "primary").map((r) => r.region);
+  // Its main focus as coverage counts it; an exercise whose tags cover nothing (a lying triceps extension tags the long
+  // head as weak) is placed by its main-focus tags.
+  const oldRegions = coverRegions(old.regions).length ? coverRegions(old.regions) : old.regions.filter((r) => r.emphasis === "primary").map((r) => r.region);
+  // The regions it alone covers in his program: every replacement keeps them as a main focus.
+  const keep = oldRegions.filter((r) => gaps.has(r));
   const group = groupOf(old.muscle_primary);
   // The same muscle: the same report group, and for the shoulders the same head (front and side delts are muscles of
   // their own, each with one region).
@@ -122,17 +129,21 @@ export function suggestReplacements(d: CoachData, raw: unknown): ToolOutcome {
       !inProgram.has(e.id) &&
       !recent.has(e.id) &&
       sameKind(e) &&
-      e.regions.some((r) => r.emphasis === "primary") &&
+      coverRegions(e.regions).length > 0 &&
       // Main lifts stay barbell (Payam, 2026-10-17): a close variation that can be loaded heavy.
       (!main || ((equipment !== "full_gym" || e.equipment === "barbell") && mainLiftOk({ ex: e, regions: e.regions.filter((r) => r.emphasis === "primary").map((r) => r.region) } as Pick<Candidate, "ex" | "regions">)))
   );
-  const primary = (e: Exercise) => e.regions.filter((r) => r.emphasis === "primary").map((r) => r.region);
+  const primary = (e: Exercise) => coverRegions(e.regions);
+  const keeps = (e: Exercise) => keep.every((r) => primary(e).includes(r));
   // "A different region of the same muscle": a main-focus region the exercise does not have, in its muscle's chip.
-  const otherRegion = (e: Exercise) => primary(e).some((r) => !oldRegions.includes(r) && oldRegions.some((o) => REGION_INFO[o].muscle === REGION_INFO[r].muscle));
-  const change = (e: Exercise): "different region" | "different equipment" | "barbell variation" => (otherRegion(e) ? "different region" : main ? "barbell variation" : "different equipment");
-  // A different region first; then (a muscle with one region, or too few in reach) the same region with other
-  // equipment, or for a main lift another barbell variation of it.
-  const sameRegion = (e: Exercise) => !otherRegion(e) && primary(e).some((r) => oldRegions.includes(r)) && (main || equipKind(e) !== kind);
+  const otherRegion = (e: Exercise) => keeps(e) && primary(e).some((r) => !oldRegions.includes(r) && oldRegions.some((o) => REGION_INFO[o].muscle === REGION_INFO[r].muscle));
+  const change = (e: Exercise): "different region" | "different equipment" | "different angle" | "barbell variation" =>
+    otherRegion(e) ? "different region" : main ? "barbell variation" : equipKind(e) !== kind ? "different equipment" : "different angle";
+  // A different region first; then (a muscle with one region, a region he would lose, or too few in reach) the same
+  // region with other equipment, or for a main lift another barbell variation of it; last the same equipment at
+  // another angle.
+  const sameRegion = (e: Exercise) => keeps(e) && !otherRegion(e) && primary(e).some((r) => oldRegions.includes(r)) && (main || equipKind(e) !== kind);
+  const sameAngle = (e: Exercise) => !main && keeps(e) && !otherRegion(e) && primary(e).some((r) => oldRegions.includes(r)) && equipKind(e) === kind;
   const mix = family ? blockMix(family, block) : [];
   const key = (e: Exercise): (number | string)[] => [
     primary(e).some((r) => gaps.has(r)) ? 0 : 1,
@@ -149,7 +160,7 @@ export function suggestReplacements(d: CoachData, raw: unknown): ToolOutcome {
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
   };
-  const ranked = [...pool.filter(otherRegion).sort(byKey), ...pool.filter(sameRegion).sort(byKey)];
+  const ranked = [...pool.filter(otherRegion).sort(byKey), ...pool.filter(sameRegion).sort(byKey), ...pool.filter(sameAngle).sort(byKey)];
   // Different options, not three of a kind: each pick differs from the others in region or equipment.
   const picks: Exercise[] = [];
   for (const e of ranked) {
@@ -182,6 +193,8 @@ export function suggestReplacements(d: CoachData, raw: unknown): ToolOutcome {
         days: entries.map(({ day }) => ({ day_id: day.id, name: day.name_en })),
         main_focus: regionView(old, "primary"),
         also_trained: regionView(old, "secondary"),
+        // Regions no other exercise of his program covers: every replacement keeps them.
+        only_main_focus_for: keep.map((r) => REGION_INFO[r].label),
         equipment_role: equipmentRole(old),
       },
       rotation: status
@@ -195,7 +208,10 @@ export function suggestReplacements(d: CoachData, raw: unknown): ToolOutcome {
         equipment: e.equipment,
         main_focus: regionView(e, "primary"),
         fills_gap: primary(e)
-          .filter((r) => gaps.has(r))
+          .filter((r) => gaps.has(r) && !keep.includes(r))
+          .map((r) => REGION_INFO[r].label),
+        keeps_main_focus: primary(e)
+          .filter((r) => oldRegions.includes(r))
           .map((r) => REGION_INFO[r].label),
         change: change(e),
         equipment_role: equipmentRole(e),

@@ -132,6 +132,18 @@ New table (migration, **STOP**: show SQL):
   (https://pubmed.ncbi.nlm.nih.gov/9189733), Schoenfeld, Ogborn & Krieger 2017 (J Sports Sci 35(11):1073–1082), RP
   forearm guide (https://rpstrength.com/expert-advice/forearm-growth-training-tips),
   https://pubmed.ncbi.nlm.nih.gov/17086765/.
+- **PR #25 review (Payam, 2026-10-17).**
+  - A region an exercise alone covers in the program stays the main focus of its replacement: a side-delt exercise is
+    replaced by a side-delt exercise (other equipment, then another angle) unless side delts are covered elsewhere.
+  - The replace card first says what happens to the replaced exercise's own region (kept by the new exercise, still
+    covered by others, or lost) and its muscle group's weekly sets, even when they do not change.
+  - The triceps long head counts as covered only by overhead work, its strong-evidence exercise (`coverRegions`), so
+    every block keeps an overhead extension. When a due exercise's region is filled again, other equipment than the due
+    one comes first within the block's equipment mix (block B: a dumbbell overhead extension for the cable one).
+  - Seven overhead extensions whose names do not say overhead are tagged by review, and Smith Machine Reverse Calf Raises
+    (a shin exercise) carries no region (`seed/library/region-overrides.json`); the generator never picks an exercise
+    without a main-focus region.
+  - The Calendar's contrast check runs at a pinned clock (06:00 Denver, or earlier).
 - **Session length.** Covering all 30 regions with the current 4 days takes about 40 exercises instead of 25 (the
   estimate before building was 35): 57–68 minutes a day over 50 seeds, inside the 75-minute setting that New program now
   defaults to.

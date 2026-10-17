@@ -4,7 +4,7 @@
 
 import { countsVolume } from "../category";
 import { groupOf, isTargetGroup, setContribution, TARGET_GROUPS } from "../muscles";
-import { REGIONS, REGION_INFO, type Region } from "../regions";
+import { coverRegions, REGIONS, REGION_INFO, type Region } from "../regions";
 import type { Exercise } from "../types";
 import { DIRECT_GROUPS, directTarget, type DirectGroup } from "./blocks";
 import { isHeavyHinge } from "./pick";
@@ -98,8 +98,8 @@ export interface CheckResult {
   direct: DirectRow[];
 }
 
-/** Main-focus regions of an exercise (its primary tags). */
-export const mainRegions = (e: Pick<Exercise, "regions"> | undefined): Region[] => (e?.regions ?? []).filter((r) => r.emphasis === "primary").map((r) => r.region);
+/** Main-focus regions of an exercise for coverage: its primary tags (the long head only from overhead work, `coverRegions`). */
+export const mainRegions = (e: Pick<Exercise, "regions"> | undefined): Region[] => coverRegions(e?.regions ?? []);
 
 /** Which exercises cover each region as a main focus in a week. */
 export function regionCoverage(days: readonly { exercises: readonly Pick<PlanExercise, "exercise_id">[] }[], ex: ReadonlyMap<string, Exercise>): CoverageRow[] {

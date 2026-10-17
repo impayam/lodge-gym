@@ -7,7 +7,7 @@ import type { DuplicateImage, LibraryRow } from "./library";
 import { regionChecks, type DecisionFile, type DedupeEntry, type ScreeningFile } from "./libraryDecisions";
 import { SOURCES, SOURCE_ORDER, type ScreenKind } from "./librarySources";
 import { CANONICAL_MUSCLES } from "./muscles";
-import { REGIONS, REGION_INFO, type RegionTag } from "./regions";
+import { REGIONS, REGION_INFO, type RegionOverrides, type RegionTag } from "./regions";
 
 interface ReportInput {
   screening: ScreeningFile;
@@ -19,6 +19,8 @@ interface ReportInput {
   tags: ReadonlyMap<string, RegionTag[]>;
   /** Exercises whose two images are the same picture: the second is left out (seed/library/duplicate-images.json). */
   duplicates: DuplicateImage[];
+  /** Reviewed region exceptions (seed/library/region-overrides.json). */
+  overrides: RegionOverrides;
 }
 
 const SCREEN_LABEL: Record<Exclude<ScreenKind, "candidate" | "duplicate">, string> = {
@@ -80,7 +82,7 @@ export function m14ReportMarkdown(r: ReportInput): string {
 
   // Regions.
   const all = [...r.before, ...r.added];
-  const checks = regionChecks(all, r.tags);
+  const checks = regionChecks(all, r.tags, r.overrides);
   lines.push(
     "## Per region (exercises that count toward volume)",
     "",
@@ -95,6 +97,13 @@ export function m14ReportMarkdown(r: ReportInput): string {
   for (const t of r.tags.values()) for (const x of t) evidence.set(`${x.emphasis} ${x.evidence}`, (evidence.get(`${x.emphasis} ${x.evidence}`) ?? 0) + 1);
   lines.push("| Emphasis and evidence | Tags |", "|---|---|", ...[...evidence].sort().map(([k, n]) => `| ${k} | ${n} |`), "");
   list("No region although counted (must be empty)", checks.untagged, (x) => `${x.name_en} (${x.muscle})`, "###");
+  const name = new Map(all.map((x) => [x.id, x.name_en]));
+  list(
+    "Reviewed region exceptions (seed/library/region-overrides.json)",
+    Object.entries(r.overrides).sort(([a], [b]) => a.localeCompare(b)),
+    ([id, o]) => `${name.get(id) ?? id}: ${o.tags.length ? o.tags.map((t) => `${t.region} ${t.emphasis} ${t.evidence}`).join(", ") : "no region"}. ${o.reason}`,
+    "###"
+  );
   list("Two primary regions of one muscle outside the reviewed rules (must be empty)", checks.doublePrimary, (x) => x, "###");
 
   // Images.

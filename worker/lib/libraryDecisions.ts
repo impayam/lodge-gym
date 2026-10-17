@@ -239,8 +239,10 @@ export function regionsSql(tags: ReadonlyMap<string, RegionTag[]>): string[] {
 const familyOf = (r: Region) => REGION_INFO[r].muscle;
 
 /** Problems with a set of tags (tests and report): untagged counted exercises, double primaries, thin regions. */
-export function regionChecks(rows: { id: string; name_en: string; muscle_primary: string; category: string | null }[], tags: ReadonlyMap<string, RegionTag[]>) {
+export function regionChecks(rows: { id: string; name_en: string; muscle_primary: string; category: string | null }[], tags: ReadonlyMap<string, RegionTag[]>, overrides: RegionOverrides = {}) {
   const untagged: { id: string; name_en: string; muscle: string }[] = [];
+  /** Counted exercises a reviewed override leaves without a region (the shin's reverse calf raise). */
+  const reviewedNone: { id: string; name_en: string; reason: string }[] = [];
   const doublePrimary: string[] = [];
   const primary = new Map<Region, number>(REGIONS.map((r) => [r, 0]));
   const anyTag = new Map<Region, number>(REGIONS.map((r) => [r, 0]));
@@ -250,7 +252,8 @@ export function regionChecks(rows: { id: string; name_en: string; muscle_primary
       if (t.length) doublePrimary.push(`${r.id}: ${r.category} carries region tags`);
       continue;
     }
-    if (!t.length) untagged.push({ id: r.id, name_en: r.name_en, muscle: r.muscle_primary });
+    if (!t.length && overrides[r.id]?.tags.length === 0) reviewedNone.push({ id: r.id, name_en: r.name_en, reason: overrides[r.id].reason });
+    else if (!t.length) untagged.push({ id: r.id, name_en: r.name_en, muscle: r.muscle_primary });
     const fam = new Map<string, RegionTag[]>();
     for (const x of t) {
       anyTag.set(x.region, anyTag.get(x.region)! + 1);
@@ -260,5 +263,5 @@ export function regionChecks(rows: { id: string; name_en: string; muscle_primary
     }
     for (const [f, xs] of fam) if (xs.length > 1 && !xs.every((x) => TWO_PRIMARY_RULES.has(x.note) || x.note === "reviewed")) doublePrimary.push(`${r.id} (${r.name_en}): ${xs.length} primary ${f} regions`);
   }
-  return { untagged, doublePrimary, primary, anyTag };
+  return { untagged, reviewedNone, doublePrimary, primary, anyTag };
 }

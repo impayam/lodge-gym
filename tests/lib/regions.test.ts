@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REGIONS, REGION_INFO, regionTags, regionsOf, ruleText, type Region, type RegionInput } from "../../worker/lib/regions";
+import { REGIONS, REGION_INFO, coverRegions, regionTags, regionsOf, ruleText, type Region, type RegionInput } from "../../worker/lib/regions";
 
 // SPEC-v11 M14 A3: the reviewed region rule table (approved 2026-10-16; forearm and neck regions added in Phase B,
 // approved 2026-10-17). Fixtures per region: the main focus a typical exercise gets, and what it must never get.
@@ -175,5 +175,14 @@ describe("rule details", () => {
     expect(ruleText("Push-Ups")).toContain(" pushup ");
     expect(ruleText("Incline Flyes")).toContain(" fly ");
     expect(ruleText("Lat Pull-Down")).toContain(" pulldown ");
+  });
+});
+
+describe("coverage regions (PR #25 review)", () => {
+  it("the triceps long head is covered only by overhead work, its strong-evidence exercise; other main-focus tags count as they are", () => {
+    const tag = (region: Region, emphasis: "primary" | "secondary", evidence: "strong" | "moderate" | "weak") => ({ region, emphasis, evidence });
+    expect(coverRegions([tag("triceps_long", "primary", "strong"), tag("triceps_lateral_medial", "secondary", "moderate")])).toEqual(["triceps_long"]);
+    expect(coverRegions([tag("triceps_long", "primary", "weak"), tag("triceps_lateral_medial", "secondary", "moderate")])).toEqual([]);
+    expect(coverRegions([tag("chest_upper", "primary", "weak"), tag("chest_mid", "secondary", "weak")])).toEqual(["chest_upper"]);
   });
 });

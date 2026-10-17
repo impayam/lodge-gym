@@ -91,6 +91,9 @@ test("a due line asks the Coach about that exercise: replacements as replace car
   const pickName = nameOf(pick);
   await expect(card.getByRole("heading").first()).toHaveText(new RegExp(`: ${name.replace(/[()]/g, "\\$&")} → ${pickName.replace(/[()]/g, "\\$&")}$`));
   await expect(card.getByTestId("coach-exercise-place")).toContainText(`In place of ${name}`);
+  // The card says first what happens to the replaced exercise's region (PR #25 review): kept by the new exercise.
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await expect(card.getByTestId("coach-exercise-notes").locator("li").first()).toHaveText(new RegExp(`^.+ \\(main focus of ${esc(name)}\\): ${esc(pickName)} keeps it as its main focus\\.$`));
 
   await card.getByTestId("coach-exercise-session").click();
   await expect(page.getByTestId("toast")).toContainText(`${pickName} replaces ${name} in `);

@@ -9,7 +9,7 @@
 
 import { countsVolume } from "../category";
 import { groupOf, isTargetGroup, setContribution, type ReportGroup } from "../muscles";
-import type { Region } from "../regions";
+import { coverRegions, type Region } from "../regions";
 import type { Exercise, Pattern } from "../types";
 import { equipKind, mixFamilyOf, type EquipKind, type MixFamily } from "./blocks";
 import type { EquipmentChoice, Slot, TargetGroup } from "./model";
@@ -39,6 +39,8 @@ export interface Candidate {
   kept: boolean;
   /** Due, or used in the last 8 weeks without being kept: never a new pick. */
   blocked: boolean;
+  /** Its equipment is a due exercise's for one of its main-focus regions: other equipment comes first (Phase B). */
+  dueKind: boolean;
 }
 
 export const EQUIPMENT_OK: Readonly<Record<EquipmentChoice, ReadonlySet<string>>> = {
@@ -76,14 +78,20 @@ export interface PoolContext {
   /** Phase B rotation: kept and blocked exercises (default: neither). */
   kept?: (id: string) => boolean;
   blocked?: (id: string) => boolean;
+  /** Phase B: true when the equipment is a due exercise's for one of these main-focus regions (default: never). */
+  dueKind?: (regions: readonly Region[], kind: EquipKind) => boolean;
 }
 
 export function candidatePool(ctx: PoolContext, equipment: EquipmentChoice, avoid: readonly string[]): Candidate[] {
   const okEquipment = EQUIPMENT_OK[equipment];
   const avoided = new Set(avoid);
+  // A tagged library (M14) never gives an exercise without a main-focus region to the generator: that is a reviewed
+  // exception, such as the shin's reverse calf raise (Payam, 2026-10-17). Libraries without tags (tests) keep them all.
+  const tagged = ctx.exercises.some((e) => e.regions?.length);
   const out: Candidate[] = [];
   for (const ex of ctx.exercises) {
     if (ex.archived_at || avoided.has(ex.id) || !countsVolume(ex.category) || isOlympicLift(ex) || !ex.pattern || !okEquipment.has(ex.equipment)) continue;
+    if (tagged && !ex.regions.some((r) => r.emphasis === "primary")) continue;
     const group = groupOf(ex.muscle_primary);
     if (!group || (!isTargetGroup(group) && !EXTRA_GROUPS.has(group))) continue;
     const main = ctx.programIds.get(ex.id);
@@ -97,8 +105,9 @@ export function candidatePool(ctx: PoolContext, equipment: EquipmentChoice, avoi
       heavyHinge: isHeavyHinge(ex),
       timed: ctx.timedIds.has(ex.id) || looksTimed(ex),
       perLeg: ctx.perLegIds.has(ex.id) || looksPerLeg(ex),
-      regions: ex.regions.filter((r) => r.emphasis === "primary").map((r) => r.region),
+      regions: coverRegions(ex.regions),
       kind: equipKind(ex),
+      dueKind: ctx.dueKind?.(coverRegions(ex.regions), equipKind(ex)) ?? false,
       family: mixFamilyOf(ex.muscle_primary),
       kept: ctx.kept?.(ex.id) ?? false,
       blocked: ctx.blocked?.(ex.id) ?? false,
@@ -161,12 +170,13 @@ const LIFT: Readonly<Record<NonNullable<PickQuery["lift"]>, { pattern: Pattern; 
   ohp: { pattern: "v_push", name: /overhead press|military press|shoulder press/i, not: /dumbbell|seated|machine|arnold|behind/i },
 };
 
-/** Preference between candidates of different slots: Phase B's kept, region and mix keys, then §8.4's history, the
- *  current program, compound, level. */
+/** Preference between candidates of different slots: Phase B's kept, region, mix and due-equipment keys, then
+ *  §8.4's history, the current program, compound, level. */
 export const preference = (c: Candidate, q?: Pick<PickQuery, "gain" | "mix">): number[] => [
   c.kept ? 0 : 1,
   q?.gain?.(c) ? 0 : 1,
   q?.mix ? q.mix(c) : 0,
+  c.dueKind ? 1 : 0,
   c.history ? 0 : 1,
   c.inProgram === 0 ? 1 : 0,
   c.ex.mechanic === "compound" ? 0 : 1,
@@ -200,14 +210,16 @@ export function pick(pool: readonly Candidate[], q: PickQuery): Candidate | null
   });
   if (!list.length) return null;
   // Phase B first: kept in its place, kept, a region the week lacks, the barbell for a main lift, the block's equipment
-  // mix. Then §8.4: history, the current program (a main lift there for a main slot), compound (isolation for an
-  // isolation slot), beginner or intermediate level; then curated sources and the seeded tie-break.
+  // mix, and within it other equipment than the due exercise of its region. Then §8.4: history, the current program (a
+  // main lift there for a main slot), compound (isolation for an isolation slot), beginner or intermediate level; then
+  // curated sources and the seeded tie-break.
   const key = (c: Candidate): number[] => [
     q.here?.(c) ? 0 : 1,
     c.kept ? 0 : 1,
     q.gain?.(c) ? 0 : 1,
     q.barbell ? (c.ex.equipment === "barbell" ? 0 : 1) : 0,
     q.mix ? q.mix(c) : 0,
+    c.dueKind ? 1 : 0,
     c.history ? 0 : 1,
     ...(q.rank ? q.rank(c) : []),
     c.inProgram === 0 ? 1 : 0,

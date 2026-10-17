@@ -224,6 +224,24 @@ describe("Phase B: Payam's inputs at 75 min, block B (SPEC-v11, approved 2026-10
     expect(new Set(neck.flatMap((x) => mainRegions(exMap.get(x.exercise_id))))).toEqual(new Set(["neck_flexors", "neck_extensors"]));
   });
 
+  it("PR #25 review: the triceps long head keeps an overhead exercise, with other equipment than the due cable one; a due side-delt exercise is paired with a side-delt one; the shin's calf raise is never picked", () => {
+    for (const seed of SEEDS) {
+      const p = generateProgram({ ...b, seed }, today);
+      const longHead = p.days.flatMap((d) => d.exercises).filter((x) => mainRegions(exMap.get(x.exercise_id)).includes("triceps_long"));
+      expect(longHead.length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
+      for (const x of longHead) {
+        const e = exMap.get(x.exercise_id)!;
+        expect(e.regions.find((r) => r.region === "triceps_long"), e.name_en).toMatchObject({ emphasis: "primary", evidence: "strong" });
+        // Overhead Cable Triceps Extension is due: block B's dumbbell takes its place.
+        expect(equipKind(e), e.name_en).not.toBe("cable");
+      }
+      expect(ids(p).has("fedb-Smith_Machine_Reverse_Calf_Raises"), `seed ${seed}`).toBe(false);
+      // (rotationOf lists the lateral raise once per day; the app's rotation once per exercise.)
+      const lateral = p.block.replaced.find((x) => x.exercise_id === "lateral")!;
+      expect(mainRegions(exMap.get(lateral.by!)), `seed ${seed}`).toContain("shoulders_side");
+    }
+  });
+
   it("every main lift due (9 weeks): a barbell variation close to it or for a region the last block lacked; each day keeps one exercise", () => {
     const p = generateProgram(b, { ...ctx, rotation: rotationOf(true) });
     const missingBefore = new Set(REGIONS.filter((r) => !current.days.some((d) => d.exercises.some((x) => mainRegions(exMap.get(x.exercise_id)).includes(r)))));

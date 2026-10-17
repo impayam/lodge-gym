@@ -285,3 +285,18 @@ export function regionTags(ex: RegionInput & { id?: string }, overrides: RegionO
 export function regionsOf(muscle: string): Region[] {
   return REGIONS.filter((r) => REGION_INFO[r].muscle === muscle);
 }
+
+/**
+ * Regions whose coverage needs more than a main-focus tag (Payam, 2026-10-17): the triceps long head counts as covered
+ * only by overhead work, its strong-evidence exercise (the triceps-overhead rule; lying extensions tag it as weak).
+ */
+const COVER_EVIDENCE: Partial<Record<Region, Evidence>> = { triceps_long: "strong" };
+
+/**
+ * The regions an exercise covers for the block's region coverage, the plan check and the Coach's replacements: its
+ * main-focus tags, less those below a region's required evidence.
+ */
+export function coverRegions(tags: readonly { region: Region; emphasis: Emphasis; evidence: Evidence }[]): Region[] {
+  const rank: Record<Evidence, number> = { weak: 0, moderate: 1, strong: 2 };
+  return tags.filter((t) => t.emphasis === "primary" && rank[t.evidence] >= rank[COVER_EVIDENCE[t.region] ?? "weak"]).map((t) => t.region);
+}

@@ -56,16 +56,16 @@ Tagged by the reviewed rule table (worker/lib/regions.ts); stretching and cardio
 | Region | Label | Primary | Any emphasis |
 |---|---|---|---|
 | chest_upper | Upper chest | 28 | 108 |
-| chest_mid | Middle chest | 53 | 180 |
+| chest_mid | Middle chest | 53 | 178 |
 | chest_lower | Lower chest | 21 | 109 |
-| shoulders_front | Front delts | 92 | 264 |
+| shoulders_front | Front delts | 92 | 262 |
 | shoulders_side | Side delts | 23 | 56 |
 | rear_delts | Rear delts | 25 | 148 |
 | back_lats | Lats (vertical pull) | 60 | 202 |
 | back_upper | Upper back (horizontal pull) | 73 | 172 |
 | traps | Traps | 19 | 113 |
-| triceps_long | Triceps long head | 18 | 55 |
-| triceps_lateral_medial | Triceps lateral and medial heads | 72 | 281 |
+| triceps_long | Triceps long head | 25 | 56 |
+| triceps_lateral_medial | Triceps lateral and medial heads | 65 | 281 |
 | biceps_long | Biceps long head | 44 | 219 |
 | biceps_short | Biceps short head | 44 | 173 |
 | brachialis | Brachialis | 35 | 82 |
@@ -75,8 +75,8 @@ Tagged by the reviewed rule table (worker/lib/regions.ts); stretching and cardio
 | hamstrings_curl | Hamstrings (leg curl) | 10 | 10 |
 | glutes_ext | Glutes (hip extension) | 38 | 235 |
 | glutes_abd | Glutes (abduction) | 4 | 4 |
-| calves_gastroc | Calves, gastrocnemius (straight knee) | 22 | 27 |
-| calves_soleus | Calves, soleus (bent knee) | 5 | 27 |
+| calves_gastroc | Calves, gastrocnemius (straight knee) | 21 | 26 |
+| calves_soleus | Calves, soleus (bent knee) | 5 | 26 |
 | adductors | Adductors | 3 | 110 |
 | core_anti_ext | Core, anti-extension | 14 | 14 |
 | core_flexion | Core, flexion | 73 | 73 |
@@ -88,16 +88,27 @@ Tagged by the reviewed rule table (worker/lib/regions.ts); stretching and cardio
 
 | Emphasis and evidence | Tags |
 |---|---|
-| primary moderate | 321 |
-| primary strong | 643 |
+| primary moderate | 313 |
+| primary strong | 650 |
 | primary weak | 50 |
 | secondary moderate | 962 |
-| secondary strong | 804 |
-| secondary weak | 238 |
+| secondary strong | 802 |
+| secondary weak | 236 |
 
 ### No region although counted (must be empty) (0)
 
 None.
+
+### Reviewed region exceptions (seed/library/region-overrides.json) (8)
+
+- Dumbbell One-Arm Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Kneeling Cable Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Seated Triceps Press: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Smith Machine Reverse Calf Raises: no region. Lifts the toes: a tibialis anterior (shin) exercise, not a calf exercise. The region list has no shin region, so it carries none (Payam, PR #25 review, 2026-10-17).
+- Standing Dumbbell Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Standing Low-Pulley One-Arm Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Standing One-Arm Dumbbell Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
+- Standing Towel Triceps Extension: triceps_long primary strong, triceps_lateral_medial secondary moderate. An overhead extension (its instructions: arms over the head, lowered behind it); the name does not say overhead, so the triceps-overhead rule did not match (Payam, PR #25 review, 2026-10-17).
 
 ### Two primary regions of one muscle outside the reviewed rules (must be empty) (0)
 

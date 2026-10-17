@@ -199,7 +199,8 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   program is A). The generator keeps exercises that are not due (`worker/lib/rotation.ts`) and replaces due ones; main
   lifts stay barbell and change only their variation; the other exercises follow the block's equipment mix per muscle
   (`worker/lib/generator/blocks.ts`). Every block covers all 30 regions with a main-focus exercise (a missing region
-  replaces a doubled one), no day has two exercises with the same main-focus region and equipment, and forearms and
+  replaces a doubled one; the triceps long head counts only with an overhead extension), no day has two exercises with
+  the same main-focus region and equipment, and forearms and
   neck get their weekly direct sets (4 and 2 in the first block, +1 per block, up to 8 and 6; neck 15–25 reps, 3–4 RIR,
   the smallest load step). New program defaults to 75 minutes, the length the 30 regions need on 4 days. The proposal
   shows the block, its region coverage and "replaces X: N weeks". The Program screen lists due exercises (at most 3)
@@ -378,10 +379,11 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 - Rotation (SPEC-v11 Phase B): `get_program` and `get_e1rm_history` give each exercise's weeks in the program, whether
   it is due and why, the block and the regions without a main focus. Ask Coach on a due line of the Program screen sends
   the exercise with the question: the coach says which region it trained, calls `suggest_replacements` (2–3 library
-  exercises for a different region of the same muscle first, then other equipment; main lifts get close barbell
-  variations; each with its region, the gap it fills and why its equipment fits) and shows each as the one-exercise card
+  exercises for a different region of the same muscle first, then other equipment; a region the exercise alone covers
+  stays the main focus of every replacement; main lifts get close barbell variations; each with its region, the gap it
+  fills and why its equipment fits) and shows each as the one-exercise card
   in replace mode: "Only this session" moves today's undone sets to the new exercise, "Whole program" saves a draft
-  with it in the old one's place. The weekly review names exercises due now and next week.
+  with it in the old one's place. The card first says what happens to the replaced exercise's region and muscle group. The weekly review names exercises due now and next week.
 - `propose_program` shows a draft card (ids not in the library are dropped and named). **Add to Planner** saves it as
   an inactive program (`generated_by = 'coach'`) under Me → Program → Drafts; approving it there is a separate tap.
   The active program is never changed by the coach.

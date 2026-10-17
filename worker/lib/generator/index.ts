@@ -28,7 +28,7 @@ import { TARGET_GROUPS, groupOf, isTargetGroup, type ReportGroup } from "../musc
 import { REGIONS, type Region } from "../regions";
 import type { DueReason, RotationStatus } from "../rotation";
 import type { DayExercise, Exercise, Pattern, Program } from "../types";
-import { DIRECT_GROUPS, SMALL_REGIONS, blockLetter, blockMix, directRegionSets, directTarget, regionFamily, type BlockLetter, type DirectGroup, type EquipKind, type MixFamily } from "./blocks";
+import { DIRECT_GROUPS, SMALL_REGIONS, blockLetter, blockMix, directRegionSets, equipKind, directTarget, regionFamily, type BlockLetter, type DirectGroup, type EquipKind, type MixFamily } from "./blocks";
 import { checkPlan, dayLoad, dayMinutes, mainRegions, type CheckResult, type Plan, type PlanDay, type PlanExercise } from "./check";
 import { candidatePool, compareKeys, mainLiftOk, pick, preference, sourceRank, type Candidate, type PickQuery } from "./pick";
 import {
@@ -165,7 +165,13 @@ export const nextBlock = (current: Pick<GeneratorInput, "block"> | null | undefi
  * muscle group on the same day that takes its place, and the due exercises it keeps. The proposal and the editor (for a
  * saved draft) both show it.
  */
-export function blockChanges(current: Pick<Program, "days"> | null, rotation: readonly RotationStatus[], days: readonly { exercises: readonly Pick<PlanExercise, "exercise_id">[] }[], ex: ReadonlyMap<string, Exercise>, block: number): BlockSummary {
+export function blockChanges(
+  current: Pick<Program, "days"> | null,
+  rotation: readonly RotationStatus[],
+  days: readonly { exercises: readonly (Pick<PlanExercise, "exercise_id"> & Partial<Pick<PlanExercise, "slot">>)[] }[],
+  ex: ReadonlyMap<string, Exercise>,
+  block: number
+): BlockSummary {
   const cur = byPosition(current?.days ?? []);
   const curIds = new Set(cur.flatMap((d) => d.exercises.map((x) => x.exercise_id)));
   const planIds = new Set(days.flatMap((d) => d.exercises.map((x) => x.exercise_id)));
@@ -179,13 +185,26 @@ export function blockChanges(current: Pick<Program, "days"> | null, rotation: re
       keptDue.push({ exercise_id: s.exercise_id, day: days.findIndex((d) => d.exercises.some((x) => x.exercise_id === s.exercise_id)), reason: s.reason!, weeks: s.weeks });
       continue;
     }
-    // Its replacement: a new exercise of its group on the same day, else a new one of its muscle (then its group) on
-    // another day; "leaves the program" only when the plan has nothing new for it.
-    const fresh = (list: readonly Pick<PlanExercise, "exercise_id">[]) => list.filter((x) => !curIds.has(x.exercise_id) && !used.has(x.exercise_id));
+    // Its replacement: for a main lift the day's new main lift; else a new exercise with its main-focus region (same
+    // day first; Payam, PR #25 review: a side-delt exercise is replaced by a side-delt exercise), else a new one of its
+    // group on the same day, else of its muscle (then its group) on another day; "leaves the program" only when the
+    // plan has nothing new for it.
+    const fresh = <T extends Pick<PlanExercise, "exercise_id">>(list: readonly T[]) => list.filter((x) => !curIds.has(x.exercise_id) && !used.has(x.exercise_id));
     const sameDay = fresh(days[day]?.exercises ?? []);
+    const wasMain = cur[day]?.exercises.some((x) => x.exercise_id === s.exercise_id && x.is_main) ?? false;
+    const newMain = wasMain ? (sameDay.find((x) => x.slot === "main") ?? null) : null;
     const anyDay = fresh(days.flatMap((d) => d.exercises));
     const muscle = (id: string) => ex.get(id)?.muscle_primary;
-    const by = sameDay.find((x) => group(x.exercise_id) === group(s.exercise_id)) ?? anyDay.find((x) => muscle(x.exercise_id) === muscle(s.exercise_id)) ?? anyDay.find((x) => group(x.exercise_id) === group(s.exercise_id)) ?? null;
+    const own = mainRegions(ex.get(s.exercise_id));
+    const sameRegion = (x: Pick<PlanExercise, "exercise_id">) => own.length > 0 && mainRegions(ex.get(x.exercise_id)).some((r) => own.includes(r));
+    const by =
+      newMain ??
+      sameDay.find(sameRegion) ??
+      anyDay.find(sameRegion) ??
+      sameDay.find((x) => group(x.exercise_id) === group(s.exercise_id)) ??
+      anyDay.find((x) => muscle(x.exercise_id) === muscle(s.exercise_id)) ??
+      anyDay.find((x) => group(x.exercise_id) === group(s.exercise_id)) ??
+      null;
     if (by) used.add(by.exercise_id);
     replaced.push({ exercise_id: s.exercise_id, reason: s.reason!, weeks: s.weeks, by: by?.exercise_id ?? null, day });
   }
@@ -217,7 +236,13 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
   const recent = ctx.recentIds ?? new Set<string>();
   const kept = (id: string) => programIds.has(id) && !(status.get(id)?.due ?? false);
   const blocked = (id: string) => !kept(id) && (programIds.has(id) || recent.has(id));
-  const pool = candidatePool({ exercises: ctx.exercises, historyIds: ctx.historyIds, programIds, timedIds, perLegIds, kept, blocked }, input.equipment, input.avoid);
+  // A region a due exercise covered gets other equipment in its place (Payam, PR #25 review: an overhead cable
+  // extension is replaced by an overhead variation with other equipment), when the library has one that fits.
+  const dueKinds = new Map<Region, Set<EquipKind>>();
+  for (const id of programIds.keys())
+    if (status.get(id)?.due && exMap.has(id)) for (const r of mainRegions(exMap.get(id))) dueKinds.set(r, new Set([...(dueKinds.get(r) ?? []), equipKind(exMap.get(id)!)]));
+  const dueKind = (regions: readonly Region[], kind: EquipKind) => regions.some((r) => dueKinds.get(r)?.has(kind) ?? false);
+  const pool = candidatePool({ exercises: ctx.exercises, historyIds: ctx.historyIds, programIds, timedIds, perLegIds, kept, blocked, dueKind }, input.equipment, input.avoid);
   const byId = new Map(pool.map((c) => [c.ex.id, c]));
   const targets = weeklyTargets(ctx.current ? programVolume(ctx.current, exMap) : zeros(), ctx.currentPriority, input.priority_muscles);
   const layout = LAYOUTS[style][input.days_per_week];

@@ -40,10 +40,10 @@ const data = (): CoachData => ({
   calendar: { shifts: [], plans: [], settings: DEFAULT_CALENDAR_SETTINGS },
 });
 type Suggestions = {
-  exercise: { exercise_id: string; role: string; days: { day_id: string }[]; main_focus: { region: string; label: string }[]; equipment_role: string };
+  exercise: { exercise_id: string; role: string; days: { day_id: string }[]; main_focus: { region: string; label: string }[]; only_main_focus_for: string[]; equipment_role: string };
   rotation: { weeks: number; due: boolean; changes_by: number } | null;
   block: { letter: string };
-  replacements: { exercise_id: string; name: string; equipment: string; main_focus: { region: string }[]; fills_gap: string[]; change: string; equipment_role: string; done_before: boolean }[];
+  replacements: { exercise_id: string; name: string; equipment: string; main_focus: { region: string }[]; fills_gap: string[]; keeps_main_focus: string[]; change: string; equipment_role: string; done_before: boolean }[];
 };
 const suggest = (d: CoachData, exercise_id: string) => {
   const r = runTool(d, "suggest_replacements", { exercise_id });
@@ -111,6 +111,28 @@ describe("suggest_replacements", () => {
     expect(blockMix("side_delts", 1)).toContain(equipKind(ex.get(r.replacements[0].exercise_id)!));
   });
 
+  it("PR #25 review: a region the exercise alone covers stays the main focus of every replacement; the long head keeps an overhead exercise", () => {
+    // The lateral raise is his only side-delt exercise: every replacement keeps side delts.
+    const lateral = suggest(d, "lateral");
+    expect(lateral.exercise.only_main_focus_for).toEqual(["Side delts"]);
+    for (const x of lateral.replacements) expect(x.keeps_main_focus, x.name).toEqual(["Side delts"]);
+    // The overhead cable extension is his only long-head exercise: overhead variations, other equipment first.
+    const oh = suggest(d, "oh_tri");
+    expect(oh.exercise.only_main_focus_for).toEqual(["Triceps long head"]);
+    expect(oh.replacements.length).toBeGreaterThanOrEqual(2);
+    for (const x of oh.replacements) {
+      const e = ex.get(x.exercise_id)!;
+      expect(x.keeps_main_focus, e.name_en).toEqual(["Triceps long head"]);
+      expect(e.regions.find((r) => r.region === "triceps_long"), e.name_en).toMatchObject({ emphasis: "primary", evidence: "strong" });
+      expect(x.change, e.name_en).toBe("different equipment");
+      expect(e.equipment, e.name_en).not.toBe("cable");
+    }
+    // A lying extension only tags the long head as weak evidence: never offered in its place.
+    expect(oh.replacements.map((x) => x.exercise_id)).not.toContain("ek-0182");
+    // The fly's middle chest is still the bench press's main focus: other regions stay open.
+    expect(suggest(d, "fly").exercise.only_main_focus_for).toEqual([]);
+  });
+
   it("an exercise not in the program is an error the model can correct", () => {
     const r = runTool(d, "suggest_replacements", { exercise_id: "pec_deck_missing" });
     expect(r.ok).toBe(false);
@@ -157,6 +179,22 @@ describe("propose_exercise in replace mode", () => {
     // Once the program has the new exercise, the saved card no longer builds a draft.
     const later = { ...d, programs: [{ ...version, days: draft.days.map((x, i) => ({ ...base.program.days[i], exercises: base.program.days[i].exercises.map((y) => (y.exercise_id === "lateral" ? { ...y, exercise_id: pick.exercise_id } : y)) })) }] };
     expect(exerciseDraft(later, c)).toBeNull();
+  });
+
+  it("PR #25 review: the card says what happens to the replaced exercise's own region and muscle group first", () => {
+    const y = ok(propose(d, { program_day_id: "D1", exercise_id: "manual-cable-y-raise", replaces_exercise_id: "lateral" }));
+    expect(y.notes[0]).toBe("Side delts (main focus of Dumbbell Lateral Raise): Cable Y-Raise keeps it as its main focus.");
+    expect(y.notes[1]).toMatch(/^Shoulders: [\d.]+ sets a week, unchanged \(target [\d.]+\)\.$/);
+    expect(y.notes.some((n) => n.startsWith("Rear delts:"))).toBe(true);
+    // A lying extension does not cover the long head: the card says so.
+    const lying = ok(propose(d, { program_day_id: "D3", exercise_id: "ek-0182", replaces_exercise_id: "oh_tri" }));
+    expect(lying.notes[0]).toBe("Triceps long head (main focus of Overhead Cable Triceps Extension): no main-focus exercise with this change.");
+    expect(lying.notes[1]).toMatch(/^Triceps: [\d.]+ sets a week, unchanged/);
+    const overhead = ok(propose(d, { program_day_id: "D3", exercise_id: "fedb-Seated_Triceps_Press", replaces_exercise_id: "oh_tri" }));
+    expect(overhead.notes[0]).toBe("Triceps long head (main focus of Overhead Cable Triceps Extension): Seated Triceps Press keeps it as its main focus.");
+    // A region still covered elsewhere: the fly's middle chest stays with the bench press.
+    const fly = ok(propose(d, { program_day_id: "D3", exercise_id: suggest(d, "fly").replacements[0].exercise_id, replaces_exercise_id: "fly" }));
+    expect(fly.notes[0]).toMatch(/^Middle chest \(main focus of Cable Chest Fly\): still the main focus of Barbell Bench Press/);
   });
 
   it("refuses a replaced exercise that is not on the day, one already in the program, and both a place and a replacement", () => {
