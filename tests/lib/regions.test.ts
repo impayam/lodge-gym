@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { REGIONS, REGION_INFO, regionTags, regionsOf, ruleText, type Region, type RegionInput } from "../../worker/lib/regions";
 
-// SPEC-v11 M14 A3: the reviewed region rule table (approved 2026-10-16). Fixtures per region: the main focus a typical
-// exercise gets, and what it must never get.
+// SPEC-v11 M14 A3: the reviewed region rule table (approved 2026-10-16; forearm and neck regions added in Phase B,
+// approved 2026-10-17). Fixtures per region: the main focus a typical exercise gets, and what it must never get.
 
 const ex = (name_en: string, muscle_primary: string, muscles_secondary: string[] = [], pattern: string | null = null, category = "strength"): RegionInput => ({ name_en, muscle_primary, muscles_secondary, pattern, category });
 const primary = (x: RegionInput) => regionTags(x).filter((t) => t.emphasis === "primary").map((t) => t.region);
 const tagOf = (x: RegionInput, r: Region) => regionTags(x).find((t) => t.region === r);
 
 describe("region list", () => {
-  it("has the 26 approved keys, each under a muscle chip", () => {
-    expect(REGIONS).toHaveLength(26);
+  it("has the 30 approved keys, each under a muscle chip", () => {
+    expect(REGIONS).toHaveLength(30);
     for (const r of REGIONS) expect(REGION_INFO[r].label).toBeTruthy();
     expect(regionsOf("chest")).toEqual(["chest_upper", "chest_mid", "chest_lower"]);
     expect(regionsOf("biceps")).toEqual(["biceps_long", "biceps_short", "brachialis"]);
+    expect(regionsOf("forearms")).toEqual(["forearm_flexors", "forearm_extensors"]);
+    expect(regionsOf("neck")).toEqual(["neck_flexors", "neck_extensors"]);
   });
 });
 
@@ -50,6 +52,14 @@ describe("rule table: one fixture per region", () => {
     [ex("Ab Wheel Rollout", "core", [], "core"), "core_anti_ext", "moderate"],
     [ex("Cable Crunch", "core", [], "core"), "core_flexion", "strong"],
     [ex("Pallof Press", "core", [], "core"), "core_anti_rot", "moderate"],
+    [ex("Palms-Up Barbell Wrist Curl Over A Bench", "forearms", [], "isolation"), "forearm_flexors", "strong"],
+    [ex("Plate Pinch", "forearms", [], "isolation"), "forearm_flexors", "moderate"],
+    [ex("Palms-Down Wrist Curl Over A Bench", "forearms", [], "isolation"), "forearm_extensors", "strong"],
+    [ex("Cable Reverse Wrist Curl", "forearms", [], "isolation"), "forearm_extensors", "strong"],
+    [ex("Lying Face Up Plate Neck Resistance", "neck", [], "isolation"), "neck_flexors", "moderate"],
+    [ex("Isometric Neck Flexion (Hand Resistance)", "neck", [], "isolation"), "neck_flexors", "moderate"],
+    [ex("Lying Face Down Plate Neck Resistance", "neck", [], "isolation"), "neck_extensors", "strong"],
+    [ex("Isometric Neck Extension (Hand Resistance)", "neck", [], "isolation"), "neck_extensors", "moderate"],
   ];
   it.each(cases.map(([x, r, ev]) => [x.name_en, x, r, ev] as const))("%s → %s", (_n, x, region, evidence) => {
     const t = tagOf(x, region);
@@ -120,9 +130,34 @@ describe("rule details", () => {
     expect(dl.some((t) => t.emphasis === "primary" && t.region.startsWith("calves"))).toBe(false);
   });
 
-  it("forearm and neck work carry no region; stretching and cardio carry none", () => {
-    expect(regionTags(ex("Wrist Curl", "forearms", [], "isolation"))).toEqual([]);
-    expect(regionTags(ex("Neck Flexion", "neck", [], "isolation"))).toEqual([]);
+  it("a reverse wrist curl is wrist extension, not brachialis work; a hammer or reverse curl stays brachialis", () => {
+    expect(primary(ex("Cable Reverse Wrist Curl", "forearms", [], "isolation"))).toEqual(["forearm_extensors"]);
+    expect(tagOf(ex("Cable Reverse Wrist Curl", "forearms", [], "isolation"), "brachialis")).toBeUndefined();
+    expect(primary(ex("Reverse Barbell Curl", "forearms", ["biceps"], "isolation"))).toEqual(["brachialis"]);
+    expect(primary(ex("Hammer Curl", "forearms", ["biceps"], "isolation"))).toEqual(["brachialis"]);
+  });
+
+  it("forearms: rollers and rotations train both groups, a neutral wrist curl neither as main focus; forearms as a secondary muscle tag nothing", () => {
+    expect(primary(ex("Wrist Roller", "forearms", [], "isolation"))).toEqual(["forearm_flexors", "forearm_extensors"]);
+    expect(primary(ex("Wrist Rotations with Straight Bar", "forearms", [], "isolation"))).toEqual(["forearm_flexors", "forearm_extensors"]);
+    expect(primary(ex("Dumbbell Neutral-Grip Wrist Curl", "forearms", [], "isolation"))).toEqual([]);
+    expect(regionTags(ex("Dumbbell Neutral-Grip Wrist Curl", "forearms", [], "isolation")).map((t) => t.emphasis)).toEqual(["secondary", "secondary"]);
+    expect(primary(ex("Dead Hang", "forearms", [], "isolation"))).toEqual(["forearm_flexors"]);
+    // Payam, 2026-10-17: forearms are not "also trained" in rows, pulls and deadlifts.
+    for (const x of [ex("Seated Cable Row", "back_upper", ["forearms", "biceps"], "h_pull"), ex("Barbell Deadlift", "lower_back", ["forearms", "hamstrings"], "hinge")])
+      expect(regionTags(x).some((t) => t.region.startsWith("forearm_")), x.name_en).toBe(false);
+  });
+
+  it("neck: front-and-back isometrics train both groups; side work neither as main focus", () => {
+    expect(primary(ex("Isometric Neck Exercise - Front And Back", "neck", [], "isolation"))).toEqual(["neck_flexors", "neck_extensors"]);
+    expect(primary(ex("Isometric Neck Exercise - Sides", "neck", [], "isolation"))).toEqual([]);
+    expect(primary(ex("Lying Neck Extension", "neck", [], "isolation"))).toEqual(["neck_extensors"]);
+    expect(primary(ex("Lying Neck Flexion", "neck", [], "isolation"))).toEqual(["neck_flexors"]);
+  });
+
+  it("stretching and cardio carry no region, forearm and neck stretches included", () => {
+    expect(regionTags(ex("Kneeling Forearm Stretch", "forearms", [], null, "stretching"))).toEqual([]);
+    expect(regionTags(ex("Side Neck Stretch", "neck", [], null, "stretching"))).toEqual([]);
     expect(regionTags(ex("Doorway Pec Stretch", "chest", [], null, "stretching"))).toEqual([]);
     expect(regionTags(ex("Rowing Machine", "back_lats", [], null, "cardio"))).toEqual([]);
   });

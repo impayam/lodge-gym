@@ -19,7 +19,7 @@ import {
   type SourceKey,
 } from "./librarySources";
 import { isLowerBody, isMuscle, type Muscle } from "./muscles";
-import { NO_REGION_MUSCLES, REGIONS, REGION_INFO, TWO_PRIMARY_RULES, isRegion, regionTags, type Region, type RegionOverrides, type RegionTag } from "./regions";
+import { REGIONS, REGION_INFO, TWO_PRIMARY_RULES, isRegion, regionTags, type Region, type RegionOverrides, type RegionTag } from "./regions";
 import type { Equipment } from "./types";
 
 /** The clean row a reviewer wrote for an included record. */
@@ -241,7 +241,6 @@ const familyOf = (r: Region) => REGION_INFO[r].muscle;
 /** Problems with a set of tags (tests and report): untagged counted exercises, double primaries, thin regions. */
 export function regionChecks(rows: { id: string; name_en: string; muscle_primary: string; category: string | null }[], tags: ReadonlyMap<string, RegionTag[]>) {
   const untagged: { id: string; name_en: string; muscle: string }[] = [];
-  const exempt: { id: string; name_en: string; muscle: string }[] = [];
   const doublePrimary: string[] = [];
   const primary = new Map<Region, number>(REGIONS.map((r) => [r, 0]));
   const anyTag = new Map<Region, number>(REGIONS.map((r) => [r, 0]));
@@ -251,7 +250,7 @@ export function regionChecks(rows: { id: string; name_en: string; muscle_primary
       if (t.length) doublePrimary.push(`${r.id}: ${r.category} carries region tags`);
       continue;
     }
-    if (!t.length) (NO_REGION_MUSCLES.has(r.muscle_primary) ? exempt : untagged).push({ id: r.id, name_en: r.name_en, muscle: r.muscle_primary });
+    if (!t.length) untagged.push({ id: r.id, name_en: r.name_en, muscle: r.muscle_primary });
     const fam = new Map<string, RegionTag[]>();
     for (const x of t) {
       anyTag.set(x.region, anyTag.get(x.region)! + 1);
@@ -261,5 +260,5 @@ export function regionChecks(rows: { id: string; name_en: string; muscle_primary
     }
     for (const [f, xs] of fam) if (xs.length > 1 && !xs.every((x) => TWO_PRIMARY_RULES.has(x.note) || x.note === "reviewed")) doublePrimary.push(`${r.id} (${r.name_en}): ${xs.length} primary ${f} regions`);
   }
-  return { untagged, exempt, doublePrimary, primary, anyTag };
+  return { untagged, doublePrimary, primary, anyTag };
 }

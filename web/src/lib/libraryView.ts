@@ -24,7 +24,7 @@ const GROUP_REGION_FAMILIES: Readonly<Record<Exclude<LibraryGroup, "all">, reado
   back: ["back"],
   legs: ["quads", "hamstrings", "glutes", "calves", "adductors"],
   shoulders: ["shoulders"],
-  arms: ["triceps", "biceps"],
+  arms: ["triceps", "biceps", "forearms"],
   core: ["core"],
 };
 export function regionsForGroup(group: LibraryGroup): Region[] {
@@ -44,6 +44,8 @@ const CHIP_LABEL: Partial<Record<Region, string>> = {
   biceps_long: "Biceps long head",
   biceps_short: "Biceps short head",
   brachialis: "Brachialis",
+  forearm_flexors: "Forearm flexors",
+  forearm_extensors: "Forearm extensors",
   quads_squat: "Quads, squat",
   quads_knee_ext: "Quads, knee extension",
   hamstrings_hinge: "Hamstrings, hinge",

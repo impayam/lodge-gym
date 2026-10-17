@@ -94,7 +94,6 @@ export function m14ReportMarkdown(r: ReportInput): string {
   const evidence = new Map<string, number>();
   for (const t of r.tags.values()) for (const x of t) evidence.set(`${x.emphasis} ${x.evidence}`, (evidence.get(`${x.emphasis} ${x.evidence}`) ?? 0) + 1);
   lines.push("| Emphasis and evidence | Tags |", "|---|---|", ...[...evidence].sort().map(([k, n]) => `| ${k} | ${n} |`), "");
-  list("No region: main muscle has no region in the approved list (forearms, neck)", checks.exempt, (x) => `${x.name_en} (${x.muscle})`, "###");
   list("No region although counted (must be empty)", checks.untagged, (x) => `${x.name_en} (${x.muscle})`, "###");
   list("Two primary regions of one muscle outside the reviewed rules (must be empty)", checks.doublePrimary, (x) => x, "###");
 

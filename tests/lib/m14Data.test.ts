@@ -117,9 +117,8 @@ describe("region tags on the whole library", () => {
   const tags = new Map<string, RegionTag[]>(pool.map((r) => [r.id, regionTags({ ...r, id: r.id }, overrides)]));
   const checks = regionChecks(pool, tags);
 
-  it("every exercise that counts toward volume has a region, except forearm and neck work", () => {
+  it("every exercise that counts toward volume has a region, forearm and neck work included (Phase B)", () => {
     expect(checks.untagged).toEqual([]);
-    expect(checks.exempt.every((x) => x.muscle === "forearms" || x.muscle === "neck")).toBe(true);
   });
 
   it("no exercise has two primary regions of one muscle outside the reviewed rules; stretching and cardio carry none", () => {
