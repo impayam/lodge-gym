@@ -35,7 +35,7 @@ describe("propose_exercise", () => {
   it("is offered to the model with a strict schema and no numbers to fill in", () => {
     const t = COACH_TOOLS.find((x) => x.name === "propose_exercise")!;
     expect(t.input_schema).toMatchObject({ type: "object", additionalProperties: false, required: ["program_day_id", "exercise_id"] });
-    expect(Object.keys(t.input_schema.properties)).toEqual(["program_day_id", "exercise_id", "after_exercise_id", "prefer"]);
+    expect(Object.keys(t.input_schema.properties)).toEqual(["program_day_id", "exercise_id", "after_exercise_id", "replaces_exercise_id", "prefer"]);
     expect(t.input_schema.properties.prefer.enum).toEqual(["session", "program"]);
   });
 

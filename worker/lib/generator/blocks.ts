@@ -9,7 +9,7 @@
 // growth": each has a role (below).
 
 import { REGION_INFO, type Region } from "../regions";
-import type { Equipment, Exercise } from "../types";
+import type { Equipment, Exercise, ProgramInfo } from "../types";
 
 export const BLOCK_LETTERS = ["A", "B", "C"] as const;
 export type BlockLetter = (typeof BLOCK_LETTERS)[number];
@@ -50,6 +50,13 @@ export type EquipKind = Equipment | "plate" | "isometric";
 export function equipKind(ex: Pick<Exercise, "equipment" | "name_en" | "muscle_primary">): EquipKind {
   if (ex.muscle_primary === "neck") return /\bisometric\b/i.test(ex.name_en) ? "isometric" : /\bplate\b/i.test(ex.name_en) || ex.equipment !== "bodyweight" ? "plate" : "bodyweight";
   return ex.equipment;
+}
+
+/** The block of the program in use: the latest activated program that carries one (the seed program is block 1). */
+export function currentBlock(infos: readonly Pick<ProgramInfo, "params" | "activations">[]): number {
+  const started = (p: Pick<ProgramInfo, "activations">) => p.activations[p.activations.length - 1]?.started_at ?? "";
+  const latest = infos.filter((p) => p.params?.block !== undefined && p.activations.length).sort((a, b) => started(b).localeCompare(started(a)))[0];
+  return latest?.params?.block ?? 1;
 }
 
 /** The block-to-block order per muscle (approved table): the equipment its other exercises use in blocks A, B and C. */

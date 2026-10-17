@@ -35,6 +35,10 @@ import { PROPOSE_PROGRAM_TOOL, proposeProgram, type ProposeResult } from "./draf
 import { CALENDAR_TOOLS, plannedThisWeek, runCalendarTool, type CoachCalendar } from "./calendarTools";
 import { PROPOSE_SESSION_ADDITIONS_TOOL, proposeSessionAdditions } from "./sessionTools";
 import { PROPOSE_EXERCISE_TOOL, proposeExercise } from "./exerciseTool";
+import { SUGGEST_REPLACEMENTS_TOOL, regionView, rotationOf, suggestReplacements } from "./rotationTools";
+import { blockLetter, currentBlock, regionCoverage } from "../generator";
+import { REGIONS, REGION_INFO, isRegion } from "../regions";
+import { dueText, type RotationStatus } from "../rotation";
 
 /** Longest date range of one get_sessions, get_volume or get_adherence call (token budget). */
 export const MAX_RANGE_DAYS = 92;
@@ -119,12 +123,13 @@ export const COACH_TOOLS = [
   },
   {
     name: "get_program",
-    description: "Payam's active program: name, style, days per week, priority muscles, the rules shown on the Program screen, and every day with its exercises, sets, reps, rest, groups and target RIR.",
+    description:
+      "Payam's active program: name, style, days per week, priority muscles, the rules shown on the Program screen, and every day with its exercises, sets, reps, rest, groups and target RIR; for each exercise its main-focus regions and its rotation (training weeks in the program, the weeks it keeps at least and changes by, whether it is due and why); the block it runs in and the regions without a main-focus exercise.",
     input_schema: { type: "object", properties: { show: SHOW }, additionalProperties: false },
   },
   {
     name: "get_library",
-    description: `Exercises from the app's library, for choosing exercises or ids for a program. Give at least one filter. At most ${LIBRARY_LIMIT} results, exercises he has done first.`,
+    description: `Exercises from the app's library, for choosing exercises or ids for a program, with their region tags (main focus and also trained, with the evidence level). Give at least one filter. At most ${LIBRARY_LIMIT} results, exercises he has done first.`,
     input_schema: {
       type: "object",
       properties: {
@@ -134,6 +139,7 @@ export const COACH_TOOLS = [
           description: "Main or secondary muscle.",
         },
         equipment: { type: "string", enum: ["barbell", "dumbbell", "cable", "machine", "bodyweight"] },
+        region: { type: "string", enum: [...REGIONS], description: "Only exercises with this region as a main focus (region tags)." },
         query: { type: "string", minLength: 2, description: 'Words in the English name, e.g. "incline press".' },
         show: SHOW,
       },
@@ -170,6 +176,7 @@ export const COACH_TOOLS = [
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   ...CALENDAR_TOOLS,
+  SUGGEST_REPLACEMENTS_TOOL,
   PROPOSE_EXERCISE_TOOL,
   PROPOSE_SESSION_ADDITIONS_TOOL,
   PROPOSE_PROGRAM_TOOL,
@@ -257,9 +264,14 @@ export function getE1rmHistory(d: CoachData, exerciseId: string, weeksBack: numb
       latest_e1rm: latest,
       best_e1rm: points.length ? Math.max(...points.map((p) => p.e1rm)) : null,
       change_pct: points.length >= 2 && first ? round1((((latest ?? 0) - first) / first) * 100) : null,
+      rotation: rotationView(rotationOf(d).find((s) => s.exercise_id === e.id)),
     },
   };
 }
+
+/** An exercise's rotation as the tools give it (Phase B); null when it is not in his active program. */
+const rotationView = (s: RotationStatus | undefined) =>
+  s ? { weeks: s.weeks, since: s.since, keeps_at_least: s.min, changes_by: s.max, weeks_until_changes_by: Math.max(0, s.max - s.weeks), stalled: s.stalled, due: s.due, reason: s.due ? dueText(s) : null } : null;
 
 /** The weeks (by the settings' week start) that overlap [from, to], none after today's week. */
 function weeksOver(d: CoachData, from: string, to: string) {
@@ -353,6 +365,12 @@ export function getProgram(d: CoachData) {
   const style = info?.style ?? "seed_full_body";
   const perWeek = info?.days_per_week ?? days.length;
   const names = new Map(d.exercises.map((e) => [e.id, e.name_en]));
+  const ex = new Map(d.exercises.map((e) => [e.id, e]));
+  const rotation = new Map(rotationOf(d).map((s) => [s.exercise_id, s]));
+  const block = currentBlock(d.programs ?? []);
+  const missing = regionCoverage(days, ex)
+    .filter((c) => !c.exercises.length)
+    .map((c) => REGION_INFO[c.region].label);
   return {
     id: info?.id ?? d.program.id,
     name: programName(info, d.program.name),
@@ -379,8 +397,12 @@ export function getProgram(d: CoachData) {
           rest_sec: x.rest_sec,
           group: x.superset_tag ? x.superset_tag[0] : null,
           target_rir: x.target_rir_min == null || x.target_rir_max == null ? null : { min: x.target_rir_min, max: x.target_rir_max },
+          main_focus: ex.get(x.exercise_id) ? regionView(ex.get(x.exercise_id)!, "primary").map((r) => r.label) : [],
+          rotation: rotationView(rotation.get(x.exercise_id)),
         })),
     })),
+    block: { block, letter: blockLetter(block) },
+    regions_without_main_focus: missing,
   };
 }
 
@@ -388,11 +410,12 @@ const libraryInput = z
   .object({
     muscle: z.string().refine(isMuscle, "Unknown muscle.").optional(),
     equipment: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight"]).optional(),
+    region: z.string().refine(isRegion, "Unknown region.").optional(),
     query: z.string().trim().min(2).optional(),
     ...show,
   })
   .strict()
-  .refine((f) => f.muscle || f.equipment || f.query, "Give at least one filter: muscle, equipment or query.");
+  .refine((f) => f.muscle || f.equipment || f.region || f.query, "Give at least one filter: muscle, equipment, region or query.");
 
 export function getLibrary(d: CoachData, f: z.infer<typeof libraryInput>) {
   const doneIds = new Set(doneSessions(d).flatMap((s) => s.sets.filter((x) => x.done).map((x) => x.exercise_id)));
@@ -401,6 +424,7 @@ export function getLibrary(d: CoachData, f: z.infer<typeof libraryInput>) {
     .filter((e) => !e.archived_at)
     .filter((e) => !f.muscle || e.muscle_primary === f.muscle || e.muscles_secondary.includes(f.muscle))
     .filter((e) => !f.equipment || e.equipment === f.equipment)
+    .filter((e) => !f.region || e.regions.some((r) => r.region === f.region && r.emphasis === "primary"))
     .filter((e) => words.every((w) => e.name_en.toLowerCase().includes(w)))
     .sort((a, b) => Number(doneIds.has(b.id)) - Number(doneIds.has(a.id)) || a.name_en.localeCompare(b.name_en));
   const list = hits.slice(0, LIBRARY_LIMIT);
@@ -417,6 +441,8 @@ export function getLibrary(d: CoachData, f: z.infer<typeof libraryInput>) {
       category: e.category,
       counts_volume: countsVolume(e.category),
       done_before: doneIds.has(e.id),
+      main_focus: regionView(e, "primary"),
+      also_trained: regionView(e, "secondary"),
     })),
   };
 }
@@ -593,6 +619,8 @@ export function runTool(
       return parse(z.object(show).strict(), () => ({ ok: true, result: getRecovery(d) }));
     case "get_training_pattern":
       return parse(z.object({}).strict(), () => ({ ok: true, result: getTrainingPattern(d) }));
+    case "suggest_replacements":
+      return suggestReplacements(d, input);
     case "propose_exercise":
       return proposeExercise(d, input, draftId(), plannedPositions(d));
     case "propose_session_additions":

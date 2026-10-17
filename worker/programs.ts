@@ -16,6 +16,7 @@ import {
   STYLE_NAME,
   checkPlan,
   dayMinutes,
+  currentBlock,
   generateProgram,
   nextBlock,
   planFromEdits,
@@ -29,7 +30,7 @@ import {
 import { TARGET_GROUPS } from "./lib/muscles";
 import { programRotation } from "./lib/rotation";
 import { addDays, localDate } from "./lib/time";
-import type { Exercise, ProgramInfo, ProgramVersion } from "./lib/types";
+import type { Exercise, ProgramVersion } from "./lib/types";
 import { ID_RE, ulid } from "./lib/ulid";
 
 const id = z.string().regex(ID_RE);
@@ -75,14 +76,6 @@ type Draft = z.infer<typeof draftSchema>;
 
 /** Exercises with done sets in the last 8 weeks: a new pick is never one of them (Phase B rotation). */
 export const RECENT_DAYS = 56;
-
-/** The block of the program in use: the latest activated program that carries one (the seed program is block 1). */
-export function currentBlock(infos: readonly ProgramInfo[]): number {
-  const latest = infos
-    .filter((p) => p.params?.block !== undefined && p.activations.length)
-    .sort((a, b) => b.activations[b.activations.length - 1].started_at.localeCompare(a.activations[a.activations.length - 1].started_at))[0];
-  return latest?.params?.block ?? 1;
-}
 
 /** What the generator and the approval check need from the database. */
 async function generatorContext(env: Env) {

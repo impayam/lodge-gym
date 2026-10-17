@@ -13,7 +13,7 @@ import { newGymPlan, streakNote } from "../lib/calendarView";
 import { targetKey, targetLabel, type AdditionTarget } from "../../../worker/lib/coach/additionTarget";
 import { inPlan } from "../../../worker/lib/plan";
 import { openPlanFor } from "../model";
-import { addCoachExtras, allExercises, coachTargets, flash, navigate, openCalendar, openPlan, refresh, saveGymPlan, today, useStore } from "../store";
+import { addCoachExtras, allExercises, coachTargets, flash, navigate, openCalendar, openPlan, refresh, replaceCoachExercise, saveGymPlan, today, useStore } from "../store";
 import { Select } from "./Select";
 import { Columns } from "./Columns";
 import { TimeChart } from "./TimeChart";
@@ -34,6 +34,7 @@ const TOOL_LABEL: Record<string, string> = {
   get_calendar: "Reading your calendar",
   find_free_slots: "Finding gym times",
   propose_schedule: "Writing a gym schedule",
+  suggest_replacements: "Finding replacements",
   propose_exercise: "Placing the exercise",
   propose_session_additions: "Picking exercises for today",
   propose_program: "Writing a program draft",
@@ -435,6 +436,8 @@ type ExerciseChange = {
   day: { id: string; name: string; position: number };
   exercise: Omit<Addition, "reason_fa"> & { rest_sec: number };
   after: { exercise_id: string; name: string } | null;
+  /** Replace mode (SPEC-v11 Phase B): the exercise it takes the place of and the days that have it. */
+  replaces?: { exercise_id: string; name: string; days: { id: string; name: string; position: number }[] } | null;
   notes: string[];
 };
 
@@ -463,16 +466,43 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
   const plan = target.kind === "open_session" ? null : openPlanFor(plans, target.day_id);
   const inSession = session ? session.sets.some((s) => s.exercise_id === x.exercise_id) : plan ? inPlan(plan, x.exercise_id) : false;
   const inDrafts = saved || (boot.programs ?? []).some((p) => p.id === result.draft_id);
+  const replaces = result.replaces ?? null;
   // Where it goes (Payam, 2026-10-16): a session open today takes it at its end; the day's plan and the program, after
   // that exercise. With a session open the card offers both, so it names both places, on a line of its own that wraps
   // (the sets line is one line and would cut it off on a phone).
   const after = result.after ? `after ${result.after.name}` : null;
-  const bothPlaces = dayKnown && session ? `At the end of this session${after ? `; in the program ${after}` : ""}.` : null;
+  const bothPlaces = replaces
+    ? `In place of ${replaces.name}${replaces.days.length > 1 ? `; in the program on ${replaces.days.map((d) => d.name).join(" and ")}` : ""}.`
+    : dayKnown && session
+      ? `At the end of this session${after ? `; in the program ${after}` : ""}.`
+      : null;
+
+  /** Only this session for a replacement: the new exercise takes the old one's place in that session or plan. */
+  const replaceSession = async (old: NonNullable<typeof replaces>) => {
+    const r = await replaceCoachExercise(
+      old.exercise_id,
+      { exercise_id: x.exercise_id, sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null, rest_sec: x.rest_sec },
+      target
+    );
+    flash(
+      r.replaced
+        ? `${x.name} replaces ${old.name} in ${label}.`
+        : r.reason === "done"
+          ? `${old.name} already has a done set in this session: it stays.`
+          : r.reason === "missing"
+            ? "The exercise library did not load. Try again online."
+            : `${old.name} is not in ${label}.`
+    );
+  };
 
   const addSession = async () => {
     setBusy(true);
     setProblem(null);
     try {
+      if (replaces) {
+        await replaceSession(replaces);
+        return;
+      }
       const r = await addCoachExtras(
         [{ exercise_id: x.exercise_id, sets: x.sets, reps_min: x.reps_min, reps_max: x.reps_max, is_time: x.is_time, weight: x.weight, weight_unit: x.weight_unit === "kg" || x.weight_unit === "lb" ? x.weight_unit : null, rest_sec: x.rest_sec }],
         target,
@@ -522,9 +552,9 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
   const open = choices.filter((c) => !c.done);
 
   return (
-    <section class="card l-col l-gap-10" data-testid="coach-exercise-change" data-prefer={result.prefer ?? "none"}>
+    <section class="card l-col l-gap-10" data-testid="coach-exercise-change" data-prefer={result.prefer ?? "none"} data-replaces={replaces?.exercise_id}>
       <h2 class="card__title l-m0">
-        {result.day.name}: + {x.name}
+        {replaces ? `${result.day.name}: ${replaces.name} → ${x.name}` : `${result.day.name}: + ${x.name}`}
       </h2>
       <ul class="list-plain">
         <li class="list-row" data-testid="coach-exercise-row" data-ex={x.exercise_id}>

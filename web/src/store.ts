@@ -6,7 +6,7 @@ import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Pho
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import { DEFAULT_CALENDAR_SETTINGS, type CalendarSettings, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
-import { addItem, inPlan, liveItems, moveAfter, planFromDay, removeItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
+import { addItem, inPlan, liveItems, moveAfter, planFromDay, removeItem, replaceItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
 import { additionTargets, type AdditionTarget } from "../../worker/lib/coach/additionTarget";
 import { ulid } from "../../worker/lib/ulid";
 import { processPhoto } from "./photos";
@@ -818,6 +818,47 @@ export async function addCoachExtras(items: CoachExtra[], target: AdditionTarget
   }
   await saveSession({ ...s, sets: [...s.sets, ...sets] });
   return { added, missing, sessionId: s.id, planId: null };
+}
+
+/**
+ * A replacement from the coach's exercise card (SPEC-v11 Phase B, "Only this session"): the new exercise takes the place
+ * of `fromId` in a session open today (its undone sets move to the new exercise; not when a set of it is done, so
+ * history never changes), else in that day's plan, which it is in when he taps Start. The program stays as it is.
+ */
+export async function replaceCoachExercise(
+  fromId: string,
+  item: CoachExtra,
+  target: AdditionTarget
+): Promise<{ replaced: boolean; reason: "missing" | "not_there" | "done" | null; sessionId: string | null; planId: string | null }> {
+  if (!allExercises().has(item.exercise_id)) await loadLibrary();
+  const ex = allExercises().get(item.exercise_id);
+  if (!ex) return { replaced: false, reason: "missing", sessionId: null, planId: null };
+  const boot = state.boot!;
+  const now = new Date().toISOString();
+  await closeStaleSessions();
+  const active = activeSession(state.sessions);
+  const s = active && active.local_date === today() ? active : null;
+  await rememberExercise(ex);
+  if (s) {
+    const mine = s.sets.filter((x) => x.exercise_id === fromId);
+    if (!mine.length) return { replaced: false, reason: "not_there", sessionId: s.id, planId: null };
+    if (mine.some((x) => x.done)) return { replaced: false, reason: "done", sessionId: s.id, planId: null };
+    if (s.sets.some((x) => x.exercise_id === ex.id)) return { replaced: false, reason: "not_there", sessionId: s.id, planId: null };
+    const plan = planForSession(boot, s, sessionPlan(state.plans, s.id), allExercises(), now);
+    const it = liveItems(plan).find((x) => x.exercise_id === fromId);
+    if (it) await savePlan(replaceItem(plan, it.id, ex.id, now));
+    const weight = item.weight != null && item.weight_unit === s.unit ? item.weight : null;
+    await saveSession({ ...s, sets: s.sets.map((x) => (x.exercise_id === fromId ? { ...x, exercise_id: ex.id, weight, reps: null, seconds: null, rir: null, updated_at: now } : x)) });
+    return { replaced: true, reason: null, sessionId: s.id, planId: null };
+  }
+  const day = boot.program.days.find((d) => d.id === target.day_id);
+  if (!day) return { replaced: false, reason: "not_there", sessionId: null, planId: null };
+  const fresh = ulid();
+  const plan = openPlanFor(state.plans, day.id) ?? planFromDay(day, fresh, now, seqIds(fresh));
+  const it = liveItems(plan).find((x) => x.exercise_id === fromId);
+  if (!it || inPlan(plan, ex.id)) return { replaced: false, reason: "not_there", sessionId: null, planId: plan.id };
+  await savePlan(replaceItem(plan, it.id, ex.id, now));
+  return { replaced: true, reason: null, sessionId: null, planId: plan.id };
 }
 
 /**

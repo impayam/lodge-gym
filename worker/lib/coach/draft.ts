@@ -152,9 +152,10 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 /**
  * The generator's checks that need no weekdays (Payam, 2026-10-15), as advice. Left out: the day length (no limit for
  * drafts; each day's estimate is shown as information instead), the 1×/week note (it names a generator style), set
- * ranges (generator slots) and the weekday rules, which draftSpacing below runs on the day order instead.
+ * ranges (generator slots) and the weekday rules, which draftSpacing below runs on the day order instead. Phase B adds
+ * region coverage and the same region + equipment advice (SPEC-v11, 2026-10-17).
  */
-const DRAFT_CHECKS = new Set(["not_strength", "duplicate", "two_roles", "squat_deadlift_mains", "session_cap", "pull_push", "no_hinge", "no_squat", "rear_delts", "floor", "under_target", "over_target"]);
+const DRAFT_CHECKS = new Set(["not_strength", "duplicate", "two_roles", "squat_deadlift_mains", "session_cap", "pull_push", "no_hinge", "no_squat", "rear_delts", "floor", "under_target", "over_target", "coverage", "region_equipment"]);
 
 function draftChecks(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>, targets: Record<string, number>): DraftIssue[] {
   const plan: Plan = {

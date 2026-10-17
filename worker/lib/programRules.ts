@@ -22,6 +22,7 @@ export function styleLabel(style: string | null): string {
  *  from the style (SPEC-v2 §8.3–§8.4). No light-week or intro-week rule (decided 2026-10-12). */
 export function programRules(style: string | null, days: number, hasSupersets: boolean, strength: boolean): string[] {
   const progression = "All sets completed? Next session add: upper body 5 lb (2.5 kg), lower body 10 lb (5 kg), dumbbells 5 lb (2 kg) per hand.";
+  const rotation = "Exercises change on a plan: main and secondary lifts after 6–8 weeks, the others after 3–4. A due exercise shows at the top; nothing changes until you approve a new program or pick a replacement.";
   const food = "To keep muscle: don't eat below maintenance, 130–150 g of protein a day, 7–9 hours of sleep.";
   const supersets = "A1/A2 and B1/B2 are supersets: alternate them and rest 60–90 s after each round.";
   if (style === null || style === "seed_full_body")
@@ -31,6 +32,7 @@ export function programRules(style: string | null, days: number, hasSupersets: b
       "Goal: 4 sessions in 7 days.",
       "Weeks 1 and 2: end each set with 3–4 reps in reserve. From week 3: 1–2 reps in reserve.",
       progression,
+      rotation,
       food,
       supersets,
     ];
@@ -49,6 +51,7 @@ export function programRules(style: string | null, days: number, hasSupersets: b
         ? "Main lifts: 3–5 reps, ending each set with 1–2 reps in reserve. Accessories: 6–12 reps."
         : "Each exercise shows its target reps in reserve (RIR): main and secondary lifts 1–3, accessories 1–2, isolation 0–2.",
     progression,
+    rotation,
     food,
     ...(hasSupersets ? [supersets] : []),
   ];

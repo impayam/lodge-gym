@@ -54,7 +54,7 @@ import {
 export * from "./model";
 export * from "./check";
 export * from "./blocks";
-export { EQUIPMENT_OK, EXTRA_GROUPS, candidatePool, isHeavyHinge, isOlympicLift, looksPerLeg, looksTimed, pick, type Candidate } from "./pick";
+export { EQUIPMENT_OK, EXTRA_GROUPS, MAIN_LIFT_REGIONS, candidatePool, isHeavyHinge, isOlympicLift, looksPerLeg, looksTimed, mainLiftOk, pick, sourceRank, type Candidate } from "./pick";
 
 export interface GeneratorContext {
   /** The library: seed, imported, manual and custom exercises, with their region tags. */

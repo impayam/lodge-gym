@@ -16,7 +16,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "./env";
 import { aiTransport, effortOf, type Effort } from "./ai";
 import { loadReportData } from "./reports";
-import { mapExercise } from "./data";
+import { attachRegions, mapExercise, readRegions } from "./data";
 import type { ReportData } from "./lib/reports";
 import { callCostUsd, type CallTokens } from "./lib/ai/cost";
 import { COACH_SYSTEM } from "./lib/coach/prompt";
@@ -119,8 +119,9 @@ function base64(bytes: Uint8Array): string {
  * get_library and make propose_program drop it. Report numbers are the same: they only look up exercises in use.
  */
 export async function loadCoachData(env: Env): Promise<ReportData> {
-  const [d, library] = await Promise.all([loadReportData(env), env.DB.prepare("SELECT * FROM exercises").all<Record<string, unknown>>()]);
-  return { ...d, exercises: library.results.map(mapExercise) };
+  const [d, library, regions] = await Promise.all([loadReportData(env), env.DB.prepare("SELECT * FROM exercises").all<Record<string, unknown>>(), readRegions(env)]);
+  // The whole library with its region tags (SPEC-v11): the coach chooses and explains exercises by region.
+  return { ...d, exercises: attachRegions(library.results.map(mapExercise), regions) };
 }
 
 /** The system prompt and the tools, with one cache breakpoint after them (tools come first in the cached prefix). */
