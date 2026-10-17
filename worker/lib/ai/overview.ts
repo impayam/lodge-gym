@@ -4,6 +4,7 @@
 // number the overview shows comes from here (e1RM, % change, volume, counts); the model only phrases them, and its prose
 // with a number this input does not contain is dropped.
 
+import { goalFacts, type GoalFacts } from "../bodyPace";
 import { z } from "zod";
 import { countsVolume } from "../category";
 import { weekRange } from "../cycle";
@@ -62,6 +63,8 @@ export interface OverviewInput {
   /** Rotation (SPEC-v11 Phase B): exercises of the active program due for a change now, and those due after one more
    *  training week. */
   rotation: { due_now: { name: string; reason: string }[]; due_next_week: { name: string; weeks: number; changes_by: number }[] };
+  /** SPEC-v12 M15: his goal and the body weight's pace against it (null: no goal set; absent in data without goals). */
+  goal?: GoalFacts | null;
 }
 
 /** A done set as compact text: "135×5 RIR 2", "45 s", "×8" (bodyweight). */
@@ -202,6 +205,7 @@ export function buildOverviewInput(d: ReportData, plans: SessionPlan[], today: s
     skipped,
     motivation: buildMotivation(d, today, previousOverviews),
     rotation: rotationFacts(d, today, name),
+    ...(d.goals === undefined ? {} : { goal: goalFacts(d, today) }),
   };
 }
 
@@ -388,7 +392,8 @@ Rules:
 - trends: one item per main lift in lifts that has a change_pct (direction and size over the window).
 - volume_fa: groups on, under or over target this week (weeks with this_week true) and over the window. Chest is Payam's priority.
 - consistency_fa: sessions done per week against sessions_planned, and any pattern in skipped. Planned sessions count from totals.since (the first program activation or the window's start, whichever is later), each day with the program active that day: weeks before it plan none, and totals compare the sessions done and planned since totals.since.
-- focus_next: 1–3 concrete priorities for the coming sessions, for strength and balance.
+- focus_next: 1–3 concrete priorities for the coming sessions, for his goal (goal: his training goal and body goal; without one, strength and balance).
+- goal: judge the weeks against it. goal.pace is the body weight's pace against his body goal (on, slow, fast, holding, drifting, no_data): in a Cut, losing weight on pace is progress, not a problem. A body goal never changes the lifting.
 - warnings: only real issues: stalls, drops, pain or injury in a note. Usually none.
 - rotation: his exercises change on a plan (main and secondary lifts after 6–8 weeks, the others after 3–4). When rotation.due_now or rotation.due_next_week is not empty, one focus_next item names the exercises due for a change now and those due next week (names only, or weeks exactly as given), and says the Program screen shows them. Nothing changes on its own: never say an exercise was changed.
 - Never suggest a deload, a light week or less volume, unless a session note says he is tired. This is his stated preference.

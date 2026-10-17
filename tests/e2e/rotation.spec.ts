@@ -110,12 +110,15 @@ test("a due line asks the Coach about that exercise: replacements as replace car
   expect((sql("SELECT COUNT(*) AS n FROM programs WHERE generated_by = 'coach'")[0] as { n: number }).n).toBe(0);
 });
 
-test("New program: 75 minutes by default, block B covers all 30 regions with the forearm and neck direct sets, and names the due exercises it replaces", async ({ page }) => {
+test("New program: no session length (the goal's schemes, nothing cut for time), block B covers all 30 regions with the forearm and neck direct sets, and names the due exercises it replaces", async ({ page }) => {
   await page.goto("/");
   await goTo(page, "Settings");
   await page.getByTestId("new-program").click();
-  await expect(page.getByRole("group", { name: "Session length" }).getByRole("button", { name: "75 min" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("group", { name: "Session length" })).toHaveCount(0);
+  await expect(page.getByTestId("np-goal-input")).toHaveText("No goal set: the Growth schemes. Set it on Profile; session length never limits a program.");
   await page.getByTestId("np-generate").click();
+  await expect(page.getByTestId("np-goal")).toHaveText("No goal set: the Growth schemes");
+  await expect(page.getByLabel("Suggested week")).toContainText("Nothing is cut for time.");
   const block = page.getByTestId("np-block");
   await expect(block.getByRole("heading")).toHaveText("Block B");
   await expect(block.getByTestId("np-coverage")).toHaveText("All 30 regions have a main-focus exercise. Forearms 4 of 4 direct sets, Neck 2 of 2 direct sets.");

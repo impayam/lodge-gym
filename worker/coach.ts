@@ -9,7 +9,7 @@
 //   POST   /api/coach/attachments/from-photo         a copy of a progress photo for the next message
 //   GET    /api/coach/attachments/:id                a sent photo (auth only, like progress photos)
 //   POST   /api/coach/drafts                         Add to Planner (and the exercise card's Whole program): saves the card's draft as
-//                                                    an inactive program (Me → Program → Drafts)
+//                                                    an inactive program (Profile → Program → Drafts)
 // The answer itself runs in the AiJobs Durable Object (worker/coachTurn.ts). Nothing here touches training data or
 // progress photos, except Add to Planner, which only adds a draft program.
 
@@ -29,6 +29,7 @@ import { isJpeg, stripJpegMetadata } from "./lib/jpeg";
 import { activeSince, programOn } from "./lib/reports";
 import { programName } from "./lib/programRules";
 import { loadReportData } from "./reports";
+import { BODY_GOAL_NAME, trainingLabel } from "./lib/goals";
 import { localDate } from "./lib/time";
 import { ID_RE } from "./lib/ulid";
 
@@ -74,6 +75,8 @@ const sendSchema = z.object({
   session: z.object({ id, exercise_id: z.string().min(1).max(120).nullable(), set: z.number().int().min(0).max(99).nullable() }).strict().optional(),
   /** Ask Coach from a due line on the Program screen (SPEC-v11 Phase B): the exercise due for a change. */
   rotation: z.object({ exercise_id: id }).strict().optional(),
+  /** "Ask Coach for a program for this goal" on the Set goal screen (SPEC-v12 M15 §2.3). */
+  goal_program: z.literal(true).optional(),
 });
 
 export const coachRoutes = new Hono<AppBindings>();
@@ -119,7 +122,7 @@ coachRoutes.post("/threads/:id/messages", async (c) => {
     const content: StoredBlock[] = [
       ...(text ? [{ type: "text" as const, text }] : []),
       ...body.attachments.map((a) => ({ type: "image" as const, attachment_id: a.id, width: a.width, height: a.height })),
-      { type: "text", text: contextBlock({ today, timezone: settings.timezone, unit: settings.unit, week_start: settings.week_start, program: { name: programName(active ?? null, program.name), since: activeSince(d, today) }, session, rotation }) },
+      { type: "text", text: contextBlock({ today, timezone: settings.timezone, unit: settings.unit, week_start: settings.week_start, program: { name: programName(active ?? null, program.name), since: activeSince(d, today) }, session, rotation, goal: d.goals ? { training: trainingLabel(d.goals.training), body: BODY_GOAL_NAME[d.goals.body], set_on: localDate(settings.timezone, d.goals.set_at) } : null, goal_program: body.goal_program }) },
     ];
     const prev = await c.env.DB.prepare("SELECT MAX(created_at) AS at FROM coach_messages WHERE thread_id = ?").bind(threadId).first<{ at: string | null }>();
     const now = nextStamp(prev?.at);

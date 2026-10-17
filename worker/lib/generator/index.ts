@@ -12,9 +12,9 @@
 //    exercises to a missing region of the same muscle; otherwise one is added where it fits. Forearms and neck get
 //    their direct weekly sets (neck work light).
 // 5. Accessories and isolation fill every muscle group toward its weekly target, never above 10 fractional sets per
-//    group in a session and never past the session length, spreading work over the days that may train the group.
+//    group in a session or 20 in a week, spreading work over the days that may train the group.
 // 6. Pull sets at least push sets.
-// 7. Days longer than the session length lose isolation sets first, then accessories, then secondaries; never mains.
+// 7. Session length is never a limit (SPEC-v12 M15 §1): a day is as long as its work; its minutes are information.
 // 8. A day never changes its main lift and all its other exercises at once.
 // 9. Supersets pair non-competing isolation work; every day is ordered main → secondary → accessory → isolation/core.
 //
@@ -29,13 +29,12 @@ import { REGIONS, type Region } from "../regions";
 import type { DueReason, RotationStatus } from "../rotation";
 import type { DayExercise, Exercise, Pattern, Program } from "../types";
 import { DIRECT_GROUPS, SMALL_REGIONS, blockLetter, blockMix, directRegionSets, equipKind, directTarget, regionFamily, type BlockLetter, type DirectGroup, type EquipKind, type MixFamily } from "./blocks";
-import { checkPlan, dayLoad, dayMinutes, mainRegions, type CheckResult, type Plan, type PlanDay, type PlanExercise } from "./check";
+import { checkPlan, dayLoad, mainRegions, type CheckResult, type Plan, type PlanDay, type PlanExercise } from "./check";
 import { candidatePool, compareKeys, mainLiftOk, pick, preference, sourceRank, type Candidate, type PickQuery } from "./pick";
 import {
   DAY_EXTRA_GROUPS,
   DAY_GROUPS,
   FLOORS,
-  HOLD_SECONDS,
   LAYOUTS,
   PRIORITY_BONUS,
   REAR_DELT_MIN,
@@ -43,6 +42,8 @@ import {
   SET_WORK_SEC,
   STYLE_NAME,
   WARMUP_SEC,
+  WEEKLY_CAP,
+  holdSeconds,
   resolveStyle,
   schemeFor,
   type DayKind,
@@ -246,14 +247,14 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
   const byId = new Map(pool.map((c) => [c.ex.id, c]));
   const targets = weeklyTargets(ctx.current ? programVolume(ctx.current, exMap) : zeros(), ctx.currentPriority, input.priority_muscles);
   const layout = LAYOUTS[style][input.days_per_week];
-  const limitSec = input.session_minutes * 60;
+  const training = input.goals?.training ?? null;
   const unfilled: string[] = [];
   // Regions the current program had no main-focus exercise for: a main lift's new variation covers one when it can.
   const lastBlockMissing = new Set(REGIONS.filter((r) => !currentDays.some((d) => d.exercises.some((x) => mainRegions(exMap.get(x.exercise_id)).includes(r)))));
 
   const entry = (c: Candidate, slot: Slot, sets?: number): PlanExercise => {
-    const sc = schemeFor(slot, strength, c.group);
-    const reps = c.timed ? HOLD_SECONDS : sc.reps;
+    const sc = schemeFor(slot, strength, c.group, training);
+    const reps = c.timed ? holdSeconds(training) : sc.reps;
     // A main hinge keeps the bottom of the range: the heaviest lift of the week, at most once per 72 h.
     const n = sets ?? (slot === "main" && c.ex.pattern === "hinge" ? sc.range[0] : sc.sets);
     return {
@@ -358,7 +359,17 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
     for (const d of days) for (const [g, v] of dayLoad(d, exMap)) out[g] += v;
     return out;
   };
-  const fits = (i: number, extraSec: number) => daySeconds(days[i]) + extraSec <= limitSec;
+  /** The weekly cap (20 fractional sets per group): `sets` more sets of c keep every group it trains under it. */
+  const weekOk = (c: Candidate, sets: number, without?: PlanExercise) => {
+    const p = planned();
+    const old = without ? byId.get(without.exercise_id) : undefined;
+    for (const [g, w] of c.contrib) {
+      if (!isTargetGroup(g)) continue;
+      const before = p[g as TargetGroup] - (old?.contrib.get(g) ?? 0) * (without?.sets ?? 0);
+      if (before + w * sets > WEEKLY_CAP + 1e-9) return false;
+    }
+    return true;
+  };
   const capOk = (i: number, c: Candidate, sets: number) => {
     const l = dayLoad(days[i], exMap);
     for (const [g, w] of c.contrib) if (isTargetGroup(g) && (l.get(g as TargetGroup) ?? 0) + w * sets > SESSION_CAP + 1e-9) return false;
@@ -407,14 +418,14 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
         const compound = c.ex.mechanic === "compound" && c.ex.pattern !== "isolation" && c.ex.pattern !== "core";
         const slot: Slot | null = x.slot === "accessory" || x.slot === "isolation" || x.slot === "core" ? x.slot : x.slot === null && !compound ? (c.ex.pattern === "core" ? "core" : "isolation") : null;
         if (!slot) continue;
-        const sc = schemeFor(slot, strength, c.group);
+        const sc = schemeFor(slot, strength, c.group, training);
         const sets = Math.min(sc.range[1], Math.max(sc.range[0], x.sets));
         const load = (i: number) => (isTargetGroup(c.group) ? (dayLoad(days[i], exMap).get(c.group as TargetGroup) ?? 0) : 0);
         const order = days
           .map((_d, i) => i)
           .filter((i) => dayTrains(days[i].kind, c.group))
           .sort((a, b) => Number(b === ci) - Number(a === ci) || load(a) - load(b) || a - b);
-        const i = order.find((k) => capOk(k, c, sets) && pushCovered(c, sets) && fits(k, (sc.rest + SET_WORK_SEC) * sets));
+        const i = order.find((k) => capOk(k, c, sets) && pushCovered(c, sets) && weekOk(c, sets));
         if (i !== undefined) days[i].exercises.push(entry(c, slot, sets));
       }
     });
@@ -429,7 +440,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
       const load = dayLoad(d, exMap).get(g) ?? 0;
       for (const x of d.exercises) {
         const c = byId.get(x.exercise_id);
-        if (!c || c.group !== g || !growable(x) || !capOk(i, c, 1) || !pushOk(c, 1) || !fits(i, x.rest_sec + SET_WORK_SEC)) continue;
+        if (!c || c.group !== g || !growable(x) || !capOk(i, c, 1) || !pushOk(c, 1) || !weekOk(c, 1)) continue;
         options.push({ key: [load, 0, i], act: () => (x.sets += 1) });
       }
       // A new exercise: big groups may take a compound accessory or an isolation movement, chosen by the §8.4
@@ -442,9 +453,9 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
           : [{ slot: "isolation", patterns: ["isolation"] }];
       let best: { c: Candidate; slot: Slot; sets: number } | null = null;
       for (const t of tries) {
-        const sc = schemeFor(t.slot, strength, g);
+        const sc = schemeFor(t.slot, strength, g, training);
         const sets = sc.range[0];
-        const accept = (c: Candidate) => capOk(i, c, sets) && pushOk(c, sets) && fits(i, (sc.rest + SET_WORK_SEC) * sets);
+        const accept = (c: Candidate) => capOk(i, c, sets) && pushOk(c, sets) && weekOk(c, sets);
         const c = pickFor(i, { patterns: t.patterns, group: g, slot: t.slot, dayIds, noHeavyHinge: true, roleOf, accept, seed: input.seed, gain, mix });
         if (!c) continue;
         if (!best || compareKeys(preference(c, { gain, mix }), preference(best.c, { gain, mix })) < 0) best = { c, slot: t.slot, sets };
@@ -471,11 +482,11 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
       for (const x of d.exercises) {
         const c = byId.get(x.exercise_id);
         if (!c || !growable(x) || !PULL.includes(c.ex.pattern ?? "")) continue;
-        if (capOk(i, c, 1) && fits(i, x.rest_sec + SET_WORK_SEC)) options.push({ key: [0, i], act: () => (x.sets += 1) });
+        if (capOk(i, c, 1) && weekOk(c, 1)) options.push({ key: [0, i], act: () => (x.sets += 1) });
       }
       const dayIds = new Set(d.exercises.map((x) => x.exercise_id));
-      const sc = schemeFor("accessory", strength, "back");
-      const accept = (c: Candidate) => capOk(i, c, sc.range[0]) && fits(i, (sc.rest + SET_WORK_SEC) * sc.range[0]);
+      const sc = schemeFor("accessory", strength, "back", training);
+      const accept = (c: Candidate) => capOk(i, c, sc.range[0]) && weekOk(c, sc.range[0]);
       const q: PickQuery = { patterns: ["h_pull", "v_pull"], group: "back", slot: "accessory", dayIds, roleOf, accept, seed: input.seed, gain, mix };
       const c = clashOk ? pick(pool, q) : pickFor(i, q);
       if (c) options.push({ key: [1, i], act: () => days[i].exercises.push(entry(c, "accessory", sc.range[0])) });
@@ -614,10 +625,10 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
       for (const slot of ["isolation", "core", "accessory"] as const) {
         const groups = [...new Set(pool.filter((c) => c.regions.includes(r) && regionSlots(c).includes(slot) && dayTrains(d.kind, c.group)).map((c) => c.group))];
         for (const g of groups) {
-          const sc = schemeFor(slot, strength, g);
+          const sc = schemeFor(slot, strength, g, training);
           const n = Math.min(sc.range[1], Math.max(sc.range[0], sets ?? sc.range[0]));
           const alone = (c: Candidate) => !only || c.regions.every((o) => o === r || regionFamily(o) !== regionFamily(r));
-          const accept = (c: Candidate) => alone(c) && regionSlots(c).includes(slot) && capOk(i, c, n) && pushCovered(c, n) && fits(i, (sc.rest + SET_WORK_SEC) * n);
+          const accept = (c: Candidate) => alone(c) && regionSlots(c).includes(slot) && capOk(i, c, n) && pushCovered(c, n) && weekOk(c, n);
           const c = pickFor(i, { group: g, slot, dayIds, noHeavyHinge: true, roleOf, accept, seed: input.seed, region: r, mix, rank: (o) => [missing(o)] });
           if (!c) continue;
           const load = isTargetGroup(g) ? (dayLoad(d, exMap).get(g as TargetGroup) ?? 0) : d.exercises.filter((x) => byId.get(x.exercise_id)?.group === g).length;
@@ -652,7 +663,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
         const clash = noClash(i, x);
         const slots: Slot[] = x.slot === "isolation" || x.slot === "core" ? [x.slot] : [x.slot, "isolation"];
         for (const slot of slots) {
-          const sc = schemeFor(slot, strength, old.group);
+          const sc = schemeFor(slot, strength, old.group, training);
           const sets = Math.min(sc.range[1], Math.max(sc.range[0], x.sets));
           const moved = (c: Candidate, pats: readonly string[]) => (pats.includes(c.ex.pattern ?? "") ? sets : 0) - (pats.includes(old.ex.pattern ?? "") ? x.sets : 0);
           const accept = (c: Candidate) =>
@@ -661,7 +672,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
             (roleOf(c.ex.id) ?? slot) === slot &&
             capOkWithout(i, x, c) &&
             floorsKept(x, c, sets) &&
-            daySeconds(d) - (x.rest_sec + SET_WORK_SEC) * x.sets + (sc.rest + SET_WORK_SEC) * sets <= limitSec &&
+            weekOk(c, sets, x) &&
             push + moved(c, PUSH) - pull - moved(c, PULL) <= Math.max(0, push - pull);
           const c = pick(pool, { group: old.group, slot, dayIds, noHeavyHinge: x.slot !== "secondary", roleOf: () => undefined, accept, seed: input.seed, region: r, mix });
           if (!c) continue;
@@ -676,8 +687,8 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
     return true;
   };
 
-  // 2. The rear-delt minimum (a hard rule) before any other work takes the time; at short sessions a lower-tier
-  //    exercise makes room for it. Then the big groups to their floors and targets.
+  // 2. The rear-delt minimum (a hard rule) first; when a session cap leaves no room, a lower-tier exercise makes room
+  //    for it. Then the big groups to their floors and targets.
   for (let guard = 0; guard < 40 && planned().rear_delts < REAR_DELT_MIN; guard++) {
     if (addFor("rear_delts")) continue;
     const i = days.findIndex((d) => DAY_GROUPS[d.kind].includes("rear_delts") && trimmable(d));
@@ -704,9 +715,9 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
         // so the week's direct sets reach the target).
         const grow = days
           .flatMap((d, i) => d.exercises.map((x) => ({ x, i })))
-          .find(({ x, i }) => {
+          .find(({ x }) => {
             const c = byId.get(x.exercise_id);
-            return c && c.group === g && c.regions.includes(r) && x.sets < x.set_range[1] && fits(i, x.rest_sec + SET_WORK_SEC);
+            return c && c.group === g && c.regions.includes(r) && x.sets < x.set_range[1] && weekOk(c, 1);
           });
         if (grow) grow.x.sets += 1;
         else if (!addRegion(r, need, true)) break;
@@ -725,13 +736,10 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
   fill(TARGET_GROUPS);
   trimExcess();
 
-  // 7. Fit every day into the session length.
-  days.forEach((d, i) => {
-    for (let guard = 0; guard < 80 && dayMinutes(d) > input.session_minutes; guard++) if (!trim(i)) break;
-  });
+  // 7. No day is cut for time (SPEC-v12 M15 §1).
 
-  // Short sessions can leave rear delts under the minimum with no time for more work: a pull secondary or accessory
-  // without rear-delt work becomes the best pull of the same pattern and primary muscle that has it (the editor's swap rule).
+  // The caps can leave rear delts under the minimum with no room for more work: a pull secondary or accessory without
+  // rear-delt work becomes the best pull of the same pattern and primary muscle that has it (the editor's swap rule).
   for (const d of days) {
     for (const x of d.exercises) {
       if (planned().rear_delts >= REAR_DELT_MIN) break;
@@ -771,7 +779,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
         // Never at the cost of a region's last main-focus exercise.
         const cov = covered();
         if (regionsOf(x.exercise_id).some((r) => (cov.get(r) ?? 0) < 2 && !c.regions.includes(r))) continue;
-        const sc = schemeFor(x.slot, strength, c.group);
+        const sc = schemeFor(x.slot, strength, c.group, training);
         const sets = Math.min(sc.range[1], Math.max(sc.range[0], x.sets));
         if (!floorsKept(x, c, sets)) continue;
         Object.assign(x, entry(c, x.slot, sets));
@@ -797,7 +805,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
     }
   }
 
-  const plan: Plan = { style, days_per_week: input.days_per_week, session_minutes: input.session_minutes, days };
+  const plan: Plan = { style, days_per_week: input.days_per_week, days };
   const check = checkPlan(plan, exMap, targets, { block });
   for (const u of unfilled) check.warnings.push({ code: "unfilled", message: `No exercise for ${u} with this equipment and avoid list.` });
   if (sameDays) days.forEach((d, i) => allNew(i) && check.warnings.push({ code: "day_all_new", message: `${d.name_en} changes its main lift and all its other exercises at once.`, day: i }));
@@ -834,17 +842,17 @@ export function planFromEdits(params: GeneratorInput, days: readonly { exercises
   const layout = LAYOUTS[style][params.days_per_week];
   if (days.length !== layout.length) throw new GeneratorInputError(`This style has ${layout.length} days.`);
   const strength = style === "strength";
+  const training = params.goals?.training ?? null;
   return {
     style,
     days_per_week: params.days_per_week,
-    session_minutes: params.session_minutes,
     days: layout.map((l, i) => ({
       name_en: l.name,
       kind: l.kind,
       offset: l.offset,
       exercises: days[i].exercises.map((x) => {
-        const sc = schemeFor(x.slot, strength, groupOf(ex?.get(x.exercise_id)?.muscle_primary));
-        const reps = x.is_time ? HOLD_SECONDS : sc.reps;
+        const sc = schemeFor(x.slot, strength, groupOf(ex?.get(x.exercise_id)?.muscle_primary), training);
+        const reps = x.is_time ? holdSeconds(training) : sc.reps;
         return {
           exercise_id: x.exercise_id,
           slot: x.slot,

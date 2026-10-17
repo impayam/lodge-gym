@@ -30,6 +30,8 @@ import { isCategory } from "./lib/category";
 import { REGIONS, isRegion } from "./lib/regions";
 import { programRotation } from "./lib/rotation";
 import { readPlans } from "./plans";
+import { readGoals, readMeasurements } from "./body";
+import { BODY_GOALS, TRAINING_GOALS } from "./lib/goals";
 import { queueAfterSession, reportsMayBeReady } from "./aiReports";
 import { ID_RE, ulid } from "./lib/ulid";
 
@@ -318,8 +320,18 @@ const settingsSchema = z
     timezone: z.string().max(64).refine(isValidTimeZone, "timezone"),
     rest_between_sets_sec: z.number().int().refine((n) => (REST_BETWEEN_SETS_CHOICES as readonly number[]).includes(n), "rest_between_sets_sec"),
     rest_next_exercise_sec: z.number().int().refine((n) => (REST_NEXT_EXERCISE_CHOICES as readonly number[]).includes(n), "rest_next_exercise_sec"),
+    // SPEC-v12 M15 §2.1 (option A, approved 2026-10-17): the goal as three settings keys. A new goal sets all three.
+    goal_training: z
+      .array(z.enum(TRAINING_GOALS))
+      .min(1)
+      .max(2)
+      .refine((t) => new Set(t).size === t.length, "duplicate goal"),
+    goal_body: z.enum(BODY_GOALS),
+    /** When it was saved on the phone (it may reach the server later, from the outbox). */
+    goal_set_at: iso,
   })
-  .partial();
+  .partial()
+  .refine((b) => (b.goal_training === undefined) === (b.goal_body === undefined), "goal_training and goal_body go together");
 
 /* ---------------- routes ---------------- */
 
@@ -332,7 +344,7 @@ dataRoutes.get("/bootstrap", async (c) => {
   const to = addDays(today, 1);
   // Every session is read once: the rotation status (Phase B) counts weeks since an exercise entered the program; the
   // app gets the last 60 days.
-  const [{ program, other_days }, versions, exercises, allSessions, watch, body, review, plans, calendar] = await Promise.all([
+  const [{ program, other_days }, versions, exercises, allSessions, watch, body, review, plans, calendar, goals, measurements] = await Promise.all([
     readProgram(c.env),
     readProgramVersions(c.env),
     readExercises(c.env),
@@ -342,23 +354,29 @@ dataRoutes.get("/bootstrap", async (c) => {
     readLatestReview(c.env),
     readPlans(c.env, from, to),
     readCalendar(c.env, today, from),
+    readGoals(c.env),
+    readMeasurements(c.env),
   ]);
   const programs: ProgramInfo[] = versions.map(({ days: _days, ...info }) => info);
   const sessions = allSessions.filter((s) => s.local_date >= from && s.local_date <= to);
   const rotation = programRotation({ settings, program, programs: versions, exercises, sessions: allSessions }, today);
-  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, calendar, rotation, server_time: nowISO() };
+  const payload: Bootstrap = { settings, program, other_days, programs, exercises, sessions, watch, body, review, plans, calendar, rotation, goals, measurements, server_time: nowISO() };
   return c.json(payload);
 });
 
 dataRoutes.put("/settings", async (c) => {
   const body = await readJson(c, settingsSchema);
-  const stmts = Object.entries(body).map(([k, v]) =>
-    c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(k, String(v))
+  const values: Record<string, string> = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, Array.isArray(v) ? JSON.stringify(v) : String(v)]));
+  // A goal saved without its time is stamped now. Saving a goal never changes the program (SPEC-v12 §2.3).
+  if (body.goal_training && !body.goal_set_at) values.goal_set_at = nowISO();
+  const stmts = Object.entries(values).map(([k, v]) =>
+    c.env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(k, v)
   );
   if (stmts.length) await c.env.DB.batch(stmts);
   // Reminders are set in local time: a new time zone moves them.
   if (body.timezone !== undefined) await syncAllReminders(c.env, new URL(c.req.url).origin);
-  return c.json({ ok: true, settings: await readSettings(c.env) });
+  const [settings, goals] = await Promise.all([readSettings(c.env), readGoals(c.env)]);
+  return c.json({ ok: true, settings, goals });
 });
 
 dataRoutes.get("/sessions", async (c) => {

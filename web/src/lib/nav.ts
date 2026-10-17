@@ -1,11 +1,13 @@
-// Navigation model (SPEC-v8 §5): five tabs, screens pushed on top of a tab, and where Back goes. Pure, unit-tested.
+// Navigation model (SPEC-v8 §5; SPEC-v12 M15 §3.0): four tabs (Train, History, Library, Profile), screens pushed on top
+// of a tab, and where Back goes. Pure, unit-tested.
 
 export type ViewName =
   | "home"
   | "history"
   | "library"
-  | "reports"
-  | "me"
+  | "profile"
+  | "goal"
+  | "sizes"
   | "program"
   | "settings"
   | "ai"
@@ -21,18 +23,17 @@ export type ViewName =
   | "coach"
   | "calendar";
 
-/** The five tabs, each named after its root screen. */
-export type TabName = "home" | "history" | "library" | "reports" | "me";
+/** The four tabs, each named after its root screen (Reports and Me became Profile, Payam 2026-10-17). */
+export type TabName = "home" | "history" | "library" | "profile";
 
 export const TABS: readonly { name: TabName; label: string }[] = [
   { name: "home", label: "Train" },
   { name: "history", label: "History" },
   { name: "library", label: "Library" },
-  { name: "reports", label: "Reports" },
-  { name: "me", label: "Me" },
+  { name: "profile", label: "Profile" },
 ];
 
-/** The tab bar indicator's position (0–4). */
+/** The tab bar indicator's position (0–3). */
 export function tabIndex(tab: TabName): number {
   return TABS.findIndex((t) => t.name === tab);
 }
@@ -52,16 +53,19 @@ export function tabAfter(view: ViewName, current: TabName): TabName {
  */
 export function backTarget(view: ViewName, tab: TabName): ViewName | null {
   switch (view) {
+    // Profile's gear list (Program, Planner, Photos, Settings), Set goal and the sizes list.
     case "program":
     case "settings":
+    case "photos":
+    case "goal":
+    case "sizes":
+      return "profile";
     case "ai":
     case "backup":
-    case "photos":
-      return "me";
     case "watch":
     case "newprogram":
       return "settings";
-    // A saved report opens from All reports, which opens from Reports.
+    // A saved report opens from All reports, which opens from Profile or History.
     case "saved":
       return "allreports";
     case "allreports":
@@ -80,7 +84,7 @@ export function showsTabBar(view: ViewName): boolean {
   return view !== "session" && view !== "coach";
 }
 
-/** The Coach button (at the right end of the tab bar) sits on the five tab screens only. */
+/** The Coach button (at the right end of the tab bar) sits on the four tab screens only. */
 export function showsCoachButton(view: ViewName): boolean {
   return isTabRoot(view);
 }

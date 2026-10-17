@@ -1,7 +1,7 @@
 // The coach's program draft (SPEC-v9 M12 §4, propose_program, approved 2026-10-15): validated with Zod, exercise ids
 // not in the library (or archived) dropped and reported back to the model, and the draft's own weekly sets against the
 // current targets. Nothing is stored by the tool: "Add to Planner" saves the cleaned draft as an inactive program
-// (generated_by 'coach') under Me → Program → Drafts; approving it stays a separate tap there.
+// (generated_by 'coach') under Profile → Program → Drafts; approving it stays a separate tap there.
 
 import { z } from "zod";
 import { checkPlan, dayMinutes, groupName, type Plan } from "../generator/check";
@@ -161,7 +161,6 @@ function draftChecks(days: CleanDraft["days"], ex: ReadonlyMap<string, Exercise>
   const plan: Plan = {
     style: "full_body", // read only by checks a draft skips
     days_per_week: days.length,
-    session_minutes: Number.POSITIVE_INFINITY, // drafts get no length warning
     days: days.map((day, i) => ({
       name_en: day.name,
       kind: "full",

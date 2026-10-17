@@ -27,7 +27,6 @@ beforeAll(async () => {
 const inputs = (over: Partial<GeneratorInput> = {}): GeneratorInput => ({
   days_per_week: 3,
   style: "full_body",
-  session_minutes: 60,
   priority_muscles: ["chest"],
   avoid: [],
   equipment: "full_gym",
@@ -89,7 +88,6 @@ describe("generate, save a draft, approve, re-activate (SPEC-v2 §8.6)", () => {
     expect(p.days[0].exercises[0]).toMatchObject({ slot: "main", target_rir_min: 1, target_rir_max: 3 });
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM programs").first<{ n: number }>())?.n).toBe(before?.n);
     expect((await client.post("/api/programs/generate", inputs({ style: "ppl", days_per_week: 4 }))).status).toBe(400);
-    expect((await client.post("/api/programs/generate", inputs({ session_minutes: 50 as 45 }))).status).toBe(400);
     expect((await client.post("/api/programs/generate", { ...inputs(), equipment: "bodyweight" })).status).toBe(400);
     expect((await client.post("/api/programs/generate", inputs({ style: "strength", equipment: "dumbbells" }))).status).toBe(400);
   });

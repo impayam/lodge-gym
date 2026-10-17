@@ -114,7 +114,7 @@ function DaysList({ days, minutes }: { days: ProgramDay[]; minutes?: number[] })
   );
 }
 
-/** The program draft card: Add to Planner saves it under Me → Program → Drafts; Change asks the coach for changes. */
+/** The program draft card: Add to Planner saves it under Profile → Program → Drafts; Change asks the coach for changes. */
 function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { input: Draft; result: DraftResult; messageId: string; toolUseId: string; onChange: () => void; onAdd: (m: string, t: string) => Promise<unknown> }) {
   const [state, setState] = useState<"idle" | "busy" | "added">("idle");
   const [problem, setProblem] = useState<string | null>(null);
@@ -154,7 +154,7 @@ function DraftCard({ input, result, messageId, toolUseId, onChange, onAdd }: { i
         {result.dropped.length ? <span class="caption">Left out (not in the library): {result.dropped.map((x) => x.exercise_id).join(", ")}</span> : null}
         {state === "added" ? (
           <div class="l-row l-between l-gap-8" data-testid="coach-draft-added">
-            <span class="caption">Added to Me → Program → Drafts.</span>
+            <span class="caption">Added to Profile → Program → Drafts.</span>
             <button type="button" class="clay press btn-sm t-pink" data-testid="coach-open-drafts" onClick={() => navigate("program")}>
               Open
             </button>
@@ -445,7 +445,7 @@ type ExerciseChange = {
  * One more exercise for a day (Payam, 2026-10-16): only the change ("Day 1 · Chest: + Butterfly", 3 × 10–15 after
  * Seated Cable Row, the weight from the app's progression), what it causes under Worth knowing, and two buttons, the
  * one he asked for first. Only this session takes the propose_session_additions path (a session open today, else
- * that day's plan, in the same place); Whole program saves the app's draft under Me → Program → Drafts. The reason is
+ * that day's plan, in the same place); Whole program saves the app's draft under Profile → Program → Drafts. The reason is
  * in the coach's text only, so it is said once.
  */
 function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: ExerciseChange; messageId: string; toolUseId: string; onAdd: (m: string, t: string) => Promise<unknown> }) {
@@ -538,7 +538,7 @@ function ExerciseCard({ result, messageId, toolUseId, onAdd }: { result: Exercis
   );
   const programDone = (
     <div class="l-row l-between l-gap-8" data-testid="coach-exercise-program-added">
-      <span class="caption">Added to Me → Program → Drafts.</span>
+      <span class="caption">Added to Profile → Program → Drafts.</span>
       <button type="button" class="clay press btn-sm t-pink" onClick={() => navigate("program")}>
         Open
       </button>

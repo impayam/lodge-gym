@@ -2,6 +2,8 @@
 // Weights are stored in the unit they were entered in (session unit) and converted only here, to the
 // settings unit.
 
+import type { Goals } from "./goals";
+import type { BodyMeasurement } from "./measurements";
 import { addDays, localDate } from "./time";
 import { countsVolume } from "./category";
 import { groupOf, REPORT_GROUPS, setContribution, TARGET_GROUPS } from "./muscles";
@@ -40,6 +42,9 @@ export interface ReportData {
   photos: Photo[];
   /** Every program with its days and activations (SPEC-v2 §8.6). Without it, every week is scored against `program`. */
   programs?: ProgramVersion[];
+  /** SPEC-v12 M15: the goal (settings keys) and the body sizes, for Profile, the Coach and the AI reports. */
+  goals?: Goals | null;
+  measurements?: BodyMeasurement[];
 }
 
 /** A program and the sessions per week it plans. */

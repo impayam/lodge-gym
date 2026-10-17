@@ -1,4 +1,4 @@
-// Program check (SPEC-v2 §8.4, §8.6): weekly volume, session length, hard-rule violations and soft warnings for a
+// Program check (SPEC-v2 §8.4, §8.6): weekly volume, day lengths (information), hard-rule violations and soft warnings for a
 // plan. The generator runs it on every proposal; the proposal editor runs it after every edit, and the server runs it
 // again before saving and approving. Hard-rule violations block approval; warnings do not.
 
@@ -18,6 +18,7 @@ import {
   SET_WORK_SEC,
   STYLE_NAME,
   WARMUP_SEC,
+  WEEKLY_CAP,
   type DayKind,
   type ResolvedStyle,
   type Slot,
@@ -51,7 +52,6 @@ export interface PlanDay {
 export interface Plan {
   style: ResolvedStyle;
   days_per_week: number;
-  session_minutes: number;
   days: PlanDay[];
 }
 
@@ -282,9 +282,8 @@ export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets
     else if (band === "under" || band === "none") warnings.push({ code: "under_target", message: `${groupName(v.group)}: ${fmt(v.planned)} of ${fmt(v.target)} target sets.` });
     else if (band === "over") warnings.push({ code: "over_target", message: `${groupName(v.group)}: ${fmt(v.planned)} of ${fmt(v.target)} target sets.` });
   }
-  minutes.forEach((mins, i) => {
-    if (mins > plan.session_minutes) warnings.push({ code: "too_long", message: `${days[i].name_en}: about ${mins} min, longer than ${plan.session_minutes} min.`, day: i });
-  });
+  // Day length is information only (SPEC-v12 M15 §1); the weekly limit is volume.
+  for (const v of volume) if (v.planned > WEEKLY_CAP + 1e-9) warnings.push({ code: "weekly_cap", message: `${groupName(v.group)}: ${fmt(v.planned)} sets a week, above ${WEEKLY_CAP}, where more sets add little.` });
 
   // Phase B (approved 2026-10-17): every block covers every region; a day never has two exercises with the same
   // main-focus region and the same equipment; forearms and neck get their direct sets. Advice, never a block.

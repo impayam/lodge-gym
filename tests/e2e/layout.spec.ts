@@ -12,11 +12,11 @@ test.describe.configure({ mode: "serial" });
 const BAR_BOTTOM = 10;
 const FAB_BOTTOM = 16;
 
-const TABS = ["Train", "History", "Library", "Reports", "Me"] as const;
+const TABS = ["Train", "History", "Library", "Profile"] as const;
 
 const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
 
-/** Four weeks of sessions, so History and Reports are long enough to scroll. */
+/** Four weeks of sessions, so History and Profile are long enough to scroll. */
 async function seedSessions(page: Page, baseURL: string) {
   const now = Date.now();
   for (let w = 3; w >= 0; w--) {
@@ -118,7 +118,7 @@ test("the tab bar and the Coach button stay at the bottom while each tab scrolls
   }
 });
 
-/** Opens a screen; the ones not in the tab bar or Me are reached through their parent screen. */
+/** Opens a screen; the ones not in the tab bar or Profile's gear are reached through their parent screen. */
 async function open(page: Page, screen: Place | "Planner" | "Apple Watch" | "New program") {
   if (screen === "Planner") {
     await goTo(page, "Train");
@@ -141,7 +141,7 @@ test("every long screen ends with its last control fully above the tab bar and c
   await seedSessions(page, baseURL!);
   await page.reload();
   await expect(page.getByTestId("next-card")).toBeVisible();
-  const screens = [...TABS, "Settings", "Program", "Photos", "AI reports", "Backup", "Planner", "Apple Watch", "New program"] as const;
+  const screens = [...TABS, "Reports", "Settings", "Program", "Photos", "AI reports", "Backup", "Planner", "Apple Watch", "New program"] as const;
   for (const screen of screens) {
     await open(page, screen);
     await page.waitForTimeout(1000);

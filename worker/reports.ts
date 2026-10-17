@@ -7,11 +7,13 @@ import { fail } from "./http";
 import { monthKeyOf, monthRange, monthlyReport, progressReport, setsCsv, weeklyReport, type ReportData } from "./lib/reports";
 import { DATE_RE, localDate } from "./lib/time";
 import { weekRange } from "./lib/cycle";
+import { profile } from "./lib/profile";
+import { readGoals, readMeasurements } from "./body";
 import type { HealthWorkout, Photo } from "./lib/types";
 
 export async function loadReportData(env: Env): Promise<ReportData> {
   const settings = await readSettings(env);
-  const [{ program }, programs, exercises, sessions, watch, body, photos] = await Promise.all([
+  const [{ program }, programs, exercises, sessions, watch, body, photos, goals, measurements] = await Promise.all([
     readProgram(env),
     readProgramVersions(env),
     readExercises(env),
@@ -23,8 +25,10 @@ export async function loadReportData(env: Env): Promise<ReportData> {
     ).all<HealthWorkout>(),
     readBodyMetrics(env, "0000-01-01", "9999-12-31"),
     env.DB.prepare("SELECT id, session_id, local_date, pose, width, height, bytes, created_at FROM photos").all<Photo>(),
+    readGoals(env),
+    readMeasurements(env),
   ]);
-  return { settings, program, programs, exercises, sessions, watch: watch.results, body, photos: photos.results };
+  return { settings, program, programs, exercises, sessions, watch: watch.results, body, photos: photos.results, goals, measurements };
 }
 
 const csv = (body: string, name: string) =>
@@ -59,4 +63,12 @@ reportRoutes.get("/month", async (c) => {
 reportRoutes.get("/progress", async (c) => {
   const d = await loadReportData(c.env);
   return c.json(progressReport(d, localDate(d.settings.timezone)));
+});
+
+/** GET /api/profile (SPEC-v12 M15 §3, §5): the after-session line, the Living Diamond and the body goal line. */
+export const profileRoutes = new Hono<AppBindings>();
+
+profileRoutes.get("/", async (c) => {
+  const d = await loadReportData(c.env);
+  return c.json(profile({ ...d, goals: d.goals ?? null, measurements: d.measurements ?? [] }, localDate(d.settings.timezone)));
 });

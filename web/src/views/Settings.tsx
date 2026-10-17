@@ -12,7 +12,7 @@ import { activeProgramInfo, programName, styleLabel } from "../model";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
 import { deviceLabel, registerPasskey } from "../passkey";
-import { IconChevron, IconWatch } from "../components/PulseIcons";
+import { IconChevron, IconDownload, IconSpark, IconWatch } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
 import { LoadError, Loading } from "../components/States";
@@ -49,7 +49,7 @@ export function Settings() {
 
   return (
     <main class="page" data-testid="settings">
-      <ScreenHead title="Settings" sub="Me" />
+      <ScreenHead title="Settings" sub="Profile" />
       <section class="card l-col l-gap-14" aria-label="General">
         <div class="form-field">
           <span class="form-field__label" id="s-unit">
@@ -136,6 +136,35 @@ export function Settings() {
           <span class="list-row__text">
             <span class="t-title">Apple Watch</span>
             <span class="caption">Token, shortcut setup, latest watch data</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+      </section>
+
+      {/* Profile's gear lists Program, Planner, Photos and Settings (Payam, 2026-10-17): AI reports and Backup open from here. */}
+      <h2 class="section-label">AI and data</h2>
+      <section class="card card--list" aria-label="AI and data">
+        <button type="button" class="list-row press" data-testid="open-ai" onClick={() => navigate("ai")}>
+          <span class="well icon-well t-violet">
+            <IconSpark />
+          </span>
+          <span class="list-row__text">
+            <span class="t-title">AI reports</span>
+            <span class="caption">Model, this month's cost, the API key status</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+        <button type="button" class="list-row press" data-testid="open-backup" onClick={() => navigate("backup")}>
+          <span class="well icon-well t-muted">
+            <IconDownload />
+          </span>
+          <span class="list-row__text">
+            <span class="t-title">Backup and export</span>
+            <span class="caption">Weekly copy every Monday</span>
           </span>
           <span class="list-row__chevron">
             <IconChevron size={16} />
@@ -307,7 +336,7 @@ export function AiSettings() {
         <Loading label="Loading this month's AI use" heights={[44, 44, 44]} />
       )}
       <p class="caption l-m0">
-        One Persian report is written after each session: once that day's body weight and the Apple Health workout are in, or 2 hours after the session ends; Write report now writes it at once. Every report is in Reports, with its cost. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
+        One Persian report is written after each session: once that day's body weight and the Apple Health workout are in, or 2 hours after the session ends; Write report now writes it at once. Every report is on Profile, with its cost. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
     </section>
   );

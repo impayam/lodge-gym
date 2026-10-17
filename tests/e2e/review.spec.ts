@@ -53,7 +53,7 @@ test("weekly reviews sit on the reports timeline on the last day of their week a
   await expect(card).toContainText("خواب را به ۷ ساعت برسان");
   await expect(page.getByRole("button", { name: /Regenerate|Retry/ })).toHaveCount(0);
   // The tab bar keeps Reports selected; the back link returns to All reports.
-  await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   await page.getByRole("main").getByRole("button", { name: "Back to All reports" }).click();
   await expect(page.getByTestId("all-reports-screen")).toBeVisible();
 

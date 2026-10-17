@@ -60,7 +60,7 @@ export function Program() {
                     data-testid="program-due-coach"
                     aria-label={`Ask Coach about ${name}`}
                     onClick={() => {
-                      askCoachAbout(dueQuestion(name), { exercise_id: s.exercise_id });
+                      askCoachAbout(dueQuestion(name), { rotation: { exercise_id: s.exercise_id } });
                       navigate("coach");
                     }}
                   >

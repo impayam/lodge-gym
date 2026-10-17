@@ -172,17 +172,35 @@ export async function aiCalls(): Promise<{ calls: number; last: AiCall | null; b
   return (await fetch(`${currentSlot().ai}/__calls`, { headers: { Connection: "close" } })).json() as Promise<{ calls: number; last: AiCall | null; by_kind: Partial<Record<AiCall["kind"], AiCall>> }>;
 }
 
-/** Where goTo can go: a tab, or a screen inside Me (SPEC-v8 §5). */
-export type Place = "Train" | "History" | "Library" | "Reports" | "Me" | "Photos" | "Program" | "Settings" | "AI reports" | "Backup";
-const IN_ME: Partial<Record<Place, string>> = { Photos: "me-add-photo", Program: "me-program", Settings: "me-settings", "AI reports": "me-ai", Backup: "me-backup" };
+/** Where goTo can go: a tab, a screen in Profile's gear list (SPEC-v12 M15 §3.0), one under Settings, or Profile's
+ *  Details (everything the Reports tab held). */
+export type Place = "Train" | "History" | "Library" | "Profile" | "Reports" | "Photos" | "Program" | "Settings" | "AI reports" | "Backup";
+const IN_GEAR: Partial<Record<Place, string>> = { Photos: "gear-photos", Program: "gear-program", Settings: "gear-settings" };
+const IN_SETTINGS: Partial<Record<Place, string>> = { "AI reports": "open-ai", Backup: "open-backup" };
 
-/** Opens a tab from the tab bar, or a screen that moved into Me (Photos, Program, Settings, AI reports, Backup). */
+/** Opens a tab from the tab bar, a screen from Profile's gear, a Settings screen, or Profile's Details (Reports). */
 export async function goTo(page: Page, place: Place) {
   const tab = (name: string) => page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name, exact: true }).click();
-  const inMe = IN_ME[place];
-  if (!inMe) return tab(place);
-  await tab("Me");
-  await page.getByTestId(inMe).click();
+  const gear = async (id: string) => {
+    await tab("Profile");
+    await page.getByTestId("profile-gear").click();
+    const sheet = page.getByTestId("gear-sheet");
+    await expect(sheet).toBeVisible();
+    await settled(sheet);
+    await page.getByTestId(id).click();
+  };
+  if (place === "Reports") {
+    await tab("Profile");
+    const details = page.getByTestId("profile-details");
+    if ((await details.getAttribute("aria-expanded")) !== "true") await details.click();
+    return expect(page.getByTestId("reports")).toBeVisible();
+  }
+  if (IN_GEAR[place]) return gear(IN_GEAR[place]!);
+  if (IN_SETTINGS[place]) {
+    await gear("gear-settings");
+    return page.getByTestId(IN_SETTINGS[place]!).click();
+  }
+  return tab(place);
 }
 
 /* ---------------- active session (SPEC-v8 §6.02): one card at a time (an exercise, or a superset / tri-set) ---------------- */

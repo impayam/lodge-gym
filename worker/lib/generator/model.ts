@@ -6,6 +6,7 @@
 // are never both main lifts of one session, full-body and strength weeks have at most two training days in a row, and
 // split days never repeat a muscle's direct work on back-to-back days.
 
+import { slotGoal, type Goals, type TrainingGoal } from "../goals";
 import { TARGET_GROUPS, type ReportGroup } from "../muscles";
 import type { Pattern } from "../types";
 
@@ -14,7 +15,6 @@ export type TargetGroup = (typeof TARGET_GROUPS)[number];
 export const STYLES = ["auto", "full_body", "upper_lower", "ppl", "ppl_ul", "bro_split", "strength"] as const;
 export type Style = (typeof STYLES)[number];
 export type ResolvedStyle = Exclude<Style, "auto">;
-export const SESSION_MINUTES = [45, 60, 75, 90] as const;
 /** Equipment the generator plans for (decided 2026-10-12: no bodyweight-only option; the library has no bodyweight rear-delt
  *  exercise or compound hinge, so such a week could never meet the hard rules). */
 export const EQUIPMENT_CHOICES = ["full_gym", "dumbbells"] as const;
@@ -25,7 +25,6 @@ export type Slot = (typeof SLOTS)[number];
 export interface GeneratorInput {
   days_per_week: number;
   style: Style;
-  session_minutes: (typeof SESSION_MINUTES)[number];
   priority_muscles: TargetGroup[];
   /** Exercise ids to leave out (an injury, a machine the gym lacks). */
   avoid: string[];
@@ -35,6 +34,10 @@ export interface GeneratorInput {
   /** The block this program starts (SPEC-v11 Phase B): the server sets it to the current program's block + 1 (the seed
    *  program is block 1, A). Older programs have none. */
   block?: number;
+  /** SPEC-v12 M15: the training and body goal when the program was made (the server sets it from the settings). The
+   *  slot schemes follow the training goal; without one they are the Growth schemes. Session length is no input: it
+   *  never limits a program. */
+  goals?: Pick<Goals, "training" | "body"> | null;
 }
 
 /** Allowed days per style (§8.3). */
@@ -204,6 +207,7 @@ export interface Scheme {
   rest: number;
 }
 
+/** The Growth schemes (the slot schemes the app always had); `strength` is the Strength style's. */
 export function scheme(slot: Slot, strength: boolean): Scheme {
   switch (slot) {
     case "main":
@@ -220,23 +224,62 @@ export function scheme(slot: Slot, strength: boolean): Scheme {
 }
 
 /**
+ * The Strength and Endurance schemes (SPEC-v12 M15 §2.2, approved 2026-10-17). Power uses Strength's for the main and
+ * secondary lifts and Growth's for the rest (§2.2: an explosive cue on the main lifts).
+ */
+const GOAL_SCHEMES: Readonly<Record<"strength" | "endurance", Readonly<Record<Slot, Scheme>>>> = {
+  strength: {
+    main: { sets: 4, range: [3, 5], reps: [3, 5], rir: [1, 2], rest: 210 },
+    secondary: { sets: 3, range: [3, 3], reps: [4, 6], rir: [1, 2], rest: 150 },
+    accessory: { sets: 3, range: [2, 3], reps: [6, 10], rir: [1, 2], rest: 120 },
+    isolation: { sets: 2, range: [2, 3], reps: [8, 12], rir: [1, 2], rest: 90 },
+    core: { sets: 3, range: [2, 3], reps: [10, 15], rir: [0, 2], rest: 60 },
+  },
+  endurance: {
+    main: { sets: 3, range: [3, 3], reps: [8, 12], rir: [2, 3], rest: 120 },
+    secondary: { sets: 3, range: [3, 3], reps: [10, 15], rir: [1, 3], rest: 90 },
+    accessory: { sets: 3, range: [2, 3], reps: [15, 20], rir: [0, 2], rest: 60 },
+    isolation: { sets: 3, range: [2, 3], reps: [15, 25], rir: [0, 2], rest: 50 },
+    core: { sets: 3, range: [2, 3], reps: [20, 30], rir: [0, 2], rest: 45 },
+  },
+};
+
+/** The scheme of a slot for a training goal (Growth, or no goal: the app's own schemes, Strength style included). */
+export function goalScheme(slot: Slot, strength: boolean, goal: TrainingGoal | null): Scheme {
+  if (!goal || goal === "growth") return scheme(slot, strength);
+  // The Strength style keeps its barbell main scheme whatever the goal.
+  if (strength && slot === "main") return scheme(slot, true);
+  if (goal === "power") return slot === "main" || slot === "secondary" ? GOAL_SCHEMES.strength[slot] : scheme(slot, strength);
+  return GOAL_SCHEMES[goal][slot];
+}
+
+/**
  * Neck work (Phase B, approved 2026-10-17): it starts light and progresses slowly: 1–3 sets of 15–25 reps with at
  * least 3 reps in reserve, and the smallest weight steps (worker/lib/progression.ts).
  */
 export const NECK_SCHEME: Scheme = { sets: 1, range: [1, 3], reps: [15, 25], rir: [3, 4], rest: 60 };
 
-/** The slot's scheme for an exercise of `group`: neck work has its own. */
-export const schemeFor = (slot: Slot, strength: boolean, group: string | null | undefined): Scheme => (group === "neck" ? NECK_SCHEME : scheme(slot, strength));
+/** The slot's scheme for an exercise of `group` under the training goal: neck work has its own. */
+export const schemeFor = (slot: Slot, strength: boolean, group: string | null | undefined, training?: readonly TrainingGoal[] | null): Scheme =>
+  group === "neck" ? NECK_SCHEME : goalScheme(slot, strength, slotGoal(slot, training));
 
-/** Seconds of a timed core hold, used instead of reps. */
+/** Seconds of a timed core hold, used instead of reps (Endurance core work holds longer). */
 export const HOLD_SECONDS: readonly [number, number] = [30, 45];
+export const holdSeconds = (training?: readonly TrainingGoal[] | null): readonly [number, number] => (slotGoal("core", training) === "endurance" ? [45, 60] : HOLD_SECONDS);
 
-/** Session length estimate (§8.4): (rest + 40 s) × sets for every exercise, plus a 5-minute warm-up. */
+/** Session length estimate (§8.4): (rest + 40 s) × sets for every exercise, plus a 5-minute warm-up. Information only
+ *  (SPEC-v12 M15 §1): the length never limits a program. */
 export const WARMUP_SEC = 300;
 export const SET_WORK_SEC = 40;
 
 /** Per-session cap (§8.4, decided): fractional sets per muscle group in one session. */
 export const SESSION_CAP = 10;
+/**
+ * Weekly cap (SPEC-v12 M15 §1, approved 2026-10-17): fractional sets per muscle group in a week. The limit of a program
+ * is volume, not time: growth keeps rising with weekly sets but with diminishing returns, and the estimates grow
+ * uncertain beyond about 20–30 (Schoenfeld, Ogborn & Krieger 2017; Pelland et al. 2025; Baz-Valle et al. 2022).
+ */
+export const WEEKLY_CAP = 20;
 /** Weekly floors (§8.4) for the big groups. */
 export const FLOORS: Readonly<Partial<Record<TargetGroup, number>>> = { chest: 10, back: 10, quads: 10, hamstrings_glutes: 10 };
 /** Balance rule: rear delts at least this many sets a week in every style. */

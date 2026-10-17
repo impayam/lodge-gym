@@ -1,5 +1,5 @@
-// Progress photos (SPEC §8): add from camera or library with a pose, gallery by date, pose filter,
-// side-by-side compare with the day gap and an optional overlay slider, two-step delete.
+// Progress photos (SPEC §8): add from the in-app guide camera (SPEC-v10.1) or the library with a pose, gallery by date,
+// pose filter, side-by-side compare with the day gap and an optional overlay slider, two-step delete.
 
 import { useEffect, useState } from "preact/hooks";
 import { daysBetween } from "../../../worker/lib/time";
@@ -9,6 +9,7 @@ import { IconCamera } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { SyncStatus } from "../components/SyncStatus";
 import { Empty, isOffline, LoadError, Loading } from "../components/States";
+import { GuideCamera } from "../components/GuideCamera";
 import { addPhoto, deletePhoto, loadPhotos, photoSrc, today, useStore } from "../store";
 
 export const POSES: [Pose, string][] = [
@@ -20,8 +21,9 @@ export const POSES: [Pose, string][] = [
 export const poseLabel = (p: Pose) => POSES.find(([k]) => k === p)?.[1] ?? p;
 
 /** Camera + library pickers for one pose. Used by the gallery and the post-session prompt. */
-export function PhotoPicker({ pose, date, sessionId, onDone, compact }: { pose: Pose; date: string; sessionId: string | null; onDone?: (n: number) => void; compact?: boolean }) {
+export function PhotoPicker({ pose, date, sessionId, onDone, compact, startCamera }: { pose: Pose; date: string; sessionId: string | null; onDone?: (n: number) => void; compact?: boolean; startCamera?: boolean }) {
   const [state, setStatus] = useState("");
+  const [camera, setCamera] = useState(!!startCamera);
   const handle = async (files: FileList | null) => {
     const list = Array.from(files ?? []);
     if (!list.length) return;
@@ -44,41 +46,44 @@ export function PhotoPicker({ pose, date, sessionId, onDone, compact }: { pose: 
       {state}
     </span>
   ) : null;
-  // A clay button holding the file input: the camera for the pose, or (in the gallery) the photo library.
-  const camera = (
-    <label class={`clay press btn btn--fit file-pick l-gap-8 ${compact ? "t-muted" : "t-pink"}`}>
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        data-testid={`camera-${pose}`}
-        onChange={(e) => {
-          const el = e.currentTarget as HTMLInputElement;
-          void handle(el.files).finally(() => (el.value = ""));
+  // The in-app guide camera (SPEC-v10.1) for the pose; in the gallery the photo library too.
+  const cameraButton = (
+    <>
+      <button type="button" class={`clay press btn btn--fit l-gap-8 ${compact ? "t-muted" : "t-pink"}`} data-testid={`camera-${pose}`} onClick={() => setCamera(true)}>
+        <IconCamera size={18} />
+        {compact ? (
+          <>
+            <span class="l-sr">Camera, </span>
+            {poseLabel(pose)}
+          </>
+        ) : (
+          "Camera"
+        )}
+      </button>
+      <GuideCamera
+        open={camera}
+        onClose={() => setCamera(false)}
+        date={date}
+        sessionId={sessionId}
+        pose={pose}
+        onSaved={() => {
+          setStatus("Photo saved and queued for upload.");
+          onDone?.(1);
         }}
       />
-      <IconCamera size={18} />
-      {compact ? (
-        <>
-          <span class="l-sr">Camera, </span>
-          {poseLabel(pose)}
-        </>
-      ) : (
-        "Camera"
-      )}
-    </label>
+    </>
   );
   if (compact)
     return (
       <div class="l-row l-gap-12">
-        {camera}
+        {cameraButton}
         {status}
       </div>
     );
   return (
     <div class="l-col l-gap-8">
       <div class="l-row l-gap-8">
-        {camera}
+        {cameraButton}
         <label class="clay press btn btn--fit file-pick t-muted">
           <input
             type="file"
@@ -174,7 +179,7 @@ function Viewer({ p, onClose }: { p: Photo; onClose: () => void }) {
   );
 }
 
-/** `compare` starts in compare mode; `open` starts with that photo open (both from Me → Progress photos). */
+/** `compare` starts in compare mode; `open` starts with that photo open (both from Profile). */
 export function Photos({ compare = false, open: openFirst }: { compare?: boolean; open?: string }) {
   const photos = useStore((s) => s.photos);
   const pendingIds = useStore((s) => s.pendingPhotos);
@@ -202,7 +207,7 @@ export function Photos({ compare = false, open: openFirst }: { compare?: boolean
 
   return (
     <main class="page" data-testid="photos">
-      <ScreenHead title="Progress photos" sub="Me">
+      <ScreenHead title="Progress photos" sub="Profile">
         {/* New photos wait in the queue until they upload. */}
         <SyncStatus />
       </ScreenHead>

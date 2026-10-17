@@ -64,7 +64,7 @@
 .chip { height: 36px; padding: 0 14px; border-radius: var(--r-pill); font: 600 13px var(--font-ui); }
 .chip[aria-pressed="true"] { background: var(--well); box-shadow: var(--sh-well); color: var(--pink); }
 
-/* ---------- Bottom tab bar: 5 icon-only tabs, floating clay capsule ---------- */
+/* ---------- Bottom tab bar: icon-only tabs (5; 4 with data-tabs="4"), floating clay capsule ---------- */
 .tabbar { position: fixed; left: var(--gutter); right: var(--gutter); bottom: calc(env(safe-area-inset-bottom) + 10px); height: 68px; border-radius: var(--r-nav);
   background: linear-gradient(180deg, var(--clay-top), var(--clay-bottom)); box-shadow: var(--sh-clay);
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; }
@@ -563,3 +563,44 @@ fieldset.form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
   .glow-once { animation: none; }
   .typing__dots > span { animation: none; opacity: 1; }
 }
+
+/* ---------- SPEC-v12 M15 additions (approved by Payam 2026-10-17; existing tokens only) ---------- */
+
+/* Four tabs (Reports and Me became Profile): the capsule and its indicator divide by 4. */
+.tabbar[data-tabs="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tabbar[data-tabs="4"] .tabbar__indicator { width: calc((100% / 4) - 12px); }
+
+/* Profile → My body: the shared 3D body (web/src/components/Body3D.tsx), a little shorter than the picker's stage. */
+.stage--profile { height: clamp(300px, 50svh, 420px); }
+
+/* Body sizes under the body: a pressed-in tile per measure (with .well). */
+.size-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; }
+.size-tile__label { font-size: 11px; color: var(--ink-3); }
+.size-tile__value { font: 600 20px var(--font-num); line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.size-tile__value small { font: 600 12px var(--font-ui); color: var(--violet-ink); }
+.size-tile__value small[data-down="true"] { color: var(--orange); }
+
+/* The goal diamond (the Living Diamond on Profile, the picker on Set goal). SVG; colours from the tokens. */
+.diamond { display: block; width: 100%; max-width: 330px; margin: 0 auto; overflow: visible; touch-action: manipulation; }
+.diamond__axis { stroke: var(--gridline); stroke-width: 1; }
+.diamond__full { fill: none; stroke: var(--divider); stroke-width: 1; }
+.diamond__ghost { fill: none; stroke: var(--ink-decor); stroke-width: 1.5; stroke-dasharray: 5 5; }   /* non-text decor */
+.diamond__now { fill: color-mix(in srgb, var(--violet) 24%, transparent); stroke: var(--violet); stroke-width: 2; stroke-linejoin: round; }
+.diamond__glow { fill: color-mix(in srgb, var(--pink) 18%, transparent); stroke: none; }
+.diamond__corner { fill: var(--clay-top); stroke: var(--ink-3); stroke-width: 2; }
+.diamond__corner[data-on="true"] { fill: var(--pink); stroke: var(--pink); filter: drop-shadow(0 0 7px var(--pink)); animation: diamond-pulse 2.4s var(--ease-out) infinite; }
+.diamond__corner[data-nodata="true"] { stroke-dasharray: 3 3; }
+.diamond__hit { fill: transparent; cursor: pointer; }
+.diamond__hit:focus-visible { outline: none; stroke: var(--pink); stroke-width: 2; }
+.diamond__label { font: 600 12px var(--font-ui); fill: var(--ink-2); }
+.diamond__label[data-on="true"] { fill: var(--ink); }
+.diamond__value { font: 600 15px var(--font-num); fill: var(--ink); font-variant-numeric: tabular-nums; }
+.diamond__value[data-muted="true"] { fill: var(--ink-3); font: 600 12px var(--font-ui); }
+.diamond__center { font: 700 11px var(--font-ui); fill: var(--pink); letter-spacing: .04em; }
+.diamond__center-sub { font: 600 12px var(--font-ui); fill: var(--ink-2); }
+.diamond__center-bg { fill: var(--well); }
+@keyframes diamond-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .diamond__corner[data-on="true"] { animation: none; } }
+
+/* Set goal: the picker's corners are 44 pt buttons; the chips below do the same (accessible alternative). */
+.diamond--pick .diamond__corner { stroke-width: 2.5; }

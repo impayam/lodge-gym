@@ -182,12 +182,13 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 ## Training styles and program generator (SPEC-v2 M8)
 
 - Settings → Program → New program: days per week, style (auto, full body, upper/lower, PPL, PPL + upper/lower, bro
-  split, strength), session length, priority muscles, exercises to leave out, and full gym or dumbbells only.
+  split, strength), priority muscles, exercises to leave out, and full gym or dumbbells only. The slot schemes follow
+  the goal set on Profile (SPEC-v12 M15); session length is information only and never limits a program.
 - The generator (`worker/lib/generator/`, pure and seeded) fills each style's fixed weekly layout: main and secondary
   lifts first, then accessories and isolation toward the weekly targets (the current program's fractional volume, +3
   for added priority muscles, floors of 10 for chest, back, quads and hamstrings & glutes), with at most 10 fractional
-  sets per muscle per session, rear delts ≥ 6, pull ≥ push, at least one hinge and one squat, and every day inside
-  the session length. Exercise choice prefers history, then the current program, then compound, then
+  sets per muscle per session and 20 per week, rear delts ≥ 6, pull ≥ push, at least one hinge and one squat; no day
+  is cut for time. Exercise choice prefers history, then the current program, then compound, then
   beginner/intermediate; one exercise keeps one role a week; Olympic-style lifts are never picked automatically.
 - `checkPlan` (`check.ts`) is shared by the generator, the editor on the phone and the server: hard-rule violations
   block approval, warnings (floors, under/over target, long days, frequency) do not.
@@ -202,12 +203,31 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   replaces a doubled one; the triceps long head counts only with an overhead extension), no day has two exercises with
   the same main-focus region and equipment, and forearms and
   neck get their weekly direct sets (4 and 2 in the first block, +1 per block, up to 8 and 6; neck 15–25 reps, 3–4 RIR,
-  the smallest load step). New program defaults to 75 minutes, the length the 30 regions need on 4 days. The proposal
+  the smallest load step). The proposal
   shows the block, its region coverage and "replaces X: N weeks". The Program screen lists due exercises (at most 3)
   with an Ask Coach button.
-- Tests: property tests over every style × days × session length × 50 seeds on the real library
+- Tests: property tests over every style × days × goal × 50 seeds on the real library
   (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
   ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
+
+## Goals, Profile and body sizes (SPEC-v12 M15, decisions by Payam 2026-10-17)
+
+- Four tabs: Train, History, Library, Profile (Reports and Me merged into Profile). The gear on Profile lists Program,
+  Planner, Photos and Settings; AI reports and Backup open from Settings.
+- Goals: a training goal of one or two of Growth, Strength, Endurance, Power and a body goal of Gain, Maintain or Cut,
+  stored as the settings keys `goal_training`, `goal_body`, `goal_set_at` (`PUT /api/settings`, offline through the
+  outbox). The generator's slot schemes follow the goal (`worker/lib/goals.ts`, `goalScheme` in
+  `worker/lib/generator/model.ts`); saving a goal never changes the program. Set goal offers "Ask Coach for a program
+  for this goal" (the Coach's CONTEXT block says so; its draft needs approval as before).
+- Profile: the line after the last session, My body (the shared 3D body `web/src/components/Body3D.tsx`, today pink,
+  this week violet, the rest dark; sizes; the body goal's pace), My goal (the Living Diamond from `GET /api/profile`,
+  `worker/lib/profile.ts`; Power always shows 0 and "No data"), This week, AI reports, Before · After, Details (the old
+  Reports: Week, Month, All).
+- Body sizes: `body_measurements` (migration 0014), `PUT`/`DELETE /api/body/measurements/:id`, Log sizes and All sizes
+  on Profile. The Coach reads them with `get_body`.
+- Photos: the in-app guide camera (SPEC-v10.1, `web/src/components/GuideCamera.tsx`): outline with head and feet lines
+  per pose, ghost of the last photo, level from the motion sensor, timer and burst of 3, settings remembered per pose.
+  No on-device pose detection.
 
 ## Body-map exercise picker (SPEC-v3 M9b, 3D model SPEC-v6)
 

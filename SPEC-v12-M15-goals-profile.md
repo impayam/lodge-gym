@@ -93,3 +93,14 @@ Each corner's length = normalized progress vs a baseline; Claude Code proposes t
 - Plan first (generator changes, Coach prompt changes, UI, migration SQL). STOP for Payam's review before building.
 - Then branch → tests (npm test, typecheck, full e2e) → draft PR with iPhone screenshots → STOP before merge.
 - D1 restore point before merge. No merge, deploy or production migration without Payam's OK.
+
+## 9. Decisions (Payam, 2026-10-17)
+1. Power: always visible, never hidden; its corner shows "0" / "No data" until there is data (a manual "Log a jump" later). Every corner always shows its number, even 0.
+2. Pace: Gain 0.25–0.5 % of body weight a week, Cut 0.5–1 % a week, Maintain within ±0.5 kg over 4 weeks.
+3. Normalization as proposed: Strength +10 % over the baseline = full; Growth ½ regions this week / 30 + ½ size score (+1.0 cm mean of arm, chest, shoulders, thigh over 8 weeks), regions only with fewer than two size entries; Endurance +25 % reps at the same weight = full; baseline the goal date with two weeks of data before it, otherwise the first 14 days.
+4. Home: nothing new.
+5. Second tab: History.
+6. Goal storage: settings keys (`goal_training`, `goal_body`, `goal_set_at`), no migration.
+7. Photos: the in-app guide camera of SPEC-v10.1 (getUserMedia works in the iOS Home Screen app).
+8. Profile's top-right button is a gear; it opens a short list: Program, Planner, Photos, Settings.
+9. Weekly cap of 20 fractional sets per muscle; no session time limit (the per-session cap of 10 stays).

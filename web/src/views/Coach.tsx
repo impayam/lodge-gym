@@ -21,6 +21,7 @@ import {
   retryAnswer,
   sendMessage,
   takePendingAsk,
+  type AskAbout,
   type Attachment,
   type RotationRef,
   type SessionRef,
@@ -119,8 +120,8 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
   const [attachments, setAttachments] = useState<(Attachment & { uploading?: boolean })[]>([]);
   const [knows, setKnows] = useState(false);
   const [picker, setPicker] = useState(false);
-  /** The due exercise a due line's question is about, until that question is sent. */
-  const [rotation, setRotation] = useState<RotationRef | null>(null);
+  /** What a question from another screen is about (a due exercise, a program for his goal), until it is sent. */
+  const [rotation, setRotation] = useState<AskAbout | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
@@ -154,10 +155,10 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
     // waits in the composer.
     const ask = inSession ? null : takePendingAsk();
     if (ask) {
-      if (canSend) void send(ask.text, ask.rotation);
+      if (canSend) void send(ask.text, ask.about);
       else {
         setText(ask.text);
-        setRotation(ask.rotation);
+        setRotation(ask.about);
       }
     }
   }, []);
@@ -247,7 +248,7 @@ export function Coach({ inSession }: { inSession?: { session: () => SessionRef }
       text: q,
       attachments: attachments.map(({ id: a, width, height }) => ({ id: a, width, height })),
       ...(inSession ? { session: inSession.session() } : {}),
-      ...(about ? { rotation: about } : {}),
+      ...(about ?? {}),
     };
     setRotation(null);
     const optimistic: CoachMessage = {

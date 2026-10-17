@@ -1,44 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { backTarget, edgeSwipeOutcome, isTabRoot, showsCoachButton, showsTabBar, tabAfter, tabIndex, TABS, type ViewName } from "../../web/src/lib/nav";
 
-// SPEC-v8 §5 and §10: five icon tabs, the indicator's index, pushed screens and Back, the edge-swipe rule.
+// SPEC-v8 §5 and §10, SPEC-v12 M15 §3.0: four icon tabs, the indicator's index, pushed screens and Back, the edge-swipe
+// rule.
 describe("tabs", () => {
-  it("are Train, History, Library, Reports and Me, in that order", () => {
-    expect(TABS.map((t) => t.label)).toEqual(["Train", "History", "Library", "Reports", "Me"]);
+  it("are Train, History, Library and Profile, in that order", () => {
+    expect(TABS.map((t) => t.label)).toEqual(["Train", "History", "Library", "Profile"]);
   });
 
   it("the indicator index follows the tab order", () => {
-    expect(TABS.map((t) => tabIndex(t.name))).toEqual([0, 1, 2, 3, 4]);
-    expect(tabIndex("reports")).toBe(3);
+    expect(TABS.map((t) => tabIndex(t.name))).toEqual([0, 1, 2, 3]);
+    expect(tabIndex("profile")).toBe(3);
   });
 
   it("a tab's root screen selects it; a pushed screen keeps the current tab", () => {
     expect(tabAfter("history", "home")).toBe("history");
-    expect(tabAfter("me", "reports")).toBe("me");
-    expect(tabAfter("report", "reports")).toBe("reports");
-    expect(tabAfter("settings", "me")).toBe("me");
+    expect(tabAfter("profile", "library")).toBe("profile");
+    expect(tabAfter("report", "profile")).toBe("profile");
+    expect(tabAfter("settings", "profile")).toBe("profile");
+    expect(tabAfter("goal", "profile")).toBe("profile");
     expect(tabAfter("session", "home")).toBe("home");
   });
 });
 
 describe("back", () => {
-  it("goes to Me from the screens that moved into it", () => {
-    for (const v of ["program", "settings", "ai", "backup", "photos"] as ViewName[]) expect(backTarget(v, "me"), v).toBe("me");
+  it("goes to Profile from its gear list (Program, Photos, Settings), Set goal and the sizes list", () => {
+    for (const v of ["program", "settings", "photos", "goal", "sizes"] as ViewName[]) expect(backTarget(v, "profile"), v).toBe("profile");
   });
 
   it("goes to the tab a report, plan, the Coach or the Calendar was opened from", () => {
     expect(backTarget("report", "history")).toBe("history");
-    expect(backTarget("report", "reports")).toBe("reports");
+    expect(backTarget("report", "profile")).toBe("profile");
     expect(backTarget("plan", "home")).toBe("home");
     expect(backTarget("coach", "library")).toBe("library");
     expect(backTarget("calendar", "home")).toBe("home");
   });
 
-  it("goes to Settings from Apple Watch and the program editor; a saved report back to All reports, and that to Reports", () => {
-    expect(backTarget("watch", "me")).toBe("settings");
-    expect(backTarget("newprogram", "me")).toBe("settings");
-    expect(backTarget("saved", "reports")).toBe("allreports");
-    expect(backTarget("allreports", "reports")).toBe("reports");
+  it("goes to Settings from AI reports, Backup, Apple Watch and the program editor; a saved report back to All reports, and that to its tab", () => {
+    for (const v of ["ai", "backup", "watch", "newprogram"] as ViewName[]) expect(backTarget(v, "profile"), v).toBe("settings");
+    expect(backTarget("saved", "profile")).toBe("allreports");
+    expect(backTarget("allreports", "profile")).toBe("profile");
   });
 
   it("is null on tab roots and the active session", () => {
@@ -56,7 +57,7 @@ describe("chrome", () => {
     expect(showsTabBar("home")).toBe(true);
   });
 
-  it("the Coach button is on the five tab screens only", () => {
+  it("the Coach button is on the four tab screens only", () => {
     expect(TABS.every((t) => showsCoachButton(t.name) && isTabRoot(t.name))).toBe(true);
     for (const v of ["session", "coach", "report", "settings", "calendar"] as ViewName[]) expect(showsCoachButton(v), v).toBe(false);
   });

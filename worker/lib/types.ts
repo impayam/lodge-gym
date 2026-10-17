@@ -3,6 +3,8 @@
 import type { CalendarSettings, GymPlan, WorkShift } from "./calendar";
 import type { Category } from "./category";
 import type { GeneratorInput } from "./generator/model";
+import type { Goals } from "./goals";
+import type { BodyMeasurement } from "./measurements";
 import type { Region } from "./regions";
 import type { RotationStatus } from "./rotation";
 import type { SessionPlan } from "./plan";
@@ -244,6 +246,10 @@ export interface Bootstrap {
   calendar?: { shifts: WorkShift[]; plans: GymPlan[]; settings: CalendarSettings };
   /** Rotation status of every exercise in the active program (SPEC-v11 Phase B). A bootstrap cached before has none. */
   rotation?: RotationStatus[];
+  /** SPEC-v12 M15: the training and body goal (null until one is saved) and every body-size entry. A bootstrap cached
+   *  before M15 has neither. */
+  goals?: Goals | null;
+  measurements?: BodyMeasurement[];
   server_time: string;
 }
 

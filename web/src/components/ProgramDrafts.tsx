@@ -1,5 +1,5 @@
 // Saved program drafts (SPEC-v2 §8.6): New program drafts and the coach's drafts (SPEC-v9 M12, Add to Planner), in
-// Me → Program and in Settings. Opening one shows it with Approve.
+// Profile → Program and in Settings. Opening one shows it with Approve.
 
 import { useEffect, useState } from "preact/hooks";
 import type { ProgramInfo } from "../../../worker/lib/types";
@@ -8,7 +8,7 @@ import { loadProgramVersions, openProgramEditor, useStore } from "../store";
 import { IconChevron } from "./PulseIcons";
 import { LoadError, Loading } from "./States";
 
-/** `card`: on a screen of its own (Me → Program), the list sits in a card when there are drafts. */
+/** `card`: on a screen of its own (Profile → Program), the list sits in a card when there are drafts. */
 export function ProgramDrafts({ testId = "program-drafts", card = false }: { testId?: string; card?: boolean }) {
   const boot = useStore((s) => s.boot)!;
   const [drafts, setDrafts] = useState<ProgramInfo[] | null>(null);

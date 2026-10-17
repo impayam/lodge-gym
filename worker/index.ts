@@ -7,7 +7,7 @@ import { healthRoutes, ingestRaw, requireHealthToken, tokenRoutes } from "./heal
 import type { AppBindings } from "./env";
 import { SECURITY_HEADERS } from "./headers";
 import { photoRoutes } from "./photos";
-import { reportRoutes } from "./reports";
+import { profileRoutes, reportRoutes } from "./reports";
 import { exportRoutes, runBackup } from "./backup";
 import { pushRoutes } from "./push";
 import { exerciseRoutes, mediaRoutes } from "./exercises";
@@ -17,6 +17,7 @@ import { aiRoutes, aiSessionRoutes } from "./aiReports";
 import { overviewRoutes } from "./aiOverview";
 import { coachRoutes } from "./coach";
 import { calendarRoutes } from "./calendar";
+import { bodyRoutes } from "./body";
 
 export { RestPush } from "./push";
 export { AiJobs } from "./aiReports";
@@ -66,6 +67,7 @@ api.route("/tokens", tokenRoutes);
 api.route("/health", healthRoutes);
 api.route("/photos", photoRoutes);
 api.route("/reports", reportRoutes);
+api.route("/profile", profileRoutes);
 api.route("/", exportRoutes);
 api.route("/push", pushRoutes);
 api.route("/exercises", exerciseRoutes);
@@ -73,6 +75,7 @@ api.route("/library/media", mediaRoutes);
 api.route("/programs", programRoutes);
 api.route("/coach", coachRoutes);
 api.route("/calendar", calendarRoutes);
+api.route("/", bodyRoutes);
 app.route("/api", api);
 
 app.all("/api/*", (c) => c.json(errorBody("not_found", "Route not found."), 404));

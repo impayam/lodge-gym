@@ -1,8 +1,8 @@
-// Reports (SPEC §10, SPEC-v8 §6.03; shorter layout approved 2026-10-16). Week / Month / All: the whole page follows the
-// period (Payam, 2026-10-14) — three tiles (sessions, new records, groups on target), one Main lifts card (the estimated
-// 1RM chart of the big three and every main lift's 1RM and change in the period: the only place for 1RM), sets vs
-// target (Month: volume vs last month; All: muscle balance), the consistency calendar, the AI reports (the latest three
-// after-session reports and a row to all reports), the period's details folded, then share and export. Report numbers
+// Profile → Details (SPEC-v12 M15 §3.2: everything the Reports tab held, folded on Profile, closed by default).
+// Week / Month / All: three tiles (sessions, new records, groups on target; the current week's are Profile's This week,
+// so they show here for a past week, a month and All), Main lifts (the estimated 1RM chart of the big three; each main
+// lift's 1RM and change is in the Strength corner of My goal), sets vs target (Month: volume vs last month; All: the
+// muscle balance list), the consistency calendar, the period's details folded, then share and export. Report numbers
 // are computed on the server; the last loaded copy is cached on the device for offline viewing. The chart and the
 // calendar read the sessions on the phone, the same way as the Train tab.
 
@@ -16,26 +16,28 @@ import { api, errorText } from "../api";
 import { Bars } from "../components/Bars";
 import { Columns } from "../components/Columns";
 import { Empty, LoadError, Loading } from "../components/States";
-import { MUSCLE_NAME, MuscleMap } from "../components/MuscleMap";
+import { BalanceList, MUSCLE_NAME } from "../components/BalanceList";
 import { IconBack, IconChevron } from "../components/PulseIcons";
 import { TimeChart, type ChartSeries } from "../components/TimeChart";
 import { dateLong, dayMonth, fmtNum, monthLabel } from "../format";
 import { BIG_THREE } from "../lib/lifts";
 import { e1rmPoints } from "../lib/records";
-import { calendarStarts, calendarWeeks, changePct, chartFrom, chartWindow, type Period } from "../lib/reportsView";
+import { calendarStarts, calendarWeeks, chartFrom, chartWindow, type Period } from "../lib/reportsView";
 import * as ldb from "../localdb";
 import { daysPerWeek } from "../model";
 import { fetchFile, reportCard, shareOrDownload } from "../share";
 import { getState, loadAllHistory, photoSrc, today, useStore } from "../store";
-import { SessionReportsList } from "./Overview";
 import { poseLabel } from "./Photos";
 
 type Week = ReturnType<typeof weeklyReport>;
 type Month = ReturnType<typeof monthlyReport>;
 type Progress = ReturnType<typeof progressReport>;
 
-/** Loads a report, caching it for offline use; `retry` loads it again after a failure. */
-function useReport<T>(path: string): {
+/** Loads a report, caching it for offline use; `retry` loads it again after a failure; a new `refresh` loads it again. */
+export function useReport<T>(
+  path: string,
+  refresh = ""
+): {
   data: T | null;
   error: unknown;
   offline: boolean;
@@ -67,7 +69,7 @@ function useReport<T>(path: string): {
     return () => {
       alive = false;
     };
-  }, [path, attempt]);
+  }, [path, attempt, refresh]);
   return { data, error, offline, retry: () => setAttempt((n) => n + 1) };
 }
 
@@ -147,20 +149,11 @@ function Pending({ error, what, onRetry }: { error: unknown; what: string; onRet
   );
 }
 
-/** A main lift in the period's table: its estimated 1RM there and the change the period measures. */
-interface LiftRow {
-  id: string;
-  name: string;
-  e1rm: number | null;
-  change: number | null;
-}
-
 /**
- * Main lifts (Reports, approved 2026-10-16): the only place for the estimated 1RM. The chart of the big three over the
- * period's window (three series in a fixed order), then every main lift of the program with its 1RM in the period and
- * the change (`changeLabel`), computed by the app (no AI).
+ * Main lifts: the chart of the big three's estimated 1RM over the period's window (three series in a fixed order).
+ * Every main lift's 1RM and its change is in the Strength corner of My goal (SPEC-v12 M15 §3.2).
  */
-function MainLifts({ period, end, rows, changeLabel, caption }: { period: Period; end: string; rows: LiftRow[]; changeLabel: string; caption: string }) {
+export function MainLifts({ period, end }: { period: Period; end: string }) {
   const sessions = useStore((s) => s.sessions);
   const unit = useStore((s) => s.boot!.settings.unit);
   const older = useStore((s) => s.loads.history);
@@ -192,29 +185,6 @@ function MainLifts({ period, end, rows, changeLabel, caption }: { period: Period
         <Empty>No bench press, squat or deadlift logged in this period.</Empty>
       )}
       {needsOlder && older?.status === "error" ? <LoadError what="Couldn't load sessions older than 60 days." error={older.error} onRetry={() => void loadAllHistory()} /> : null}
-      {rows.length ? (
-        <>
-          <table class="data-table num" data-testid="main-lifts-table">
-            <thead>
-              <tr>
-                <th scope="col">Lift</th>
-                <th scope="col">1RM ({unit})</th>
-                <th scope="col">{changeLabel}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((l) => (
-                <tr data-lift={l.id}>
-                  <td>{l.name}</td>
-                  <td>{l.e1rm == null ? "–" : fmtNum(l.e1rm, 1)}</td>
-                  <td class={l.change == null ? "" : l.change > 0 ? "t-violet" : l.change < 0 ? "t-orange" : ""}>{signed(l.change, "%")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <span class="caption">{caption}</span>
-        </>
-      ) : null}
     </Card>
   );
 }
@@ -223,7 +193,7 @@ function MainLifts({ period, end, rows, changeLabel, caption }: { period: Period
  * The three tiles of every period: sessions, new records, groups on target (no lift numbers: they are in Main lifts).
  * A group is on target at 80–120% of its weekly target, as in Sets vs target.
  */
-function PeriodTiles({ testid, sessions, records, muscles, context }: { testid: string; sessions: { value: string; context?: string }; records: number; muscles: MuscleRow[]; context: { records: string; target: string } }) {
+export function PeriodTiles({ testid, sessions, records, muscles, context }: { testid: string; sessions: { value: string; context?: string }; records: number; muscles: MuscleRow[]; context: { records: string; target: string } }) {
   const targeted = muscles.filter((m) => m.target !== null);
   const on = targeted.filter((m) => m.status === "on").length;
   return (
@@ -393,7 +363,7 @@ const Offline = ({ on }: { on: boolean }) => (on ? <p class="caption l-m0">Offli
 
 /* ---------------- Week ---------------- */
 
-function WeekView({ reports }: { reports: ComponentChildren }) {
+function WeekView() {
   const [anchor, setAnchor] = useState(today());
   const ws = useStore((s) => s.boot!.settings.week_start);
   const range = weekRange(anchor, ws);
@@ -412,7 +382,6 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
       <>
         {nav}
         <Pending error={error} what="this week's report" onRetry={retry} />
-        {reports}
       </>
     );
   const card = () =>
@@ -451,20 +420,9 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
     <>
       {nav}
       <Offline on={offline} />
-      <PeriodTiles
-        testid="week-stats"
-        sessions={{ value: `${fmtNum(r.sessions.done)}/${fmtNum(r.sessions.target)}` }}
-        records={r.prs.length}
-        muscles={r.muscles}
-        context={{ records: "new records this week", target: "muscle groups on their weekly target this week" }}
-      />
-      <MainLifts
-        period="week"
-        end={range.end}
-        rows={r.lifts.map((l) => ({ id: l.exercise_id, name: l.name_en, e1rm: l.best?.e1rm ?? null, change: l.best ? l.change_pct : null }))}
-        changeLabel="vs last week"
-        caption="Best set of the week (Epley). Change: against last week's best."
-      />
+      {/* The current week's tiles are Profile's This week. */}
+      {range.start !== weekRange(today(), ws).start ? <WeekTiles r={r} /> : null}
+      <MainLifts period="week" end={range.end} />
       <Card title="Sets this week vs target" sub="Chest first" testid="week-sets">
         <Bars
           testid="sets-bars"
@@ -484,7 +442,6 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
         </span>
       </Card>
       <Consistency starts={calendarStarts("week", range.start, range, null)} sub="Last 5 weeks" />
-      {reports}
       <Details sub="New records, sessions, Apple Watch, body weight, notes">
         {r.prs.length ? (
           <ListCard title="New records" testid="week-prs">
@@ -531,7 +488,7 @@ function WeekView({ reports }: { reports: ComponentChildren }) {
 
 /* ---------------- Month ---------------- */
 
-function MonthView({ reports }: { reports: ComponentChildren }) {
+function MonthView() {
   const [key, setKey] = useState(monthKeyOf(today()));
   const ws = useStore((s) => s.boot!.settings.week_start);
   const target = useStore((s) => daysPerWeek(s.boot!));
@@ -544,7 +501,6 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
       <>
         {nav}
         <Pending error={error} what="this month's report" onRetry={retry} />
-        {reports}
       </>
     );
   const card = () =>
@@ -579,16 +535,7 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
         muscles={r.muscles}
         context={{ records: "new records this month", target: "muscle groups whose average week this month is on their weekly target" }}
       />
-      <MainLifts
-        period="month"
-        end={range.end}
-        rows={r.e1rm.map((l) => {
-          const pts = l.points;
-          return { id: l.exercise_id, name: l.name_en, e1rm: pts.length ? pts[pts.length - 1].e1rm : null, change: pts.length >= 2 ? changePct(pts[0].e1rm, pts[pts.length - 1].e1rm) : null };
-        })}
-        changeLabel="this month"
-        caption="Latest session of the month (Epley). Change: from the first session of the month to the last."
-      />
+      <MainLifts period="month" end={range.end} />
       <Card title="Volume vs last month" sub={`${r.unit} × reps, chest first`} testid="month-volume">
         {volume.length ? (
           <Bars
@@ -608,7 +555,6 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
         )}
       </Card>
       <Consistency starts={calendarStarts("month", weekRange(range.start, ws).start, range, null)} sub={monthLabel(range.start)} />
-      {reports}
       <Details sub="Month in numbers, sessions per week, body weight, photos">
         <ListCard title="Month in numbers" testid="month-numbers">
           <Row name="Sessions" sub={`target ${fmtNum(r.target, 1)}`} value={fmtNum(r.sessions)} />
@@ -668,7 +614,7 @@ function MonthView({ reports }: { reports: ComponentChildren }) {
 
 /* ---------------- All ---------------- */
 
-function AllView({ reports }: { reports: ComponentChildren }) {
+function AllView() {
   const { data: r, error, offline, retry } = useReport<Progress>("/reports/progress");
   const ws = useStore((s) => s.boot!.settings.week_start);
   const [scope, setScope] = useState<"since" | "last4">("since");
@@ -676,7 +622,6 @@ function AllView({ reports }: { reports: ComponentChildren }) {
     return (
       <>
         <Pending error={error} what="your progress report" onRetry={retry} />
-        {reports}
       </>
     );
   const since = r.since;
@@ -710,23 +655,16 @@ function AllView({ reports }: { reports: ComponentChildren }) {
         muscles={r.balance.muscles}
         context={{ records: "record moments since the first session", target: "muscle groups on their weekly target this week" }}
       />
-      <MainLifts
-        period="all"
-        end={t}
-        rows={since.lifts.map((l) => ({ id: l.exercise_id, name: l.name_en, e1rm: l.current?.e1rm ?? null, change: l.change_pct }))}
-        changeLabel="since start"
-        caption="Latest session with the lift (Epley). Change: from its first session to now."
-      />
+      <MainLifts period="all" end={t} />
       <Card title="Muscle balance this week" sub={`${dayMonth(r.balance.week.start)} – ${dayMonth(r.balance.week.end)}`} testid="balance">
         <span class="caption">
           Done sets per group vs the program target. Direct counts the primary muscle only; fractional adds 0.5 for each secondary muscle. The target is the program's planned sets, counted the same
           fractional way. Below 80% of the target (fractional) counts as under, above 120% as over. Forearms and neck, when the program trains them directly, compare direct sets with the program's
           direct sets.
         </span>
-        <MuscleMap muscles={r.balance.muscles} />
+        <BalanceList muscles={r.balance.muscles} />
       </Card>
       <Consistency starts={calendarStarts("all", weekRange(t, ws).start, { start: since.from, end: t }, weekRange(since.from, ws).start)} sub={`Since ${dayMonth(since.from)}`} />
-      {reports}
       <Details sub="Sessions, adherence, body weight, volume per week">
         <div class="segmented l-full" role="group" aria-label="Details period" data-testid="all-scope">
           {(
@@ -766,46 +704,81 @@ const PERIODS: [Period, string][] = [
   ["all", "All"],
 ];
 
-export function Reports() {
-  const [period, setPeriod] = useState<Period>("week");
-  const reports = <SessionReportsList />;
+/** The three tiles of a week (Profile → This week for the current one, Details for a past one). */
+export function WeekTiles({ r }: { r: Week }) {
   return (
-    <main class="page" data-testid="reports">
-      <header class="page-head">
-        <h1 class="h-page">Reports</h1>
-        <div
-          class="segmented"
-          role="tablist"
-          aria-label="Period"
-          onKeyDown={(e) => {
-            // Tabs pattern: the arrow keys move between periods; only the selected one is in the Tab order.
-            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-            e.preventDefault();
-            const i = PERIODS.findIndex(([k]) => k === period);
-            const next = PERIODS[(i + (e.key === "ArrowRight" ? 1 : PERIODS.length - 1)) % PERIODS.length][0];
-            setPeriod(next);
-            document.getElementById(`period-${next}`)?.focus();
-          }}
-        >
-          {PERIODS.map(([k, label]) => (
-            <button
-              type="button"
-              role="tab"
-              id={`period-${k}`}
-              aria-selected={period === k}
-              aria-controls="period-panel"
-              tabIndex={period === k ? 0 : -1}
-              class="press"
-              onClick={() => setPeriod(k)}
-            >
-              {label}
-            </button>
-          ))}
+    <PeriodTiles
+      testid="week-stats"
+      sessions={{ value: `${fmtNum(r.sessions.done)}/${fmtNum(r.sessions.target)}` }}
+      records={r.prs.length}
+      muscles={r.muscles}
+      context={{ records: "new records this week", target: "muscle groups on their weekly target this week" }}
+    />
+  );
+}
+
+/** Profile → This week: the current week's three tiles. */
+export function ThisWeek() {
+  const ws = useStore((s) => s.boot!.settings.week_start);
+  const start = weekRange(today(), ws).start;
+  const { data: r, error, retry } = useReport<Week>(`/reports/week?start=${start}`);
+  if (!r || r.range.start !== start) return <Pending error={error} what="this week's numbers" onRetry={retry} />;
+  return <WeekTiles r={r} />;
+}
+
+/** Profile → Details: closed by default; open, the period's report. */
+export function ProfileDetails() {
+  const [open, setOpen] = useState(false);
+  const [period, setPeriod] = useState<Period>("week");
+  return (
+    <>
+      <section class="card card--list" aria-label="Details">
+        <button type="button" class="list-row press" data-testid="profile-details" aria-expanded={open} aria-controls="profile-details-body" onClick={() => setOpen(!open)}>
+          <span class="list-row__text">
+            <span class="t-title">{open ? "Hide details" : "Details"}</span>
+            <span class="caption">Week · Month · All: main lifts chart, sets vs target, consistency, records, body weight, volume, share and CSV</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+      </section>
+      {open ? (
+        <div id="profile-details-body" class="l-col l-gap-12" data-testid="reports">
+          <div
+            class="segmented l-full"
+            role="tablist"
+            aria-label="Period"
+            onKeyDown={(e) => {
+              // Tabs pattern: the arrow keys move between periods; only the selected one is in the Tab order.
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+              e.preventDefault();
+              const i = PERIODS.findIndex(([k]) => k === period);
+              const next = PERIODS[(i + (e.key === "ArrowRight" ? 1 : PERIODS.length - 1)) % PERIODS.length][0];
+              setPeriod(next);
+              document.getElementById(`period-${next}`)?.focus();
+            }}
+          >
+            {PERIODS.map(([k, label]) => (
+              <button
+                type="button"
+                role="tab"
+                id={`period-${k}`}
+                aria-selected={period === k}
+                aria-controls="period-panel"
+                tabIndex={period === k ? 0 : -1}
+                class="press l-grow"
+                onClick={() => setPeriod(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div id="period-panel" role="tabpanel" aria-labelledby={`period-${period}`} class="l-col l-gap-12">
+            {period === "week" ? <WeekView /> : period === "month" ? <MonthView /> : <AllView />}
+          </div>
         </div>
-      </header>
-      <div id="period-panel" role="tabpanel" aria-labelledby={`period-${period}`} class="l-col l-gap-12">
-        {period === "week" ? <WeekView reports={reports} /> : period === "month" ? <MonthView reports={reports} /> : <AllView reports={reports} />}
-      </div>
-    </main>
+      ) : null}
+    </>
   );
 }

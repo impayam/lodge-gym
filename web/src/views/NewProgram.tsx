@@ -2,13 +2,13 @@
 // editing (swap an exercise for one with the same pattern and primary muscle, change sets within the slot's range;
 // the check re-runs after every edit), save as a draft, and approve. Generating and approving need the internet.
 
+import { BODY_GOAL_NAME, trainingLabel, type Goals } from "../../../worker/lib/goals";
 import { useEffect, useState } from "preact/hooks";
 import { countsVolume } from "../../../worker/lib/category";
 import {
   ALLOWED_DAYS,
   EQUIPMENT_OK,
   SEED_PRIORITY,
-  SESSION_MINUTES,
   STYLES,
   STYLE_NAME,
   blockChanges,
@@ -68,6 +68,11 @@ const toEdited = (x: Pick<PlanExercise, "exercise_id" | "slot" | "sets" | "per_l
   superset_tag: x.superset_tag,
 });
 
+/** The goal a program follows (SPEC-v12 M15 §2.3): the slot schemes come from it; without one, Growth's. */
+function goalLine(goals: Pick<Goals, "training" | "body"> | null | undefined): string {
+  return goals ? `For your goal: ${trainingLabel(goals.training)} · ${BODY_GOAL_NAME[goals.body]}` : "No goal set: the Growth schemes";
+}
+
 export function NewProgram() {
   const boot = useStore((s) => s.boot)!;
   const sessions = useStore((s) => s.sessions);
@@ -79,8 +84,6 @@ export function NewProgram() {
   const [input, setInput] = useState<GeneratorInput>({
     days_per_week: active?.days_per_week ?? boot.program.days.length,
     style: "auto",
-    // Every region in every block needs about 75 min with 4 days (Payam, 2026-10-17: longer sessions for it).
-    session_minutes: active?.params?.session_minutes ?? 75,
     priority_muscles: [...currentPriority],
     avoid: [],
     equipment: "full_gym",
@@ -269,12 +272,12 @@ export function NewProgram() {
         backLabel={programId ? "Back to Settings" : "Change the inputs"}
         onBack={() => (programId ? navigate("settings") : setDays(null))}
       />
-      <span class="ex-card__meta num">{params.session_minutes} min sessions</span>
+      <span class="ex-card__meta" data-testid="np-goal">{goalLine(params.goals)}</span>
       <section class="card l-col l-gap-10" aria-label="Suggested week">
         <WeekStrip offsets={plan.days.map((d) => d.offset)} />
         <p class="caption l-m0">
-          {plural(plan.days_per_week, "session")} a week, about {fmtNum(Math.min(...minutes))}–{fmtNum(Math.max(...minutes))} min each. New programs start at full volume and the target RIR from
-          the first session; weights continue from your last sessions.
+          {plural(plan.days_per_week, "session")} a week, about {fmtNum(Math.min(...minutes))}–{fmtNum(Math.max(...minutes))} min each. Nothing is cut for time. New programs start at full volume and
+          the target RIR from the first session; weights continue from your last sessions.
         </p>
       </section>
 
@@ -456,6 +459,7 @@ function WeekStrip({ offsets }: { offsets: number[] }) {
 }
 
 function Inputs({ input, setInput, exMap }: { input: GeneratorInput; setInput: (f: (i: GeneratorInput) => GeneratorInput) => void; exMap: Map<string, Exercise> }) {
+  const goals = useStore((s) => s.boot?.goals);
   const [q, setQ] = useState("");
   const set = (patch: Partial<GeneratorInput>) => setInput((i) => ({ ...i, ...patch }));
   const resolved = resolveStyle(input.style, input.days_per_week);
@@ -501,15 +505,9 @@ function Inputs({ input, setInput, exMap }: { input: GeneratorInput; setInput: (
             : `${STYLE_NAME[input.style as ResolvedStyle]} runs ${ALLOWED_DAYS[input.style as ResolvedStyle].join(" or ")} days a week.`}
         </span>
       </div>
-      <div class="form-field">
-        <span class="form-field__label">Session length</span>
-        {toggle(
-          "Session length",
-          SESSION_MINUTES.map((m) => [m, `${fmtNum(m)} min`] as [GeneratorInput["session_minutes"], string]),
-          input.session_minutes,
-          (m) => set({ session_minutes: m })
-        )}
-      </div>
+      <p class="caption l-m0" data-testid="np-goal-input">
+        {goalLine(goals)}. Set it on Profile; session length never limits a program.
+      </p>
       <div class="form-field">
         <span class="form-field__label">Equipment</span>
         {toggle(

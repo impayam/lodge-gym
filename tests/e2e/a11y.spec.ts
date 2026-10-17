@@ -294,23 +294,30 @@ test.afterAll(() => {
   resetCalendar();
 });
 
-test("contrast: the five tabs", async ({ page }) => {
+test("contrast: the four tabs", async ({ page }) => {
   test.setTimeout(300_000);
   const failed = await contrast(page, "Train");
-  for (const tab of ["History", "Library", "Reports", "Me"] as const) {
+  for (const tab of ["History", "Library", "Profile"] as const) {
     await goTo(page, tab);
     failed.push(...(await contrast(page, tab)));
   }
-  // Reports' folded details, and All reports.
+  // Profile's Details (the old Reports) with the week's folded details, Set goal, the sizes list, and All reports.
   await goTo(page, "Reports");
+  failed.push(...(await contrast(page, "Profile details")));
   await page.getByTestId("report-details").click();
   failed.push(...(await contrast(page, "Reports details")));
+  await page.getByTestId("set-goal-open").click();
+  failed.push(...(await contrast(page, "Set goal")));
+  await page.getByTestId("back").click();
+  await page.getByTestId("sizes-all").click();
+  failed.push(...(await contrast(page, "All sizes")));
+  await page.getByTestId("back").click();
   await page.getByTestId("all-reports").click();
   failed.push(...(await contrast(page, "All reports")));
   expect(failed).toEqual([]);
 });
 
-test("contrast: the screens in Me", async ({ page }) => {
+test("contrast: the screens in Profile's gear and Settings", async ({ page }) => {
   test.setTimeout(300_000);
   const failed: string[] = [];
   for (const place of ["Settings", "Program", "Photos", "AI reports", "Backup"] as const) {

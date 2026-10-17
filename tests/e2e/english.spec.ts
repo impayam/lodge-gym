@@ -45,7 +45,7 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   await check("session");
   // The active session is full screen (SPEC-v8 §5): leave it before using the tab bar.
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  for (const tab of ["History", "Library", "Photos", "Reports", "Me", "Program", "Settings", "AI reports", "Backup"]) {
+  for (const tab of ["History", "Library", "Photos", "Reports", "Profile", "Program", "Settings", "AI reports", "Backup"]) {
     await goTo(page, tab as Place);
     await page.waitForLoadState("networkidle");
     await check(tab);
@@ -53,6 +53,12 @@ test("every screen is English, left-to-right, with Latin digits and Gregorian da
   await goTo(page, "Reports");
   await page.getByTestId("report-details").click();
   await check("Reports details");
+  await page.getByTestId("set-goal-open").click();
+  await check("Set goal");
+  await page.getByTestId("back").click();
+  await page.getByTestId("sizes-all").click();
+  await check("All sizes");
+  await page.getByTestId("back").click();
   await page.getByTestId("all-reports").click();
   await expect(page.getByTestId("rt-col")).toHaveCount(1);
   await page.getByTestId("rt-mode-list").click();

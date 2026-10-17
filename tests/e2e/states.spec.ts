@@ -69,10 +69,15 @@ test("reports: an offline report load says so; Retry loads the week", async ({ p
   await goTo(page, "Reports");
   const err = page.getByTestId("load-error").filter({ hasText: "Couldn't load this week's report." });
   await expect(err).toContainText("No internet connection.");
+  // Profile's This week loads the same week: it says so too.
+  const tiles = page.getByTestId("load-error").filter({ hasText: "Couldn't load this week's numbers." });
+  await expect(tiles).toContainText("No internet connection.");
   await page.unroute("**/api/reports/week*");
   await err.getByTestId("retry").click();
-  await expect(page.getByTestId("week-stats")).toBeVisible();
+  await expect(page.getByTestId("reports").getByTestId("week-sets")).toBeVisible();
   await expect(page.getByTestId("load-error").filter({ hasText: "this week's report" })).toHaveCount(0);
+  await tiles.getByTestId("retry").click();
+  await expect(page.getByTestId("week-stats")).toBeVisible();
 });
 
 test("history: with no sessions the empty line leads to Train; a failed full-history load shows Retry", async ({ page }) => {
