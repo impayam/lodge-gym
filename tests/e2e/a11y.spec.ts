@@ -169,7 +169,8 @@ const runs = (page: Page) =>
       const badge = el.closest(".badge");
       out.push({
         text: t.slice(0, 40),
-        color: cs.color,
+        // SVG text (the goal diamond) is drawn in its fill, not its color.
+        color: el instanceof SVGElement ? cs.fill : cs.color,
         size: parseFloat(cs.fontSize),
         weight: Number(cs.fontWeight),
         x: r.left,
@@ -196,6 +197,7 @@ async function measure(page: Page) {
       for (const [prop, value] of [
         ["color", "transparent"],
         ["-webkit-text-fill-color", "transparent"],
+        ...(el instanceof SVGTextElement || el instanceof SVGTSpanElement ? [["fill", "transparent"]] : []),
         ["text-shadow", "none"],
         ["caret-color", "transparent"],
       ]) {

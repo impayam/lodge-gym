@@ -118,7 +118,7 @@ test("New program: no session length (the goal's schemes, nothing cut for time),
   await expect(page.getByTestId("np-goal-input")).toHaveText("No goal set: the Growth schemes. Set it on Profile; session length never limits a program.");
   await page.getByTestId("np-generate").click();
   await expect(page.getByTestId("np-goal")).toHaveText("No goal set: the Growth schemes");
-  await expect(page.getByLabel("Suggested week")).toContainText("Nothing is cut for time.");
+  await expect(page.getByRole("region", { name: "Suggested week" })).toContainText("Nothing is cut for time.");
   const block = page.getByTestId("np-block");
   await expect(block.getByRole("heading")).toHaveText("Block B");
   await expect(block.getByTestId("np-coverage")).toHaveText("All 30 regions have a main-focus exercise. Forearms 4 of 4 direct sets, Neck 2 of 2 direct sets.");

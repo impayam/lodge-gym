@@ -132,7 +132,11 @@ function CameraBody({ onClose, date, sessionId, startPose, onSaved }: { onClose:
   // The level: the phone's front-back tilt from the motion sensor (listening from the render that shows it).
   useLayoutEffect(() => {
     if (motion !== "on") return;
-    const on = (e: DeviceOrientationEvent) => setDeg(tilt(e.beta));
+    // An event without a reading (some browsers send one when listening starts) keeps the last value.
+    const on = (e: DeviceOrientationEvent) => {
+      const t = tilt(e.beta);
+      if (t !== null) setDeg(t);
+    };
     window.addEventListener("deviceorientation", on);
     return () => window.removeEventListener("deviceorientation", on);
   }, [motion]);
