@@ -576,7 +576,7 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
   const regionSlots = (c: Candidate): Slot[] => (c.ex.pattern === "core" ? ["core"] : c.ex.mechanic === "compound" && c.ex.pattern !== "isolation" ? ["accessory"] : ["isolation"]);
 
   /** Adds an exercise with region r as a main focus where it fits: the best exercise, on the day that may train it with
-   *  the least of its group; `sets` or its slot's minimum. `only`: an exercise for r alone among its muscle's regions
+   *  the least of its group (then the shortest day); `sets` or its slot's minimum. `only`: an exercise for r alone among its muscle's regions
    *  (the forearm and neck targets count each region's sets). False when nothing fits. */
   const addRegion = (r: Region, sets?: number, only = false): boolean => {
     const mix = mixNow();
@@ -596,7 +596,8 @@ export function generateProgram(input: GeneratorInput, ctx: GeneratorContext): P
           const c = pickFor(i, { group: g, slot, dayIds, noHeavyHinge: true, roleOf, accept, seed: input.seed, region: r, mix, rank: (o) => [missing(o)] });
           if (!c) continue;
           const load = isTargetGroup(g) ? (dayLoad(d, exMap).get(g as TargetGroup) ?? 0) : d.exercises.filter((x) => byId.get(x.exercise_id)?.group === g).length;
-          const key = [missing(c), ...preference(c, { mix }), load, i];
+          // Then the shorter day, so region work spreads over the week instead of filling the first days.
+          const key = [missing(c), ...preference(c, { mix }), load, daySeconds(d), i];
           if (!best || compareKeys(key, best.key) < 0) best = { c, i, slot, sets: n, key };
         }
       }
