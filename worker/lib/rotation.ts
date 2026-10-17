@@ -199,11 +199,14 @@ export function dueList(statuses: readonly RotationStatus[]): RotationStatus[] {
     .map((x) => x.s);
 }
 
-const REASON_TEXT: Readonly<Record<DueReason, (s: RotationStatus) => string>> = {
-  max: (s) => `${s.weeks} weeks in the program`,
-  stalled: (s) => `${s.weeks} weeks, no progress in the last ${STALL_SESSIONS} sessions`,
-  no_new_best: (s) => `${s.weeks} weeks, no new best in the last ${NEW_BEST_WEEKS} weeks`,
+const REASON_TEXT: Readonly<Record<DueReason, (weeks: number) => string>> = {
+  max: (w) => `${w} weeks in the program`,
+  stalled: (w) => `${w} weeks, no progress in the last ${STALL_SESSIONS} sessions`,
+  no_new_best: (w) => `${w} weeks, no new best in the last ${NEW_BEST_WEEKS} weeks`,
 };
 
+/** A due reason in words: "8 weeks in the program". */
+export const reasonText = (reason: DueReason, weeks: number): string => REASON_TEXT[reason](weeks);
+
 /** The reason in words, for the Program screen's due line and the Coach: "8 weeks in the program". */
-export const dueText = (s: RotationStatus): string => (s.reason ? REASON_TEXT[s.reason](s) : `${s.weeks} of ${s.max} weeks`);
+export const dueText = (s: RotationStatus): string => (s.reason ? reasonText(s.reason, s.weeks) : `${s.weeks} of ${s.max} weeks`);

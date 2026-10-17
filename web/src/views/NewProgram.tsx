@@ -11,6 +11,7 @@ import {
   SESSION_MINUTES,
   STYLES,
   STYLE_NAME,
+  blockChanges,
   checkPlan,
   groupName,
   looksPerLeg,
@@ -31,6 +32,8 @@ import {
   type TargetGroup,
 } from "../../../worker/lib/generator";
 import { TARGET_GROUPS } from "../../../worker/lib/muscles";
+import { REGIONS } from "../../../worker/lib/regions";
+import { reasonText } from "../../../worker/lib/rotation";
 import { balanceStatus } from "../../../worker/lib/reports";
 import type { Exercise, ProgramVersion } from "../../../worker/lib/types";
 import { ulid } from "../../../worker/lib/ulid";
@@ -76,7 +79,8 @@ export function NewProgram() {
   const [input, setInput] = useState<GeneratorInput>({
     days_per_week: active?.days_per_week ?? boot.program.days.length,
     style: "auto",
-    session_minutes: 60,
+    // Every region in every block needs about 75 min with 4 days (Payam, 2026-10-17: longer sessions for it).
+    session_minutes: active?.params?.session_minutes ?? 75,
     priority_muscles: [...currentPriority],
     avoid: [],
     equipment: "full_gym",
@@ -124,9 +128,9 @@ export function NewProgram() {
   let targets: Record<TargetGroup, number> | null = null;
   if (params && days) {
     try {
-      plan = planFromEdits(params, days);
+      plan = planFromEdits(params, days, exMap);
       targets = weeklyTargets(programVolume(boot.program, exMap), currentPriority, params.priority_muscles);
-      check = checkPlan(plan, exMap, targets);
+      check = checkPlan(plan, exMap, targets, { block: params.block });
     } catch (e) {
       plan = null;
     }
@@ -273,6 +277,8 @@ export function NewProgram() {
           the first session; weights continue from your last sessions.
         </p>
       </section>
+
+      <BlockCard plan={plan} check={check} block={params.block ?? 2} exMap={exMap} />
 
       {check.violations.length ? issues("Fix before approving", check.violations, "np-violations", true) : null}
       {check.warnings.length ? issues("Worth knowing", check.warnings, "np-warnings", false) : null}
@@ -570,6 +576,38 @@ function Inputs({ input, setInput, exMap }: { input: GeneratorInput; setInput: (
           </div>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+/**
+ * The block this program starts (SPEC-v11 Phase B): region coverage, forearm and neck sets, and what replaces each
+ * exercise that is due for a change, with the reason ("8 weeks in the program").
+ */
+function BlockCard({ plan, check, block, exMap }: { plan: Plan; check: CheckResult; block: number; exMap: Map<string, Exercise> }) {
+  const boot = useStore((s) => s.boot)!;
+  const summary = blockChanges(boot.program, boot.rotation ?? [], plan.days, exMap, block);
+  const name = (id: string) => exMap.get(id)?.name_en ?? id;
+  const covered = check.coverage.filter((c) => c.exercises.length).length;
+  return (
+    <section class="card l-col l-gap-8" aria-labelledby="np-block-title" data-testid="np-block">
+      <h2 class="card__title l-m0" id="np-block-title">
+        Block {summary.letter}
+      </h2>
+      <p class="caption l-m0 num" data-testid="np-coverage">
+        {covered === REGIONS.length ? `All ${REGIONS.length} regions have a main-focus exercise.` : `${covered} of ${REGIONS.length} regions have a main-focus exercise.`}
+        {check.direct.length ? ` ${check.direct.map((d) => `${d.group === "forearms" ? "Forearms" : "Neck"} ${fmtNum(d.planned)} of ${fmtNum(d.target)} direct sets`).join(", ")}.` : ""}
+      </p>
+      {summary.replaced.length || summary.kept_due.length ? (
+        <ul class="prose-list ex-card__meta" data-testid="np-rotation">
+          {summary.replaced.map((r) => (
+            <li data-ex={r.exercise_id}>{r.by ? `${name(r.by)} replaces ${name(r.exercise_id)}: ${reasonText(r.reason, r.weeks)}.` : `${name(r.exercise_id)} leaves the program: ${reasonText(r.reason, r.weeks)}.`}</li>
+          ))}
+          {summary.kept_due.map((k) => (
+            <li data-ex={k.exercise_id}>{`${name(k.exercise_id)} stays one more block although it is due (${reasonText(k.reason, k.weeks)}): ${plan.days[k.day]?.name_en ?? "its day"} keeps one known exercise.`}</li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

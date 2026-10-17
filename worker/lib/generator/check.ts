@@ -4,7 +4,9 @@
 
 import { countsVolume } from "../category";
 import { groupOf, isTargetGroup, setContribution, TARGET_GROUPS } from "../muscles";
+import { REGIONS, REGION_INFO, type Region } from "../regions";
 import type { Exercise } from "../types";
+import { DIRECT_GROUPS, directTarget, type DirectGroup } from "./blocks";
 import { isHeavyHinge } from "./pick";
 import { balanceStatus } from "../reports";
 import {
@@ -70,6 +72,19 @@ export interface VolumeRow {
   days: number;
 }
 
+/** Phase B: the exercises that have a region as a main focus this week. */
+export interface CoverageRow {
+  region: Region;
+  exercises: string[];
+}
+
+/** Phase B: forearms and neck count direct sets (their main muscle) against the block's target. */
+export interface DirectRow {
+  group: DirectGroup;
+  target: number;
+  planned: number;
+}
+
 export interface CheckResult {
   volume: VolumeRow[];
   minutes: number[];
@@ -77,7 +92,30 @@ export interface CheckResult {
   warnings: Issue[];
   push_sets: number;
   pull_sets: number;
+  /** Phase B: every region and its main-focus exercises (empty for none). */
+  coverage: CoverageRow[];
+  /** Phase B: forearm and neck direct sets against the block's target (only for programs that carry a block). */
+  direct: DirectRow[];
 }
+
+/** Main-focus regions of an exercise (its primary tags). */
+export const mainRegions = (e: Pick<Exercise, "regions"> | undefined): Region[] => (e?.regions ?? []).filter((r) => r.emphasis === "primary").map((r) => r.region);
+
+/** Which exercises cover each region as a main focus in a week. */
+export function regionCoverage(days: readonly { exercises: readonly Pick<PlanExercise, "exercise_id">[] }[], ex: ReadonlyMap<string, Exercise>): CoverageRow[] {
+  const by = new Map<Region, string[]>(REGIONS.map((r) => [r, []]));
+  for (const d of days)
+    for (const x of d.exercises) {
+      const e = ex.get(x.exercise_id);
+      if (!e || !countsVolume(e.category)) continue;
+      for (const r of mainRegions(e)) if (!by.get(r)!.includes(x.exercise_id)) by.get(r)!.push(x.exercise_id);
+    }
+  return REGIONS.map((region) => ({ region, exercises: by.get(region)! }));
+}
+
+/** Direct weekly sets of a group: sets of exercises whose main muscle is in it. */
+export const directSets = (days: readonly { exercises: readonly Pick<PlanExercise, "exercise_id" | "sets">[] }[], ex: ReadonlyMap<string, Exercise>, group: string) =>
+  days.reduce((a, d) => a + d.exercises.reduce((b, x) => b + (groupOf(ex.get(x.exercise_id)?.muscle_primary) === group ? x.sets : 0), 0), 0);
 
 const GROUP_NAME: Readonly<Record<TargetGroup, string>> = {
   chest: "Chest",
@@ -119,7 +157,7 @@ const PULL = new Set(["h_pull", "v_pull"]);
 /** Calendar distance from day offset a to b going forward through the week (1–7). */
 const ahead = (a: number, b: number) => ((b - a + 7) % 7) || 7;
 
-export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets: Readonly<Record<TargetGroup, number>>): CheckResult {
+export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets: Readonly<Record<TargetGroup, number>>, opts: { block?: number } = {}): CheckResult {
   const violations: Issue[] = [];
   const warnings: Issue[] = [];
   const days = plan.days;
@@ -247,7 +285,29 @@ export function checkPlan(plan: Plan, ex: ReadonlyMap<string, Exercise>, targets
   minutes.forEach((mins, i) => {
     if (mins > plan.session_minutes) warnings.push({ code: "too_long", message: `${days[i].name_en}: about ${mins} min, longer than ${plan.session_minutes} min.`, day: i });
   });
-  return { volume, minutes, violations: dedupe(violations), warnings, push_sets: push, pull_sets: pull };
+
+  // Phase B (approved 2026-10-17): every block covers every region; a day never has two exercises with the same
+  // main-focus region and the same equipment; forearms and neck get their direct sets. Advice, never a block.
+  const coverage = regionCoverage(days, ex);
+  const missing = coverage.filter((c) => !c.exercises.length).map((c) => REGION_INFO[c.region].label);
+  if (missing.length) warnings.push({ code: "coverage", message: `No main-focus exercise this block for: ${missing.join(", ")}.` });
+  days.forEach((d, i) => {
+    const seen = new Map<string, string>();
+    for (const x of d.exercises) {
+      const e = ex.get(x.exercise_id);
+      if (!e) continue;
+      for (const r of mainRegions(e)) {
+        const key = `${r}|${e.equipment}`;
+        const other = seen.get(key);
+        if (other && other !== e.name_en) warnings.push({ code: "region_equipment", message: `${d.name_en}: ${other} and ${e.name_en} both train ${REGION_INFO[r].label.toLowerCase()} with the ${e.equipment}.`, day: i });
+        else seen.set(key, e.name_en);
+      }
+    }
+  });
+  const direct: DirectRow[] =
+    opts.block !== undefined && opts.block >= 2 ? DIRECT_GROUPS.map((g) => ({ group: g, target: directTarget(g, opts.block!), planned: directSets(days, ex, g) })) : [];
+  for (const r of direct) if (r.planned < r.target) warnings.push({ code: "direct_under", message: `${r.group === "forearms" ? "Forearms" : "Neck"}: ${r.planned} of ${r.target} direct sets.` });
+  return { volume, minutes, violations: dedupe(violations), warnings: dedupe(warnings), push_sets: push, pull_sets: pull, coverage, direct };
 }
 
 function dedupe(list: Issue[]): Issue[] {

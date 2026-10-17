@@ -3,6 +3,11 @@ import {
   ALLOWED_DAYS,
   EQUIPMENT_CHOICES,
   FLOORS,
+  NECK_SCHEME,
+  blockMix,
+  equipKind,
+  mainRegions,
+  mixFamilyOf,
   GeneratorInputError,
   REAR_DELT_MIN,
   SEED_PRIORITY,
@@ -21,7 +26,9 @@ import {
   type ResolvedStyle,
   type TargetGroup,
 } from "../../worker/lib/generator";
-import { TARGET_GROUPS } from "../../worker/lib/muscles";
+import { TARGET_GROUPS, groupOf } from "../../worker/lib/muscles";
+import { REGIONS } from "../../worker/lib/regions";
+import type { RotationStatus } from "../../worker/lib/rotation";
 import { currentProgram, libraryExercises } from "../fixtures/generator/pool";
 
 const exercises = libraryExercises();
@@ -80,6 +87,8 @@ describe("property: every style × days × session length × 50 seeds (§8.8)", 
                 // Elsewhere a floor miss is always reported to Payam as a warning.
                 if (below) expect(p.check.warnings.some((w) => w.code === "floor" && w.message.startsWith(`${g === "hamstrings_glutes" ? "Hamstrings & glutes" : g[0].toUpperCase() + g.slice(1)}:`)), `${g} ${at}`).toBe(true);
               }
+              // Phase B: never two exercises with the same main-focus region and the same equipment in a day.
+              expect(p.check.warnings.filter((w) => w.code === "region_equipment"), at).toEqual([]);
               const roles = new Map<string, string>();
               for (const d of p.days)
                 for (const x of d.exercises) {
@@ -97,15 +106,6 @@ describe("property: every style × days × session length × 50 seeds (§8.8)", 
 });
 
 describe("Payam's inputs: 4 days, full body, 60 min, priority chest (§8.8 snapshot)", () => {
-  const base = programVolume(current, exMap);
-  it("every seed lands within ±2 sets per muscle of the current program", () => {
-    for (const seed of SEEDS) {
-      const p = generateProgram({ ...payam, seed }, ctx);
-      for (const v of p.check.volume) expect(Math.abs(v.planned - base[v.group]), `${v.group} seed ${seed}`).toBeLessThanOrEqual(2);
-      expect(p.check.violations).toEqual([]);
-      expect(p.check.warnings).toEqual([]);
-    }
-  });
   it("keeps the main lifts and their days; deterministic for a seed", () => {
     const p = generateProgram(payam, ctx);
     expect(p.name).toBe("Full body · 4 days");
@@ -157,6 +157,89 @@ describe("Payam's inputs: 4 days, full body, 60 min, priority chest (§8.8 snaps
   it("bro split warns about frequency; upper/lower 2 days too", () => {
     expect(generateProgram({ ...payam, style: "bro_split", days_per_week: 5 }, ctx).check.warnings.map((w) => w.code)).toContain("frequency");
     expect(generateProgram({ ...payam, style: "upper_lower", days_per_week: 2 }, ctx).check.warnings.map((w) => w.code)).toContain("frequency");
+  });
+});
+
+/** The rotation status of the seed program as of 2026-10-17 (4 training weeks): main and secondary lifts are kept
+ *  (6–8 week rule), isolation and core work is due (by 4); `allDue`: every exercise 9 weeks in. */
+function rotationOf(allDue = false): RotationStatus[] {
+  return current.days.flatMap((d) =>
+    d.exercises.map((x) => {
+      const e = exMap.get(x.exercise_id)!;
+      const other = !x.is_main && !(e.mechanic === "compound" && e.pattern !== "isolation" && e.pattern !== "core");
+      const due = allDue || other;
+      return { exercise_id: x.exercise_id, role: other ? "other" : "main", weeks: allDue ? 9 : 4, since: "2026-09-27", min: other ? 3 : 6, max: other ? 4 : 8, stalled: false, new_best: other ? null : true, due, reason: due ? "max" : null, due_next_week: false } as RotationStatus;
+    })
+  );
+}
+
+describe("Phase B: Payam's inputs at 75 min, block B (SPEC-v11, approved 2026-10-17)", () => {
+  const b: GeneratorInput = { ...payam, session_minutes: 75, block: 2 };
+  const today = { ...ctx, rotation: rotationOf() };
+  const ids = (p: { days: { exercises: { exercise_id: string }[] }[] }) => new Set(p.days.flatMap((d) => d.exercises.map((x) => x.exercise_id)));
+
+  it("every seed: all 30 regions, forearms 4 and neck 2 direct sets, within 75 min, no hard rule broken, every group on target", () => {
+    for (const seed of SEEDS) {
+      const p = generateProgram({ ...b, seed }, today);
+      const at = `seed ${seed}`;
+      expect(p.check.violations, at).toEqual([]);
+      expect(p.check.coverage.filter((c) => !c.exercises.length).map((c) => c.region), at).toEqual([]);
+      expect(p.check.direct, at).toEqual([
+        { group: "forearms", target: 4, planned: 4 },
+        { group: "neck", target: 2, planned: 2 },
+      ]);
+      expect(p.check.minutes.every((m) => m <= 75), at).toBe(true);
+      expect(p.check.warnings.filter((w) => ["coverage", "direct_under", "unfilled", "too_long", "region_equipment", "floor", "under_target", "day_all_new"].includes(w.code)), at).toEqual([]);
+      // No group under its target; region work may take some over it (Payam, 2026-10-17: longer sessions for it).
+      for (const v of p.check.volume) expect(v.planned, `${v.group} ${at}`).toBeGreaterThanOrEqual(v.target - 0.5);
+    }
+  });
+
+  it("rotation as of today: main and secondary lifts stay in their days, the due isolation and core work is replaced", () => {
+    const p = generateProgram(b, today);
+    current.days.forEach((d, i) => {
+      for (const x of d.exercises.filter((y) => y.is_main || exMap.get(y.exercise_id)!.mechanic === "compound")) expect(p.days[i].exercises.some((y) => y.exercise_id === x.exercise_id), `${d.name_en} ${x.exercise_id}`).toBe(true);
+    });
+    const due = rotationOf().filter((s) => s.due).map((s) => s.exercise_id);
+    for (const id of due) expect(ids(p).has(id), id).toBe(false);
+    expect(p.block).toMatchObject({ block: 2, letter: "B", kept_due: [] });
+    expect(new Set(p.block.replaced.map((r) => r.exercise_id))).toEqual(new Set(due));
+    expect(p.block.replaced.every((r) => r.reason === "max" && r.weeks === 4)).toBe(true);
+    expect(p.params.block).toBe(2);
+    expect(generateProgram(b, today)).toEqual(p);
+  });
+
+  it("new exercises follow block B's equipment mix; neck work is light: 1 set of 15–25 reps at RIR 3–4", () => {
+    const p = generateProgram(b, today);
+    const old = ids(current);
+    const fresh = p.days.flatMap((d) => d.exercises.filter((x) => x.slot !== "main" && !old.has(x.exercise_id)).map((x) => ({ x, e: exMap.get(x.exercise_id)! })));
+    expect(fresh.length).toBeGreaterThan(10);
+    for (const { e } of fresh) {
+      const family = mixFamilyOf(e.muscle_primary)!;
+      expect(blockMix(family, 2), `${e.name_en} (${family})`).toContain(equipKind(e));
+    }
+    const neck = p.days.flatMap((d) => d.exercises).filter((x) => groupOf(exMap.get(x.exercise_id)!.muscle_primary) === "neck");
+    expect(neck.length).toBe(2);
+    for (const x of neck) expect(x).toMatchObject({ sets: 1, reps_min: NECK_SCHEME.reps[0], reps_max: NECK_SCHEME.reps[1], target_rir_min: 3, target_rir_max: 4, set_range: [1, 3] });
+    expect(new Set(neck.flatMap((x) => mainRegions(exMap.get(x.exercise_id))))).toEqual(new Set(["neck_flexors", "neck_extensors"]));
+  });
+
+  it("every main lift due (9 weeks): a barbell variation close to it or for a region the last block lacked; each day keeps one exercise", () => {
+    const p = generateProgram(b, { ...ctx, rotation: rotationOf(true) });
+    const missingBefore = new Set(REGIONS.filter((r) => !current.days.some((d) => d.exercises.some((x) => mainRegions(exMap.get(x.exercise_id)).includes(r)))));
+    current.days.forEach((d, i) => {
+      const oldMain = d.exercises.find((x) => x.is_main)!.exercise_id;
+      const main = p.days[i].exercises.find((x) => x.slot === "main")!.exercise_id;
+      const e = exMap.get(main)!;
+      expect(main, d.name_en).not.toBe(oldMain);
+      expect(e.equipment, e.name_en).toBe("barbell");
+      const regions = mainRegions(e);
+      expect(regions.some((r) => mainRegions(exMap.get(oldMain)).includes(r) || missingBefore.has(r)), e.name_en).toBe(true);
+      expect(p.days[i].exercises.some((x) => x.slot !== "main" && d.exercises.some((y) => y.exercise_id === x.exercise_id)), d.name_en).toBe(true);
+    });
+    expect(p.check.violations).toEqual([]);
+    expect(p.block.kept_due.length).toBe(4);
+    expect(p.block.replaced.find((r) => r.exercise_id === "bench")?.by).toBe(p.days[0].exercises[0].exercise_id);
   });
 });
 

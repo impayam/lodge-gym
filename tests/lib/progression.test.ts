@@ -102,6 +102,18 @@ describe("RIR rules", () => {
   });
 });
 
+describe("neck work (SPEC-v11 Phase B): the smallest plate, never a double step", () => {
+  const plate = { equipment: "dumbbell" as const, is_lower: false, muscle_primary: "neck" };
+  it("+2.5 lb or +1.25 kg, also on the −/+ buttons", () => {
+    expect([weightIncrement(plate, "lb"), weightIncrement(plate, "kg"), stepperIncrement(plate, "lb"), stepperIncrement(plate, "kg")]).toEqual([2.5, 1.25, 2.5, 1.25]);
+  });
+  it("planned at RIR 3+, so every set with RIR 3 still adds one step only", () => {
+    const one = [set(0, 10, 25, true, null, "neck")];
+    expect(suggest({ sets: 1, reps_max: 25, is_time: false }, plate, perf(withRir(one, [3])))).toMatchObject({ allHit: true, easy: false, weight: 12.5 });
+    expect(suggest({ sets: 1, reps_max: 25, is_time: false }, plate, perf([set(0, 10, 20, true, null, "neck")]))).toMatchObject({ allHit: false, weight: 10 });
+  });
+});
+
 describe("last performance", () => {
   const mk = (id: string, date: string, status: "active" | "done", sets: SetEntry[]): PerfSession => ({
     id,
