@@ -86,7 +86,7 @@ describe("plan check, Phase B", () => {
     superset_tag: null,
     set_range: [1, 3],
   });
-  const plan = (days: PlanExercise[][]): Plan => ({ style: "full_body", days_per_week: days.length, session_minutes: 90, days: days.map((exercises, i) => ({ name_en: `D${i + 1}`, kind: "full", offset: i * 3, exercises })) });
+  const plan = (days: PlanExercise[][]): Plan => ({ style: "full_body", days_per_week: days.length, days: days.map((exercises, i) => ({ name_en: `D${i + 1}`, kind: "full", offset: i * 3, exercises })) });
 
   it("coverage lists every region with its main-focus exercises, and warns about the missing ones", () => {
     const p = plan([[x("bench", "main", 4), x("fly")]]);

@@ -3,6 +3,8 @@
 import type { CalendarSettings, GymPlan, WorkShift } from "./calendar";
 import type { Category } from "./category";
 import type { GeneratorInput } from "./generator/model";
+import type { Goals } from "./goals";
+import type { BodyMeasurement } from "./measurements";
 import type { Region } from "./regions";
 import type { RotationStatus } from "./rotation";
 import type { SessionPlan } from "./plan";
@@ -191,6 +193,8 @@ export interface HealthWorkout {
 }
 
 export type Pose = "front" | "side" | "back" | "other";
+/** How a photo is framed (migration 0015): head to feet, or head to waist (a mirror shot); null when not known. */
+export type Framing = "full" | "upper";
 
 /** Progress photo metadata (SPEC §8); the images live in R2. */
 export interface Photo {
@@ -198,6 +202,8 @@ export interface Photo {
   session_id: string | null;
   local_date: string;
   pose: Pose;
+  /** From the guide camera's pose check; null for library photos and older ones. */
+  framing: Framing | null;
   width: number;
   height: number;
   bytes: number;
@@ -244,6 +250,10 @@ export interface Bootstrap {
   calendar?: { shifts: WorkShift[]; plans: GymPlan[]; settings: CalendarSettings };
   /** Rotation status of every exercise in the active program (SPEC-v11 Phase B). A bootstrap cached before has none. */
   rotation?: RotationStatus[];
+  /** SPEC-v12 M15: the training and body goal (null until one is saved) and every body-size entry. A bootstrap cached
+   *  before M15 has neither. */
+  goals?: Goals | null;
+  measurements?: BodyMeasurement[];
   server_time: string;
 }
 

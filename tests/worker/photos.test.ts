@@ -51,6 +51,22 @@ describe("photos API (SPEC §8)", () => {
     expect(list.photos[0]).toMatchObject({ id: m.id, pose: "front", width: 1200, height: 1600, session_id: null });
   });
 
+  it("keeps the framing the guide camera's pose check found (migration 0015); none from the library or older apps", async () => {
+    const full = meta({ framing: "full" });
+    const upper = meta({ framing: "upper", local_date: "2026-09-29" });
+    const old = meta({ local_date: "2026-09-27" });
+    for (const m of [full, upper, old]) expect((await client.post("/api/photos", m)).status).toBe(200);
+    expect((await client.post("/api/photos", { ...meta(), framing: null })).status).toBe(200);
+    expect((await client.post("/api/photos", { ...meta(), framing: "half" })).status).toBe(400);
+    const list = (await (await client.fetch("/api/photos")).json()) as { photos: Photo[] };
+    expect(list.photos.filter((p) => [full.id, upper.id, old.id].includes(p.id)).map((p) => p.framing)).toEqual(["upper", "full", null]);
+    // A retry with another framing (an edit of the same photo) takes the new one.
+    await client.post("/api/photos", { ...old, framing: "upper" });
+    expect(await env.DB.prepare("SELECT framing FROM photos WHERE id = ?").bind(old.id).first()).toEqual({ framing: "upper" });
+    // The table refuses anything else.
+    await expect(env.DB.prepare("UPDATE photos SET framing = 'half' WHERE id = ?").bind(old.id).run()).rejects.toThrow();
+  });
+
   it("is idempotent on create (outbox retries) and validates input", async () => {
     const m = meta();
     await client.post("/api/photos", m);

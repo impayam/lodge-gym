@@ -1,10 +1,8 @@
-import { CalendarSettingsCard } from "../components/CalendarSettings";
 import { ProgramDrafts } from "../components/ProgramDrafts";
 import { useEffect, useState } from "preact/hooks";
 import { LICENCE_URL, SOURCES } from "../../../worker/lib/librarySources";
 import { isValidTimeZone } from "../../../worker/lib/time";
-import { REST_BETWEEN_SETS_CHOICES, REST_NEXT_EXERCISE_CHOICES, type Settings as SettingsT, type WeekStart } from "../../../worker/lib/types";
-import { REST_DEFAULTS } from "../../../worker/lib/rest";
+import type { Settings as SettingsT, WeekStart } from "../../../worker/lib/types";
 import { api, errorText } from "../api";
 import { dateLong, fmtNum, instantShort, plural } from "../format";
 import { fetchUsage, type AiUsage } from "../ai";
@@ -12,17 +10,15 @@ import { activeProgramInfo, programName, styleLabel } from "../model";
 import { fetchFile, shareOrDownload } from "../share";
 import { disablePush, enablePush, isStandalone, pushEnabled, pushSupported, testPush } from "../push";
 import { deviceLabel, registerPasskey } from "../passkey";
-import { IconChevron, IconWatch } from "../components/PulseIcons";
+import { IconChevron, IconDownload, IconSpark, IconWatch } from "../components/PulseIcons";
 import { ScreenHead } from "../components/ScreenHead";
 import { Select } from "../components/Select";
 import { LoadError, Loading } from "../components/States";
 import { logout, navigate, openProgramEditor, saveSettings, syncNow, useStore } from "../store";
 
-/** "45 s", "2 min", "1 min 30 s". */
-const restText = (sec: number) => (sec < 60 ? `${fmtNum(sec)} s` : sec % 60 ? `${fmtNum(Math.floor(sec / 60))} min ${fmtNum(sec % 60)} s` : `${fmtNum(sec / 60)} min`);
-
 const ZONES = ["America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Chicago", "America/New_York", "Asia/Tehran", "Europe/London", "UTC"];
 
+/** The app's own settings; the training ones (rest timer, calendar) are on Profile → My training (./MyTraining.tsx). */
 export function Settings() {
   const boot = useStore((s) => s.boot)!;
   const sync = useStore((s) => s.sync);
@@ -49,7 +45,7 @@ export function Settings() {
 
   return (
     <main class="page" data-testid="settings">
-      <ScreenHead title="Settings" sub="Me" />
+      <ScreenHead title="Settings" sub="Profile" />
       <section class="card l-col l-gap-14" aria-label="General">
         <div class="form-field">
           <span class="form-field__label" id="s-unit">
@@ -96,36 +92,8 @@ export function Settings() {
         </div>
       </section>
 
-      <h2 class="section-label">Training</h2>
-      <section class="card l-col l-gap-14" aria-label="Training" data-testid="training-settings">
-        <div class="form-field">
-          <label class="form-field__label" for="s-rest-sets">
-            Rest between sets
-          </label>
-          <Select id="s-rest-sets" value={String(st.rest_between_sets_sec ?? REST_DEFAULTS.rest_between_sets_sec)} onChange={(e) => set({ rest_between_sets_sec: Number((e.currentTarget as HTMLSelectElement).value) })}>
-            {REST_BETWEEN_SETS_CHOICES.map((n) => (
-              <option value={String(n)}>{restText(n)}</option>
-            ))}
-          </Select>
-        </div>
-        <div class="form-field">
-          <label class="form-field__label" for="s-rest-next">
-            Rest before the next exercise
-          </label>
-          <Select id="s-rest-next" value={String(st.rest_next_exercise_sec ?? REST_DEFAULTS.rest_next_exercise_sec)} onChange={(e) => set({ rest_next_exercise_sec: Number((e.currentTarget as HTMLSelectElement).value) })}>
-            {REST_NEXT_EXERCISE_CHOICES.map((n) => (
-              <option value={String(n)}>{restText(n)}</option>
-            ))}
-          </Select>
-        </div>
-        <p class="caption l-m0">Supersets and tri-sets rest as your program sets after each round, and as above after their last round. The timer keeps +30 s and Skip.</p>
-      </section>
-
       <h2 class="section-label">Program</h2>
       <ProgramSettings />
-
-      <h2 class="section-label">Calendar</h2>
-      <CalendarSettingsCard />
 
       <h2 class="section-label">Connections</h2>
       <section class="card card--list" aria-label="Connections">
@@ -136,6 +104,35 @@ export function Settings() {
           <span class="list-row__text">
             <span class="t-title">Apple Watch</span>
             <span class="caption">Token, shortcut setup, latest watch data</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+      </section>
+
+      {/* Profile's gear lists Program, Planner, My training, Photos and Settings (Payam, 2026-10-17): AI reports and Backup open from here. */}
+      <h2 class="section-label">AI and data</h2>
+      <section class="card card--list" aria-label="AI and data">
+        <button type="button" class="list-row press" data-testid="open-ai" onClick={() => navigate("ai")}>
+          <span class="well icon-well t-violet">
+            <IconSpark />
+          </span>
+          <span class="list-row__text">
+            <span class="t-title">AI reports</span>
+            <span class="caption">Model, this month's cost, the API key status</span>
+          </span>
+          <span class="list-row__chevron">
+            <IconChevron size={16} />
+          </span>
+        </button>
+        <button type="button" class="list-row press" data-testid="open-backup" onClick={() => navigate("backup")}>
+          <span class="well icon-well t-muted">
+            <IconDownload />
+          </span>
+          <span class="list-row__text">
+            <span class="t-title">Backup and export</span>
+            <span class="caption">Weekly copy every Monday</span>
           </span>
           <span class="list-row__chevron">
             <IconChevron size={16} />
@@ -189,6 +186,18 @@ export function Settings() {
             CC BY-SA 4.0
           </a>
           .
+        </p>
+        {/* The guide camera's on-device pose check (web/public/pose/POSE-SOURCE.md). */}
+        <p class="ex-card__meta" data-testid="about-pose">
+          Photo pose check:{" "}
+          <a class="t-pink" href="https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker" target="_blank" rel="noopener noreferrer">
+            MediaPipe Pose Landmarker
+          </a>{" "}
+          by Google,{" "}
+          <a class="t-pink" href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">
+            Apache 2.0
+          </a>
+          ; it runs on the phone, nothing is sent.
         </p>
         {/* SPEC-v11 A1: the exercise sources and their licences; authors are credited on each exercise. */}
         <p class="ex-card__meta" data-testid="about-library">
@@ -307,7 +316,7 @@ export function AiSettings() {
         <Loading label="Loading this month's AI use" heights={[44, 44, 44]} />
       )}
       <p class="caption l-m0">
-        One Persian report is written after each session: once that day's body weight and the Apple Health workout are in, or 2 hours after the session ends; Write report now writes it at once. Every report is in Reports, with its cost. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
+        One Persian report is written after each session: once that day's body weight and the Apple Health workout are in, or 2 hours after the session ends; Write report now writes it at once. Every report is on Profile, with its cost. The planner's Get advice asks for advice on a plan. Costs are estimates from the token counts.
       </p>
     </section>
   );

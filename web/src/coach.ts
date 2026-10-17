@@ -148,16 +148,26 @@ export interface RotationRef {
   exercise_id: string;
 }
 
-export function sendMessage(threadId: string, message: { id: string; text: string; attachments: Pick<Attachment, "id" | "width" | "height">[]; session?: SessionRef; rotation?: RotationRef }, on: (e: CoachEvent) => void) {
+/** What a question from another screen is about: a due exercise (Program), or a program for his goal (Set goal). */
+export interface AskAbout {
+  rotation?: RotationRef;
+  goal_program?: true;
+}
+
+export function sendMessage(
+  threadId: string,
+  message: { id: string; text: string; attachments: Pick<Attachment, "id" | "width" | "height">[]; session?: SessionRef } & AskAbout,
+  on: (e: CoachEvent) => void
+) {
   return post(`/coach/threads/${encodeURIComponent(threadId)}/messages`, message, on);
 }
 
-/** The question a due line's Ask Coach asks for Payam: the Coach takes it once it opens, in a new chat. */
-let pendingAsk: { text: string; rotation: RotationRef } | null = null;
-export function askCoachAbout(text: string, rotation: RotationRef) {
-  pendingAsk = { text, rotation };
+/** The question a due line's or Set goal's Ask Coach asks for Payam: the Coach takes it once it opens, in a new chat. */
+let pendingAsk: { text: string; about: AskAbout } | null = null;
+export function askCoachAbout(text: string, about: AskAbout) {
+  pendingAsk = { text, about };
 }
-export function takePendingAsk(): { text: string; rotation: RotationRef } | null {
+export function takePendingAsk(): { text: string; about: AskAbout } | null {
   const p = pendingAsk;
   pendingAsk = null;
   return p;
@@ -170,7 +180,7 @@ export const archiveThread = (id: string, archived: boolean) => api<{ ok: true }
 
 export const deleteThread = (id: string) => api<{ ok: true }>("DELETE", `/coach/threads/${encodeURIComponent(id)}`);
 
-/** Add to Planner: the draft becomes an inactive program under Me → Program → Drafts. */
+/** Add to Planner: the draft becomes an inactive program under Profile → Program → Drafts. */
 export const addDraft = (messageId: string, toolUseId: string) => api<{ ok: true; program_id: string }>("POST", "/coach/drafts", { message_id: messageId, tool_use_id: toolUseId });
 
 /** A message's text blocks without the app's CONTEXT block. */

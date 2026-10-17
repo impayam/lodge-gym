@@ -1,5 +1,5 @@
-// Me → Body (SPEC-v8 §6.06): the existing body weight only (weekly sizes are a separate milestone). The last logged
-// value, and the trend of the daily values in the app's 60-day window; tapping the chart shows that day's value.
+// Profile → Body weight (SPEC-v8 §6.06; on Profile under My body since SPEC-v12 M15): the last logged value, and the
+// trend of the daily values in the app's 60-day window; tapping the chart shows that day's value. Sizes are on My body.
 
 import { useState } from "preact/hooks";
 import { bodyDaily } from "../../../worker/lib/reports";
@@ -16,9 +16,9 @@ export function BodyCard() {
   const shown = picked && picked.values[0] != null ? { date: picked.date, value: picked.values[0] } : last;
 
   return (
-    <section class="card l-col l-gap-12" data-testid="me-body">
+    <section class="card l-col l-gap-12" data-testid="body-weight-card">
       <div class="card__head">
-        <h2 class="card__title l-m0">Body</h2>
+        <h2 class="card__title l-m0">Body weight</h2>
         {days.length ? <span class="caption num">{plural(days.length, "day")} logged</span> : null}
       </div>
       {shown ? (

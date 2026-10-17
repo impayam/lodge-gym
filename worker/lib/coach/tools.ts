@@ -28,7 +28,7 @@ import {
   type BalanceStatus,
   type ReportData,
 } from "../reports";
-import { addDays, DATE_RE, daysBetween, localHM, weekday } from "../time";
+import { addDays, DATE_RE, daysBetween, localDate, localHM, weekday } from "../time";
 import type { Exercise, Pose, ProgramVersion, WorkoutSession } from "../types";
 import { lastHeavyCompound } from "../ai/advice";
 import { GROUP_NAME, sessionDay } from "../ai/report";
@@ -40,6 +40,9 @@ import { SUGGEST_REPLACEMENTS_TOOL, regionView, rotationOf, suggestReplacements 
 import { blockLetter, currentBlock, regionCoverage } from "../generator";
 import { REGIONS, REGION_INFO, isRegion } from "../regions";
 import { dueText, type RotationStatus } from "../rotation";
+import { BODY_GOAL_NAME, TRAINING_GOAL_NAME } from "../goals";
+import { SIZE_NAME, latestSizes } from "../measurements";
+import { bodyLine } from "../bodyPace";
 
 /** Longest date range of one get_sessions, get_volume or get_adherence call (token budget). */
 export const MAX_RANGE_DAYS = 92;
@@ -151,6 +154,12 @@ export const COACH_TOOLS = [
     name: "get_body_weight",
     description: "Body weight over the last N weeks: one value per day (the day's entries averaged), a 7-day moving average, weekly averages and the change.",
     input_schema: { type: "object", properties: { weeks: { type: "integer", minimum: 1, maximum: 104, description: "Default 12." } }, additionalProperties: false },
+  },
+  {
+    name: "get_body",
+    description:
+      "His goal and body against it (SPEC-v12): the training and body goal and when he set them; the latest 7-day average body weight, its change since the goal was set, the weekly rate as % of body weight and the pace against the body goal (on pace, slower, faster, holding, drifting or no data), as the app computes it; and his latest body sizes in cm with the change since the entry before.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "get_photos",
@@ -405,6 +414,21 @@ export function getProgram(d: CoachData) {
     })),
     block: { block, letter: blockLetter(block) },
     regions_without_main_focus: missing,
+    goal: d.goals ? { training: d.goals.training.map((g) => TRAINING_GOAL_NAME[g]), body: BODY_GOAL_NAME[d.goals.body], set_on: localDate(d.settings.timezone, d.goals.set_at) } : null,
+    goal_of_this_program: info?.params?.goals ? { training: info.params.goals.training.map((g) => TRAINING_GOAL_NAME[g]), body: BODY_GOAL_NAME[info.params.goals.body] } : null,
+  };
+}
+
+/** get_body (SPEC-v12 M15): the goal, the body weight against the body goal's pace, and the latest sizes. */
+export function getBody(d: CoachData) {
+  const p = { ...d, goals: d.goals ?? null, measurements: d.measurements ?? [] };
+  const line = bodyLine(p, d.today);
+  return {
+    goal: d.goals ? { training: d.goals.training.map((g) => TRAINING_GOAL_NAME[g]), body: BODY_GOAL_NAME[d.goals.body], set_on: localDate(d.settings.timezone, d.goals.set_at) } : null,
+    weight: line
+      ? { unit: line.unit, avg7: line.avg7, change_since_goal: line.change, since: line.since, weekly_rate_pct: line.rate_pct, pace: line.status, pace_text: line.sentence }
+      : { note: "No goal set: the pace needs a body goal." },
+    sizes_cm: latestSizes(p.measurements).map((s) => ({ size: SIZE_NAME[s.field], value: s.value, date: s.date, change: s.change, since: s.since })),
   };
 }
 
@@ -615,6 +639,8 @@ export function runTool(
       return parse(libraryInput, (f) => ({ ok: true, result: getLibrary(d, f) }));
     case "get_body_weight":
       return parse(weeksInput("weeks"), (r) => ({ ok: true, result: getBodyWeight(d, (r as { weeks?: number }).weeks ?? 12) }));
+    case "get_body":
+      return parse(z.object({}).strict(), () => ({ ok: true, result: getBody(d) }));
     case "get_photos":
       return parse(photosInput, (f) => ({ ok: true, result: getPhotos(d, f) }));
     case "get_recovery":

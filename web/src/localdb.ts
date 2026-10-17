@@ -1,6 +1,8 @@
 // IndexedDB: offline copy of bootstrap data, sessions, session plans and the training calendar, plus the outbox of
 // pending writes.
 
+import type { Goals } from "../../worker/lib/goals";
+import type { BodyMeasurement } from "../../worker/lib/measurements";
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { CalendarSettings, GymPlan, WorkShift } from "../../worker/lib/calendar";
 import type { SessionPlan } from "../../worker/lib/plan";
@@ -24,7 +26,10 @@ export type OutboxEntry =
   | { key: string; op: "delete_shift"; id: string; rev: number; queued_at: string }
   | { key: string; op: "put_gymplan"; id: string; rev: number; queued_at: string }
   | { key: string; op: "delete_gymplan"; id: string; rev: number; queued_at: string }
-  | { key: string; op: "calendar_settings"; patch: Partial<CalendarSettings>; rev: number; queued_at: string };
+  | { key: string; op: "calendar_settings"; patch: Partial<CalendarSettings>; rev: number; queued_at: string }
+  | { key: string; op: "goals"; goals: Goals; rev: number; queued_at: string }
+  | { key: string; op: "put_measurement"; doc: BodyMeasurement; rev: number; queued_at: string }
+  | { key: string; op: "delete_measurement"; id: string; rev: number; queued_at: string };
 
 interface Schema extends DBSchema {
   kv: { key: string; value: unknown };

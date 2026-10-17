@@ -107,7 +107,7 @@ export function reportData(settings: Partial<Settings> = {}): ReportData {
     { local_date: "2026-09-24", kind: "body_mass", value: 81, unit: "kg", source: "shortcut" },
     { local_date: "2026-09-24", kind: "resting_hr", value: 58, unit: null, source: "shortcut" },
   ];
-  const photo = (id: string, date: string, pose: Photo["pose"]): Photo => ({ id, session_id: null, local_date: date, pose, width: 1200, height: 1600, bytes: 1, created_at: `${date}T12:00:00.000Z` });
+  const photo = (id: string, date: string, pose: Photo["pose"]): Photo => ({ id, session_id: null, local_date: date, pose, framing: null, width: 1200, height: 1600, bytes: 1, created_at: `${date}T12:00:00.000Z` });
   return {
     settings: { unit: "lb", week_start: "mon", relock_minutes: 0, timezone: "America/Denver", rest_between_sets_sec: 30, rest_next_exercise_sec: 120, ...settings },
     program: program(),

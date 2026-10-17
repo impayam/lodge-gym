@@ -8,20 +8,20 @@
 //   4. tapping an exercise adds it to the session (the caller's onPick). Back goes list → body, and the place is
 //      remembered while the app is open, per session.
 // Without WebGL 2, or when the model fails or takes over 10 s, only the chips show, with a "3D unavailable" note.
+// The body itself is the shared one (./Body3D.tsx, SPEC-v12 M15 §3.3).
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { BODY_AREAS, areaDef, areaOfMuscle, musclePicks, type BodyArea, type CategoryFilter, type FigureView } from "../../../worker/lib/bodyAreas";
+import { BODY_AREAS, areaDef, musclePicks, type BodyArea, type CategoryFilter, type FigureView } from "../../../worker/lib/bodyAreas";
 import { CATEGORIES, countsVolume } from "../../../worker/lib/category";
 import type { Muscle } from "../../../worker/lib/muscles";
 import type { Equipment, Exercise, WorkoutSession } from "../../../worker/lib/types";
 import { dayMonth, fmtNum, ytLink } from "../format";
-import type { AnatomyView } from "../lib/anatomy3d";
 import { loadLibrary, useStore } from "../store";
 import { Empty, LoadError, Loading } from "./States";
 import { CATEGORY_LABEL, EquipmentIcon, equipmentLabel, muscleLabel } from "../views/Library";
 import { IconPlay } from "./PulseIcons";
-import { token } from "../lib/tokens";
 import { Select } from "./Select";
+import { Body3D, type Body3DHandle } from "./Body3D";
 
 interface Place {
   step: "body" | "list";
@@ -37,16 +37,11 @@ interface Place {
   category: CategoryFilter;
 }
 
-/** The "Drag to turn" hint shows until the first touch on the model, once per app run. */
-let hintDone = false;
-
 const START: Place = { step: "body", area: null, view: "front", selected: null, muscle: null, equipment: "", category: "counted" };
 /** Where the picker was left, per session, while the app stays open. */
 const memory = new Map<string, Place>();
 
 const EQUIPMENT: Equipment[] = ["barbell", "dumbbell", "cable", "machine", "bodyweight"];
-/** SPEC-v6 §5: a model that has not loaded after 10 s gives way to the chips. */
-const LOAD_TIMEOUT_MS = 10_000;
 
 type Go = (patch: Partial<Place>, scroll?: boolean) => void;
 
@@ -68,140 +63,35 @@ export function BodyPicker({ sessionId, onPick }: { sessionId: string; onPick: (
   return <BodyStep place={place} go={go} />;
 }
 
-const accentColor = () => token("--model-accent");
-
 function BodyStep({ place, go }: { place: Place; go: Go }) {
-  const host = useRef<HTMLDivElement>(null);
-  const view3d = useRef<AnatomyView | null>(null);
   const [mode, setMode] = useState<"loading" | "3d" | "fallback">("loading");
-  const [hint, setHint] = useState(!hintDone);
-  const placeRef = useRef(place);
-  placeRef.current = place;
-
-  useEffect(() => {
-    const openedAt = performance.now();
-    let view: AnatomyView | null = null;
-    let gone = false;
-    const timer = window.setTimeout(() => {
-      gone = true;
-      setMode("fallback");
-    }, LOAD_TIMEOUT_MS);
-    import("../lib/anatomy3d")
-      .then((m) =>
-        m.AnatomyView.create(host.current!, {
-          onSelect: (muscle) => {
-            const p = placeRef.current;
-            if (!p.area) {
-              // Whole body: the tap picks the muscle's area and zooms in, on the side the body faces now.
-              const area = muscle ? areaOfMuscle(muscle) : null;
-              if (area) zoom(area, p.view);
-              return;
-            }
-            go({ selected: muscle }, false);
-            view3d.current?.select(muscle);
-          },
-          onFacing: (v) => go({ view: v }, false),
-          accent: accentColor(),
-          openedAt,
-        })
-      )
-      .then((v) => {
-        view = v;
-        if (gone) return v.dispose();
-        clearTimeout(timer);
-        const p = placeRef.current;
-        v.setArea(p.area, p.view, false);
-        v.select(p.selected);
-        view3d.current = v;
-        setMode("3d");
-      })
-      .catch(() => {
-        if (gone) return;
-        gone = true;
-        clearTimeout(timer);
-        setMode("fallback");
-      });
-    return () => {
-      gone = true;
-      clearTimeout(timer);
-      view?.dispose();
-      view3d.current = null;
-    };
-  }, []);
-
-  /** Enters an area's close-up, or goes back to the whole body. The muscle is chosen in the close-up only. */
-  function zoom(area: BodyArea | null, view: FigureView) {
-    go({ area, view, selected: null }, false);
-    view3d.current?.setArea(area, view);
-    view3d.current?.select(null);
-  }
+  const body = useRef<Body3DHandle | null>(null);
   // A chip opens the close-up on the area's first side (the camera preset's side, ../lib/anatomy-camera.ts).
-  const chooseArea = (area: BodyArea | null) => zoom(area, area ? areaDef(area).views[0] : placeRef.current.view);
-  const turn = (view: FigureView) => {
-    go({ view }, false);
-    view3d.current?.setView(view);
-  };
+  const chooseArea = (area: BodyArea | null) => body.current?.zoom(area);
   const def = place.area ? areaDef(place.area) : null;
-
-  const sides =
-    mode === "3d" ? (
-      <span class="segmented" role="group" aria-label="Side">
-        {(["front", "back"] as const).map((v) => (
-          <button type="button" class="press" aria-pressed={place.view === v} data-testid={`view-${v}`} onClick={() => turn(v)}>
-            {v === "front" ? "Front" : "Back"}
-          </button>
-        ))}
-      </span>
-    ) : null;
-  const back = def ? (
-    <button type="button" class="clay press btn-sm t-muted" data-testid="pick-back" onClick={() => chooseArea(null)}>
-      ← Body
-    </button>
-  ) : null;
 
   return (
     <div class="l-col l-gap-12" data-testid="body-step" data-area={place.area ?? ""} data-mode={mode}>
-      {mode === "fallback" ? (
-        <>
-          <div class="stage__off" data-testid="anatomy-fallback">
-            3D unavailable. Pick an area, then a muscle.
-          </div>
-          {back ? <div class="l-row">{back}</div> : null}
-        </>
-      ) : (
-        <div
-          class="stage stage--picker"
-          data-testid="anatomy"
-          onPointerDown={(e) => {
-            // A touch on the model itself (not on Front / Back or ← Body) retires the hint.
-            if ((e.target as Element).tagName !== "CANVAS") return;
-            hintDone = true;
-            setHint(false);
-          }}
-        >
-          <div class="stage__canvas" ref={host} />
-          {mode === "loading" ? <div class="stage__msg">Loading the 3D body…</div> : null}
-          <div class="stage__top">
-            {back ?? <span />}
-            {sides}
-          </div>
-          {mode === "3d" && !place.selected ? (
-            <span class="stage__hint" data-gone={hint ? "false" : "true"} data-testid="anatomy-hint" aria-hidden="true">
-              Drag to turn.
-              <br />
-              {def ? "Tap a muscle." : "Tap to zoom in."}
-            </span>
-          ) : null}
-          {mode === "3d" && place.selected ? (
-            <div class="stage__card" data-testid="anatomy-selection" data-muscle={place.selected}>
-              <b class="t-title">{muscleLabel(place.selected)}</b>
-              <button type="button" class="clay press btn-sm t-pink" data-testid="show-exercises" onClick={() => go({ step: "list", muscle: place.selected })}>
+      <Body3D
+        size="picker"
+        place={{ area: place.area, view: place.view, selected: place.selected }}
+        onPlace={(p) => go({ area: p.area, view: p.view, selected: p.selected }, false)}
+        onMode={setMode}
+        handle={body}
+        hintKey="picker"
+        ids={{ stage: "anatomy", front: "view-front", back: "view-back", body: "pick-back", hint: "anatomy-hint", card: "anatomy-selection" }}
+        fallbackNote="3D unavailable. Pick an area, then a muscle."
+        card={(m) => ({
+          body: (
+            <>
+              <b class="t-title">{muscleLabel(m)}</b>
+              <button type="button" class="clay press btn-sm t-pink" data-testid="show-exercises" onClick={() => go({ step: "list", muscle: m })}>
                 Show exercises
               </button>
-            </div>
-          ) : null}
-        </div>
-      )}
+            </>
+          ),
+        })}
+      />
       {def ? (
         // In a close-up the area's muscle chips take the place of the area chips; "← Body" goes back.
         <div class="chip-wrap" role="group" aria-label={`${def.label} muscles`} data-testid="muscle-chips">

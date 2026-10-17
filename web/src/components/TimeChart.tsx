@@ -33,7 +33,7 @@ interface Props {
   area?: boolean;
   /** Value labels on the y-axis. */
   yAxis?: boolean;
-  /** The recessive horizontal grid (off on the small Me → Body trend, which keeps only its baseline). */
+  /** The recessive horizontal grid (off on the small Profile → Body weight trend, which keeps only its baseline). */
   grid?: boolean;
   /** Date labels under the plot: first and last, with an optional text for the last. */
   xLabels?: { last?: string } | false;

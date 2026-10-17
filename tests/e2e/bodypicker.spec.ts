@@ -272,7 +272,9 @@ test("fallback: without WebGL the chips alone pick the exercise, with a 3D unava
   await startSession(page);
   const step = await openPicker(page, "fallback");
   await expect(step.getByTestId("anatomy-fallback")).toContainText("3D unavailable");
+  await expect(step.getByTestId("anatomy-retry")).toBeVisible();
   await expect(step.locator("canvas")).toHaveCount(0);
+  await expect(page.locator("svg path.body-region, .body-figure")).toHaveCount(0);
   await allAreasVisible(page);
   await step.getByTestId("area-arms").click();
   await step.getByTestId("muscle-triceps").click();

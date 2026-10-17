@@ -270,7 +270,7 @@ export function AllReports() {
   return (
     <main class="page" data-testid="all-reports-screen">
       <header class="screen-head">
-        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to Reports" data-testid="back" onClick={goBack}>
+        <button type="button" class="clay press btn-icon t-muted" aria-label="Back to Profile" data-testid="back" onClick={goBack}>
           <IconBack size={20} />
         </button>
         <div class="l-col l-grow">

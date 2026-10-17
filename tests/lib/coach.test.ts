@@ -104,7 +104,7 @@ describe("coach tool inputs", () => {
     expect(sessions[1].exercises.find((x) => x.exercise_id === "cs_row")!.sets[0].weight).toBe(55.1);
   });
 
-  it("every tool has a strict object schema; there are 14 read tools (suggest_replacements, Phase B), propose_schedule, propose_exercise, propose_session_additions and propose_program", () => {
+  it("every tool has a strict object schema; there are 15 read tools (suggest_replacements, Phase B; get_body, M15), propose_schedule, propose_exercise, propose_session_additions and propose_program", () => {
     expect(COACH_TOOLS.map((t) => t.name)).toEqual([
       "get_sessions",
       "get_e1rm_history",
@@ -114,6 +114,7 @@ describe("coach tool inputs", () => {
       "get_program",
       "get_library",
       "get_body_weight",
+      "get_body",
       "get_photos",
       "get_recovery",
       "get_training_pattern",
@@ -368,7 +369,7 @@ describe("coach prompt", () => {
     expect(COACH_SYSTEM).toContain("Keep every exercise he asks for.");
     expect(COACH_SYSTEM).not.toMatch(/no heavy compound/i);
     expect(COACH_SYSTEM).toContain("pulling volume at least equal to pushing volume");
-    expect(COACH_SYSTEM).toContain("Me → Program → Drafts");
+    expect(COACH_SYSTEM).toContain("Profile → Program → Drafts");
     expect(COACH_SYSTEM).not.toMatch(/Settings → Program/);
   });
 
@@ -376,5 +377,65 @@ describe("coach prompt", () => {
     expect(contextBlock({ today: "2026-10-14", timezone: "America/Denver", unit: "lb", week_start: "mon", program: { name: "Full body · 4 days", since: "2026-09-27" } })).toBe(
       [CONTEXT_HEADER, "Today: Wednesday 2026-10-14. Time zone: America/Denver.", "Weight unit: lb. Weeks start on Monday.", "Active program: Full body · 4 days, active since 2026-09-27."].join("\n")
     );
+  });
+});
+
+describe("SPEC-v12 M15: goals in the Coach", () => {
+  const goals = { training: ["growth", "strength"] as ("growth" | "strength")[], body: "cut" as const, set_at: "2026-09-20T15:00:00.000Z" };
+  it("the prompt has the goal rules, no time limit and cardio apart from lifting", () => {
+    expect(COACH_SYSTEM).toContain("GOALS\n- He sets a training goal of one or two of Growth, Strength, Endurance and Power");
+    expect(COACH_SYSTEM).toContain("Session length is information. The app never cuts, shortens or refuses an exercise because of minutes, and neither do you.");
+    expect(COACH_SYSTEM).toContain("Cardio is separate from lifting: it follows his body goal and never shortens or changes the lifting program.");
+    expect(COACH_SYSTEM).toContain("the main and secondary lifts follow the heavier goal of the pair (Strength, then Power, then Growth, then Endurance)");
+    expect(COACH_SYSTEM).not.toContain("Goals: strength and balance");
+    expect(COACH_SYSTEM).not.toContain("Me → Program");
+  });
+  it("the CONTEXT block names the goal, and says when he asked for a program for it", () => {
+    const base = { today: "2026-10-17", timezone: "America/Denver", unit: "lb" as const, week_start: "mon" as const, program: null };
+    expect(contextBlock({ ...base, goal: { training: "Growth + Strength", body: "Cut", set_on: "2026-10-17" } })).toContain("Goal: Growth + Strength (training), Cut (body), set on 2026-10-17.");
+    expect(contextBlock({ ...base, goal: { training: "Growth + Strength", body: "Cut", set_on: "2026-10-17" }, goal_program: true })).toContain("He set his goal today: Growth + Strength, Cut, and asked for a program for it.");
+    expect(contextBlock({ ...base, goal: null })).toContain("Goal: none set (the app uses the Growth schemes).");
+    // A block written before M15 has no goal line.
+    expect(contextBlock(base)).not.toContain("Goal:");
+  });
+  it("get_body: the goal, the weight against its pace, the latest sizes; get_program carries the goal", () => {
+    const d: CoachData = {
+      ...data("2026-09-27"),
+      goals,
+      measurements: [
+        { id: "m1", local_date: "2026-09-01", arm_cm: 38, chest_cm: null, waist_cm: 86, hips_cm: null, thigh_cm: null, calf_cm: null, neck_cm: null, shoulders_cm: null, note: "", created_at: "2026-09-01T10:00:00Z", updated_at: "2026-09-01T10:00:00Z", deleted_at: null },
+        { id: "m2", local_date: "2026-09-25", arm_cm: 38.5, chest_cm: null, waist_cm: 85, hips_cm: null, thigh_cm: null, calf_cm: null, neck_cm: null, shoulders_cm: null, note: "", created_at: "2026-09-25T10:00:00Z", updated_at: "2026-09-25T10:00:00Z", deleted_at: null },
+      ],
+    };
+    const r = runTool(d, "get_body", {});
+    expect(r.ok).toBe(true);
+    const body = (r as { result: { goal: unknown; weight: { pace: string }; sizes_cm: { size: string; value: number; change: number | null }[] } }).result;
+    expect(body.goal).toEqual({ training: ["Growth", "Strength"], body: "Cut", set_on: "2026-09-20" });
+    expect(["on", "slow", "fast", "no_data"]).toContain(body.weight.pace);
+    expect(body.sizes_cm).toEqual([
+      { size: "Arm", value: 38.5, date: "2026-09-25", change: 0.5, since: "2026-09-01" },
+      { size: "Waist", value: 85, date: "2026-09-25", change: -1, since: "2026-09-01" },
+    ]);
+    expect(runTool(d, "get_body", { x: 1 }).ok).toBe(false);
+    const p = runTool(d, "get_program", {}) as { result: { goal: unknown } };
+    expect(p.result.goal).toEqual({ training: ["Growth", "Strength"], body: "Cut", set_on: "2026-09-20" });
+    const none = runTool(data("2026-09-27"), "get_body", {}) as { result: { goal: unknown; weight: unknown } };
+    expect(none.result.goal).toBeNull();
+    expect(none.result.weight).toEqual({ note: "No goal set: the pace needs a body goal." });
+  });
+});
+
+describe("SPEC-v12 M15: the goal line of the AI reports", () => {
+  it("the weekly overview and the after-session report carry the goal in words (no numbers); data from before M15 has none", async () => {
+    const { buildReportInput, REPORT_SYSTEM } = await import("../../worker/lib/ai/report");
+    const { OVERVIEW_SYSTEM } = await import("../../worker/lib/ai/overview");
+    const d = { ...reportData(), goals: { training: ["strength" as const], body: "cut" as const, set_at: "2026-09-01T10:00:00Z" } };
+    expect(buildOverviewInput(d, [], "2026-09-27", null).goal).toEqual({ training: "Strength", body: "Cut", pace: expect.any(String) });
+    expect(buildReportInput(d, "S1", null).goal).toEqual({ training: "Strength", body: "Cut", pace: expect.any(String) });
+    expect(buildOverviewInput({ ...reportData(), goals: null }, [], "2026-09-27", null).goal).toBeNull();
+    expect("goal" in buildOverviewInput(reportData(), [], "2026-09-27", null)).toBe(false);
+    expect("goal" in buildReportInput(reportData(), "S1", null)).toBe(false);
+    expect(OVERVIEW_SYSTEM).toContain("in a Cut, losing weight on pace is progress, not a problem");
+    expect(REPORT_SYSTEM).toContain("goal is his training goal and body goal (null: none set)");
   });
 });

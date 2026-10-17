@@ -1,4 +1,4 @@
-// History (SPEC-v8 §6.04, SPEC-v2 §8.6): sessions only (Step 3: the AI reports live in Reports; a link goes there),
+// History (SPEC-v8 §6.04, SPEC-v2 §8.6): sessions only (Step 3: the AI reports live on Profile; a link goes there),
 // as cards by month (grouped by program when there is more than one), then the program timeline with Switch back.
 
 import { useEffect, useState } from "preact/hooks";
@@ -54,13 +54,13 @@ export function History() {
         </div>
       </header>
       <section class="card card--list" aria-label="AI reports">
-        <button type="button" class="list-row press" data-testid="history-reports-link" onClick={() => navigate("reports")}>
+        <button type="button" class="list-row press" data-testid="history-reports-link" onClick={() => navigate("profile")}>
           <span class="well icon-well t-violet">
             <IconSpark />
           </span>
           <span class="list-row__text">
             <span class="t-title">AI reports</span>
-            <span class="caption">After-session reports and weekly reviews are in Reports.</span>
+            <span class="caption">After-session reports and weekly reviews are on Profile.</span>
           </span>
           <span class="list-row__chevron">
             <IconChevron size={16} />

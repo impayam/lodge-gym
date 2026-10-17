@@ -8,6 +8,7 @@
 // done set counts 1 for its primary muscle's group and 0.5 for each other group, at most once per group, and only
 // strength work counts (setContribution, countsVolume).
 
+import { goalFacts, type GoalFacts } from "../bodyPace";
 import { z } from "zod";
 import { countsVolume } from "../category";
 import { weekRange } from "../cycle";
@@ -119,6 +120,8 @@ export interface ReportInput {
   where_you_are?: WhereYouAre | null;
   /** The motivational lines of the latest earlier reports, newest first, so this one says something new; added by the job. */
   recent_motivation?: string[];
+  /** SPEC-v12 M15: his goal and the body weight's pace against it (null: no goal set; absent in data without goals). */
+  goal?: GoalFacts | null;
 }
 
 const rirText = (r: number | null | undefined) => (r == null ? null : r >= 3 ? "3+" : String(r));
@@ -328,6 +331,7 @@ export function buildReportInput(d: ReportData, sessionId: string, plan: Session
     week_so_far: { start: range.start, end: range.end, sessions_done: week.length + (week.some((x) => x.id === s.id) ? 0 : 1), sessions_planned: scored.days_per_week, volume },
     watch,
     body_weight,
+    ...(d.goals === undefined ? {} : { goal: goalFacts(d, s.local_date) }),
   };
 }
 
@@ -453,6 +457,9 @@ Today:
 - Missed exercises and sets: say in missed_note_fa what was skipped and what it means for the week's targets (null if nothing was skipped).
 - Next time: the app sets every weight, rep and time for next session with its progression rules (all planned sets at the top of the rep range → +5 lb upper body, +10 lb lower body, +5 lb per dumbbell; kg: +2.5, +5, +2 per dumbbell; RIR 3+ on every planned set → twice that; otherwise the same weight) and shows them itself (app_next_time). In next_time write only a short Persian note per exercise that has app_next_time (keep the weight and aim for every rep, or move up as the app shows), with no numbers at all. Never suggest a weight anywhere in the report. Extra exercises have no progression target.
 - Warnings only for real issues: a big drop in performance, pain in the note, or a very high number of RIR 0 sets. Usually there are none.
+
+Goal:
+- goal is his training goal and body goal (null: none set). Judge the session against it: Growth wants near-failure sets in the rep ranges, Strength heavy main lifts, Endurance high reps with short rest, Power fast main lifts. goal.pace is the body weight's pace against his body goal: in a Cut, losing weight on pace is progress, not a problem. A body goal never changes the lifting.
 
 Where you are (where_fa):
 - 2–4 short lines on where his training stands, from where_you_are only: consistency (sessions done against sessions planned, week by week in weeks and in totals, which count from totals.since) and the main lifts' estimated 1RM trend (lifts[].change_pct, stalls, drops).

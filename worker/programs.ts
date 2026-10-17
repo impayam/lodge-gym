@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppBindings, Env } from "./env";
 import { ApiError, fail, nowISO, readJson } from "./http";
+import { readGoals } from "./body";
 import { attachRegions, mapExercise, readProgram, readProgramInfos, readProgramVersions, readRegions, readSessions, readSettings } from "./data";
 import {
   EQUIPMENT_CHOICES,
@@ -27,6 +28,7 @@ import {
   type Plan,
   type TargetGroup,
 } from "./lib/generator";
+import { BODY_GOALS, TRAINING_GOALS } from "./lib/goals";
 import { TARGET_GROUPS } from "./lib/muscles";
 import { programRotation } from "./lib/rotation";
 import { addDays, localDate } from "./lib/time";
@@ -38,13 +40,25 @@ const id = z.string().regex(ID_RE);
 const inputSchema = z.object({
   days_per_week: z.number().int().min(2).max(6),
   style: z.enum(STYLES),
-  session_minutes: z.union([z.literal(45), z.literal(60), z.literal(75), z.literal(90)]),
   priority_muscles: z.array(z.enum(TARGET_GROUPS)).max(TARGET_GROUPS.length),
   avoid: z.array(id).max(300),
   equipment: z.enum(EQUIPMENT_CHOICES),
   seed: z.number().int().min(0).max(2_147_483_647),
   /** Phase B: the block a draft starts (set by /generate; ignored there). */
   block: z.number().int().min(1).max(1000).optional(),
+  /** SPEC-v12 M15: the goal the program was made for (set by /generate from the settings; ignored there). Older
+   *  programs carry a session length instead; it is dropped, because it no longer limits a program. */
+  goals: z
+    .object({
+      training: z
+        .array(z.enum(TRAINING_GOALS))
+        .min(1)
+        .max(2)
+        .refine((t) => new Set(t).size === t.length, "duplicate goal"),
+      body: z.enum(BODY_GOALS),
+    })
+    .nullable()
+    .optional(),
 });
 
 /** An edited proposal: the generator inputs and, per layout day, the exercises with their slot and sets. */
@@ -144,12 +158,13 @@ export const programRoutes = new Hono<AppBindings>();
 /** Every program with its days, exercises and activations, newest first. */
 programRoutes.get("/", async (c) => c.json({ programs: await readProgramVersions(c.env) }));
 
-/** A proposal for the inputs; nothing is stored. It starts the block after the current program's (Phase B). */
+/** A proposal for the inputs; nothing is stored. It starts the block after the current program's (Phase B) and follows
+ *  the saved goal (SPEC-v12 M15 §2.4). */
 programRoutes.post("/generate", async (c) => {
   const input = await readJson(c, inputSchema);
-  const ctx = await generatorContext(c.env);
+  const [ctx, goals] = await Promise.all([generatorContext(c.env), readGoals(c.env)]);
   try {
-    return c.json({ proposal: generateProgram({ ...input, block: ctx.block }, ctx) });
+    return c.json({ proposal: generateProgram({ ...input, block: ctx.block, goals: goals ? { training: goals.training, body: goals.body } : null }, ctx) });
   } catch (e) {
     if (e instanceof GeneratorInputError) return fail(c, 400, "invalid_style", e.message);
     throw e;

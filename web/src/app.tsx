@@ -7,8 +7,7 @@ import { getState, goBack, navigate, setState, useStore } from "./store";
 import { FirstOffline, Locked, Login, Recovery, Setup } from "./views/Auth";
 import { History } from "./views/History";
 import { Library } from "./views/Library";
-import { Me } from "./views/Me";
-import { AiReports, Backup } from "./views/MeScreens";
+import { AiReports, Backup } from "./views/SettingsScreens";
 import { Calendar } from "./views/Calendar";
 import { Coach } from "./views/Coach";
 import { NewProgram } from "./views/NewProgram";
@@ -16,11 +15,14 @@ import { Home } from "./views/Home";
 import { Photos } from "./views/Photos";
 import { Planner } from "./views/Planner";
 import { Program } from "./views/Program";
-import { Reports } from "./views/Reports";
+import { Profile } from "./views/Profile";
+import { SetGoal } from "./views/SetGoal";
+import { AllSizes } from "./components/Sizes";
 import { AllReports, SavedReport } from "./views/ReportsTimeline";
 import { Session } from "./views/Session";
 import { SessionReportScreen } from "./views/SessionReport";
 import { Settings } from "./views/Settings";
+import { MyTraining } from "./views/MyTraining";
 import { Watch } from "./views/Watch";
 
 /** Client-side re-lock after N minutes in the background (SPEC §4.4). */
@@ -42,11 +44,11 @@ function useRelock() {
   }, []);
 }
 
-/** The 5 icon tabs with the pressed-in well that slides to the current one (SPEC-v8 §5). */
-/** The five tabs; `coach` leaves room at the right end for the Coach button. */
+/** The four icon tabs with the pressed-in well that slides to the current one (SPEC-v8 §5, SPEC-v12 M15 §3.0); `coach`
+ *  leaves room at the right end for the Coach button. */
 function TabBar({ tab, coach }: { tab: TabName; coach: boolean }) {
   return (
-    <nav class={coach ? "tabbar tabbar--coach" : "tabbar"} aria-label="Sections" style={{ "--i": String(tabIndex(tab)) }}>
+    <nav class={coach ? "tabbar tabbar--coach" : "tabbar"} data-tabs={String(TABS.length)} aria-label="Sections" style={{ "--i": String(tabIndex(tab)) }}>
       <span class="tabbar__indicator" aria-hidden="true" />
       {TABS.map(({ name, label }) => {
         const Icon = TabIcon[name];
@@ -97,12 +99,14 @@ export function App() {
       <AllReports />
     ) : view.name === "saved" && view.saved ? (
       <SavedReport key={`${view.saved.kind}:${view.saved.id}`} item={view.saved} />
-    ) : view.name === "reports" ? (
-      <Reports />
     ) : view.name === "library" ? (
       <Library />
-    ) : view.name === "me" ? (
-      <Me />
+    ) : view.name === "profile" ? (
+      <Profile />
+    ) : view.name === "goal" ? (
+      <SetGoal />
+    ) : view.name === "sizes" ? (
+      <AllSizes />
     ) : view.name === "coach" ? (
       <Coach />
     ) : view.name === "calendar" ? (
@@ -113,6 +117,8 @@ export function App() {
       <Program />
     ) : view.name === "settings" ? (
       <Settings />
+    ) : view.name === "training" ? (
+      <MyTraining />
     ) : view.name === "ai" ? (
       <AiReports />
     ) : view.name === "backup" ? (

@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { Category } from "../../worker/lib/category";
-import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, SetEntry, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
+import type { BodyMetric, Bootstrap, Exercise, ExerciseMedia, Framing, HealthWorkout, Photo, Pose, ProgramInfo, ProgramVersion, SetEntry, Settings, Unit, WorkoutSession } from "../../worker/lib/types";
 import type { CheckResult, EditedExercise, GeneratorInput, Proposal } from "../../worker/lib/generator";
 import type { TimelineItem } from "../../worker/lib/ai/timeline";
 import { DEFAULT_CALENDAR_SETTINGS, type CalendarSettings, type GymPlan, type WorkShift } from "../../worker/lib/calendar";
 import { addItem, inPlan, liveItems, moveAfter, planFromDay, removeItem, replaceItem, seqIds, type SessionPlan } from "../../worker/lib/plan";
 import { additionTargets, type AdditionTarget } from "../../worker/lib/coach/additionTarget";
 import { ulid } from "../../worker/lib/ulid";
+import type { BodyGoal, Goals, TrainingGoal } from "../../worker/lib/goals";
+import type { BodyMeasurement } from "../../worker/lib/measurements";
 import { processPhoto } from "./photos";
 import { cancelPush, schedulePush } from "./push";
 import { addDays, localDate } from "../../worker/lib/time";
@@ -138,18 +140,18 @@ export function goBack() {
   if (to) navigate(to);
 }
 
-/** Progress photos, optionally in compare mode or with one photo open (Me → Progress photos). */
+/** Progress photos, optionally in compare mode or with one photo open (Profile → Photos). */
 export function openPhotos(opts: { compare?: boolean; open?: string } = {}) {
   setState({ view: { name: "photos", photos: opts } });
   window.scrollTo(0, 0);
 }
 
 /**
- * A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). `inReports`
- * opens it on the Reports tab, where every AI report lives (Step 3), so Back goes there.
+ * A session's AI report (SPEC-v3 M9a); `fresh` right after Finish session (with the progress-photo prompt). `inProfile`
+ * opens it on the Profile tab, where the AI reports card lives (SPEC-v12 M15 §3.2), so Back goes there.
  */
-export function openReport(sessionId: string, fresh = false, inReports = false) {
-  setState((s) => ({ view: { name: "report", sessionId, fresh }, tab: inReports ? "reports" : s.tab }));
+export function openReport(sessionId: string, fresh = false, inProfile = false) {
+  setState((s) => ({ view: { name: "report", sessionId, fresh }, tab: inProfile ? "profile" : s.tab }));
   window.scrollTo(0, 0);
 }
 
@@ -243,7 +245,8 @@ export async function refresh() {
   try {
     const b = await api<Bootstrap>("GET", "/bootstrap");
     const { sessions, server_time, plans, calendar, ...rest } = b;
-    const boot: BootData = { ...rest, calendar_settings: calendar?.settings ?? state.boot?.calendar_settings };
+    // Goals and body sizes still in the outbox stay as this device has them until they are sent.
+    const boot: BootData = withPending({ ...rest, calendar_settings: calendar?.settings ?? state.boot?.calendar_settings }, await ldb.outboxAll());
     await ldb.kvSet("boot", boot);
     await ldb.kvSet("logged_in", true);
     const windowStart = addDays(localDate(boot.settings.timezone), -60);
@@ -579,6 +582,50 @@ export async function saveBodyMass(date: string, value: number | null, unit: Uni
   await enqueue({ key: "body:" + date, op: "body_mass", date, value, unit });
 }
 
+/* ---------------- goals and body sizes (SPEC-v12 M15 §2, §4) ---------------- */
+
+/** The bootstrap with the goal and the size entries this device has not sent yet. */
+function withPending(boot: BootData, outbox: OutboxEntry[]): BootData {
+  let goals = boot.goals ?? null;
+  let measurements = [...(boot.measurements ?? [])];
+  for (const e of outbox.sort((a, b) => a.queued_at.localeCompare(b.queued_at))) {
+    if (e.op === "goals") goals = e.goals;
+    else if (e.op === "put_measurement") measurements = [...measurements.filter((m) => m.id !== e.doc.id), e.doc];
+    else if (e.op === "delete_measurement") measurements = measurements.filter((m) => m.id !== e.id);
+  }
+  return { ...boot, goals, measurements: sortMeasurements(measurements) };
+}
+
+const sortMeasurements = (list: BodyMeasurement[]) => [...list].sort((a, b) => (a.local_date + a.created_at).localeCompare(b.local_date + b.created_at));
+
+/** Saves the goal (works offline). Saving a goal never changes the program (SPEC-v12 §2.3). */
+export async function saveGoals(training: TrainingGoal[], body: BodyGoal) {
+  if (!state.boot) return;
+  const goals: Goals = { training, body, set_at: new Date().toISOString() };
+  const boot = { ...state.boot, goals };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
+  await enqueue({ key: "goals", op: "goals", goals });
+}
+
+/** Adds or edits one body-size entry (works offline). */
+export async function saveMeasurement(doc: BodyMeasurement) {
+  if (!state.boot) return;
+  const m = { ...doc, updated_at: new Date().toISOString() };
+  const boot = { ...state.boot, measurements: sortMeasurements([...(state.boot.measurements ?? []).filter((x) => x.id !== m.id), m]) };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
+  await enqueue({ key: "measurement:" + m.id, op: "put_measurement", doc: m });
+}
+
+export async function deleteMeasurement(id: string) {
+  if (!state.boot) return;
+  const boot = { ...state.boot, measurements: (state.boot.measurements ?? []).filter((x) => x.id !== id) };
+  setState({ boot });
+  await ldb.kvSet("boot", boot);
+  await enqueue({ key: "measurement:" + id, op: "delete_measurement", id });
+}
+
 /* ---------------- photos (SPEC §8) ---------------- */
 
 async function restorePendingPhotos() {
@@ -618,13 +665,15 @@ function photoUploaded(id: string) {
 }
 
 /** Resizes, strips metadata, stores locally and queues the upload. */
-export async function addPhoto(file: Blob, pose: Pose, localDateStr: string, sessionId: string | null) {
+/** `framing` comes from the guide camera's pose check (null from the library, or when it found no one). */
+export async function addPhoto(file: Blob, pose: Pose, localDateStr: string, sessionId: string | null, framing: Framing | null = null) {
   const processed = await processPhoto(file);
   const photo: Photo = {
     id: ulid(),
     session_id: sessionId,
     local_date: localDateStr,
     pose,
+    framing,
     width: processed.width,
     height: processed.height,
     bytes: processed.full.size,
@@ -1033,6 +1082,13 @@ async function syncOnce() {
           setState({ boot });
           await ldb.kvSet("boot", boot);
         }
+      } else if (e.op === "goals") {
+        await api("PUT", "/settings", { goal_training: e.goals.training, goal_body: e.goals.body, goal_set_at: e.goals.set_at });
+      } else if (e.op === "put_measurement") {
+        const { deleted_at: _deleted, ...doc } = e.doc;
+        await api("PUT", `/body/measurements/${encodeURIComponent(e.doc.id)}`, doc);
+      } else if (e.op === "delete_measurement") {
+        await api("DELETE", `/body/measurements/${encodeURIComponent(e.id)}`);
       } else {
         await api("PUT", "/settings", e.patch);
       }

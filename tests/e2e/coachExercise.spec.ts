@@ -5,7 +5,7 @@ import { ulid } from "../../worker/lib/ulid";
 
 // Coach: one more exercise for a day (Payam, 2026-10-16), with the model mocked. One card with only the change and
 // two buttons, the one he asked for first: Only this session (the open session, or that day's plan, in the same place)
-// and Whole program (a draft of his program with that exercise, under Me → Program → Drafts). The program, library and
+// and Whole program (a draft of his program with that exercise, under Profile → Program → Drafts). The program, library and
 // recovery cards are shown only when he asks to see them; Sets vs target is one card with the weeks as columns.
 test.describe.configure({ mode: "serial" });
 
@@ -107,7 +107,7 @@ test("one more exercise on the chest day: one card with only the change; no prog
   expect(program()).toBe(before);
 });
 
-test("from now on: Whole program first; it saves his program with that exercise as a draft under Me → Program → Drafts; the active program stays", async ({ page }) => {
+test("from now on: Whole program first; it saves his program with that exercise as a draft under Profile → Program → Drafts; the active program stays", async ({ page }) => {
   const before = program();
   await askCoach(page, "From now on add one more chest exercise on my chest day");
   const { card, id, name } = await exerciseCard(page);
@@ -116,7 +116,7 @@ test("from now on: Whole program first; it saves his program with that exercise 
   await expect(card.getByRole("button")).toHaveText(["Whole program", "Only this session"]);
 
   await card.getByTestId("coach-exercise-program").click();
-  await expect(card.getByTestId("coach-exercise-program-added")).toContainText("Added to Me → Program → Drafts.");
+  await expect(card.getByTestId("coach-exercise-program-added")).toContainText("Added to Profile → Program → Drafts.");
   const drafts = sql("SELECT id, name, active FROM programs WHERE generated_by = 'coach'") as { id: string; name: string; active: number }[];
   expect(drafts).toEqual([{ id: expect.any(String), name: `Full body · 4 days + ${name}`, active: 0 }]);
   // The draft: Day 1 with the exercise after Seated Cable Row, his superset kept; the other days as they are.
@@ -135,7 +135,7 @@ test("from now on: Whole program first; it saves his program with that exercise 
   expect(program()).toBe(before);
   expect(count("SELECT COUNT(*) AS n FROM planned_sessions")).toBe(0);
 
-  // Open: Me → Program, where it waits for his approval with the other drafts.
+  // Open: Profile → Program, where it waits for his approval with the other drafts.
   await card.getByTestId("coach-exercise-program-added").getByRole("button", { name: "Open" }).click();
   await expect(page.getByTestId("program-screen-drafts")).toContainText(`Full body · 4 days + ${name}`);
   // The draft's Day 1 says the card's "about N min"; the other days keep the program's estimate.

@@ -116,8 +116,9 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   body a tap zooms to that muscle's area (as in the picker); in the close-up a tap shows a card with the muscle, its
   group and "done / target sets this week" (fractional) with the status icon and label; "← Body" goes back. The legend
   and the list under the map carry icon and label, so status is never colour alone; the list is the accessible
-  alternative. Without WebGL 2, or when the model fails or takes over 10 s, a "3D unavailable" note shows with the
-  drawn front and back figures (one region per canonical muscle key, tapping a region selects its group).
+  alternative. Without WebGL 2, or when the model fails or takes over 10 s, only a "3D unavailable." note shows with
+  Retry (as in the exercise picker); no drawn figure ships (PR #26 review, 2026-10-17: a proper fallback is for the
+  native app).
 - Calves count only from calf work: the seeded squat, leg press, lunge, RDL and deadlift do not list calves as a
   secondary muscle (decided 2026-10-12).
 - Only strength work counts (decided 2026-10-12): exercises whose `category` (migration `0005_exercise_category.sql`)
@@ -182,12 +183,13 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 ## Training styles and program generator (SPEC-v2 M8)
 
 - Settings → Program → New program: days per week, style (auto, full body, upper/lower, PPL, PPL + upper/lower, bro
-  split, strength), session length, priority muscles, exercises to leave out, and full gym or dumbbells only.
+  split, strength), priority muscles, exercises to leave out, and full gym or dumbbells only. The slot schemes follow
+  the goal set on Profile (SPEC-v12 M15); session length is information only and never limits a program.
 - The generator (`worker/lib/generator/`, pure and seeded) fills each style's fixed weekly layout: main and secondary
   lifts first, then accessories and isolation toward the weekly targets (the current program's fractional volume, +3
   for added priority muscles, floors of 10 for chest, back, quads and hamstrings & glutes), with at most 10 fractional
-  sets per muscle per session, rear delts ≥ 6, pull ≥ push, at least one hinge and one squat, and every day inside
-  the session length. Exercise choice prefers history, then the current program, then compound, then
+  sets per muscle per session and 20 per week, rear delts ≥ 6, pull ≥ push, at least one hinge and one squat; no day
+  is cut for time. Exercise choice prefers history, then the current program, then compound, then
   beginner/intermediate; one exercise keeps one role a week; Olympic-style lifts are never picked automatically.
 - `checkPlan` (`check.ts`) is shared by the generator, the editor on the phone and the server: hard-rule violations
   block approval, warnings (floors, under/over target, long days, frequency) do not.
@@ -202,12 +204,45 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
   replaces a doubled one; the triceps long head counts only with an overhead extension), no day has two exercises with
   the same main-focus region and equipment, and forearms and
   neck get their weekly direct sets (4 and 2 in the first block, +1 per block, up to 8 and 6; neck 15–25 reps, 3–4 RIR,
-  the smallest load step). New program defaults to 75 minutes, the length the 30 regions need on 4 days. The proposal
+  the smallest load step). The proposal
   shows the block, its region coverage and "replaces X: N weeks". The Program screen lists due exercises (at most 3)
   with an Ask Coach button.
-- Tests: property tests over every style × days × session length × 50 seeds on the real library
+- Tests: property tests over every style × days × goal × 50 seeds on the real library
   (`tests/fixtures/generator/library.json`, rebuilt by `npx tsx scripts/generator-pool.mts`), Payam's snapshot (within
   ±2 sets per muscle of the current program), the API flow and the seed re-run, and the Playwright flow.
+
+## Goals, Profile and body sizes (SPEC-v12 M15, decisions by Payam 2026-10-17)
+
+- Four tabs: Train, History, Library, Profile (Reports and Me merged into Profile). The gear on Profile lists Program,
+  Planner, My training, Photos and Settings; AI reports and Backup open from Settings.
+- My training (`web/src/views/MyTraining.tsx`, PR #26 review): the rest timer (Rest between sets, Rest before the next
+  exercise) and the whole Calendar group (wake up, earliest suggestion, travel, shifts, reminder, gym hours, preferred
+  times), moved out of Settings unchanged (same settings keys and API). Settings keeps the app: units, week start,
+  Face ID lock, time zone, Program, Apple Watch, AI and data, Devices, rest-timer notification, Sync, About, Sign out.
+- Goals: a training goal of one or two of Growth, Strength, Endurance, Power and a body goal of Gain, Maintain or Cut,
+  stored as the settings keys `goal_training`, `goal_body`, `goal_set_at` (`PUT /api/settings`, offline through the
+  outbox). The generator's slot schemes follow the goal (`worker/lib/goals.ts`, `goalScheme` in
+  `worker/lib/generator/model.ts`); saving a goal never changes the program. Set goal offers "Ask Coach for a program
+  for this goal" (the Coach's CONTEXT block says so; its draft needs approval as before).
+- Profile: the line after the last session, My body (the shared 3D body `web/src/components/Body3D.tsx`, today pink,
+  this week violet, the rest dark; sizes; the body goal's pace), My goal (the Living Diamond from `GET /api/profile`,
+  `worker/lib/profile.ts`; Power always shows 0 and "No data"), This week, AI reports, Before · After, Details (the old
+  Reports: Week, Month, All).
+- Body sizes: `body_measurements` (migration 0014), `PUT`/`DELETE /api/body/measurements/:id`, Log sizes and All sizes
+  on Profile. The Coach reads them with `get_body`.
+- Photos: the in-app guide camera (SPEC-v10.1, `web/src/components/GuideCamera.tsx`): outline with two guide lines
+  per pose, ghost of the last photo of the same pose and framing, level from the motion sensor, timer and burst of 3,
+  settings remembered per pose.
+- Pose check (PR #26 review): MediaPipe Pose Landmarker lite (Apache-2.0, `web/public/pose/POSE-SOURCE.md`, SHA-256
+  pinned in `web/src/lib/pose-asset.ts` and checked by `npm run build`) on the phone's CPU, loaded on first use of the
+  camera and kept by the service worker (model 5.8 MB, WebAssembly runtime 11.8 MB, about 3.4 MB compressed, code
+  0.5 MB; nothing in the install, nothing sent anywhere). Ankles in the frame is a full-body photo (head and feet on
+  the lines), otherwise an upper-body one (a mirror shot, head and waist on the lines); the framing switches after three
+  readings in a row (`web/src/lib/pose.ts`). Lines, outline, ghost and each framing's line size follow it, and the
+  framing is remembered per pose. One hint at a time ("Step back a bit", "Move left a bit", "Raise the phone a
+  little", "On the lines.") live and under each burst shot. The kept photo is saved with its framing
+  (`photos.framing`, migration 0015; NULL for library and older photos). Before · After and the month report's first
+  and last photo compare only photos of the same pose and framing (`worker/lib/photoGroups.ts`).
 
 ## Body-map exercise picker (SPEC-v3 M9b, 3D model SPEC-v6)
 
@@ -417,9 +452,6 @@ Re-writing a week: insert a new row with a later `created_at` (or `INSERT OR REP
 
 ## Artwork and credits
 
-- Muscle map figures (`web/src/components/bodyMap.ts`): original drawing made for Lodge Gym. Only the left half is
-  drawn and mirrored in code, so the figures are symmetric by construction. No third-party artwork or icon set is
-  used, so no external licence applies.
 - Exercise images: free-exercise-db (Unlicense), wger (each image's own licence and author, shown under it) and
   everkinetic (CC BY-SA 4.0), copied into the private R2 bucket (see "Exercise library"); credited in Settings → About.
 - 3D anatomy model of the exercise picker: Body Anatomy 3D Viewer by hpfrei (github.com/hpfrei/body-anatomy-3d-viewer,

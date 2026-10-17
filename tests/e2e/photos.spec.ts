@@ -61,6 +61,11 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   resetWorkouts();
   sql("DELETE FROM photos");
   await signIn(context, baseURL!);
+  // No camera access (as when it is turned off on the phone): the guide camera offers the iPhone camera instead, a file
+  // with EXIF orientation like a real photo.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: async () => Promise.reject(new DOMException("off", "NotAllowedError")) } });
+  });
   await page.goto("/");
   await page.waitForFunction(() => navigator.serviceWorker?.controller != null, null, { timeout: 15_000 }).catch(() => undefined);
   const files = { front: await makeJpeg(page, "#c00"), side: await makeJpeg(page, "#0a0"), back: await makeJpeg(page, "#00c") };
@@ -71,7 +76,11 @@ test("post-session photos offline: EXIF orientation applied, metadata stripped, 
   const prompt = page.getByTestId("photo-prompt");
   await expect(prompt).toBeVisible();
   for (const pose of ["front", "side", "back"] as const) {
-    await prompt.getByTestId(`camera-${pose}`).setInputFiles(files[pose]);
+    await prompt.getByTestId(`camera-${pose}`).click();
+    const cam = page.getByTestId("guide-camera");
+    await expect(cam.getByTestId("camera-error")).toContainText("Camera access is off");
+    await cam.getByTestId("camera-native").setInputFiles(files[pose]);
+    await expect(cam).toHaveCount(0);
     await expect(prompt.getByRole("status").first()).toContainText("queued for upload");
   }
   await expect(page.getByTestId("session-photos").locator("img")).toHaveCount(3);

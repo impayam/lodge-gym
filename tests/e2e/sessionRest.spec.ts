@@ -136,9 +136,9 @@ test("rest: 30 s between sets and 2 min before the next exercise; the superset i
   ]);
 });
 
-test("Settings → Training: his rest between sets and before the next exercise; a superset keeps its program rest", async ({ page }) => {
+test("My training → Training: his rest between sets and before the next exercise; a superset keeps its program rest", async ({ page }) => {
   await page.goto("/");
-  await goTo(page, "Settings");
+  await goTo(page, "My training");
   const training = page.getByTestId("training-settings");
   await expect(training.locator("#s-rest-sets")).toHaveValue("30");
   await expect(training.locator("#s-rest-next")).toHaveValue("120");

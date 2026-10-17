@@ -1,4 +1,3 @@
-import { STAGE_STATUS_COLOR } from "./tokens";
 import { expect, test } from "./fixtures";
 import { resetWorkouts, signIn, sql, goTo } from "./helpers";
 
@@ -6,7 +5,7 @@ test.describe.configure({ mode: "serial" });
 
 const denver = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(d);
 
-test("weekly, monthly and progress reports with muscle map, CSV and PNG export", async ({ page, context, baseURL }) => {
+test("Profile → Details: weekly, monthly and progress reports with the balance list, CSV and PNG export", async ({ page, context, baseURL }) => {
   resetWorkouts();
   sql("DELETE FROM body_metrics");
   sql("DELETE FROM health_workouts");
@@ -35,24 +34,22 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   // The 1RM chart and the calendar read the sessions on the phone: load them.
   await page.reload();
   await goTo(page, "Reports");
-  // Week (the default, shorter layout approved 2026-10-16): tiles without lift numbers, one Main lifts card, sets vs
-  // target (chest first), the period's details folded.
+  // Week (the default, shorter layout approved 2026-10-16; on Profile since M15): the current week's tiles are Profile's
+  // This week (no lift numbers), Details holds the Main lifts chart, sets vs target (chest first), the details folded.
   const tiles = page.getByTestId("week-stats").locator(".card--tile");
   await expect(tiles.nth(0)).toHaveText(/^1\/4\s*Sessions$/);
   // Bench 135 × 5 beats last week's 130 × 5: one record (the other exercises are new).
   await expect(tiles.nth(1)).toHaveText(/^1\s*New records/);
   await expect(tiles.nth(2)).toHaveText(/^\d+\/10\s*Groups on target/);
   await expect(page.getByTestId("week-stats")).not.toContainText("%");
-  // Main lifts: the big three's chart (bench 157.5 this week), then every main lift's 1RM this week vs last week.
+  // Main lifts: the big three's chart (bench 157.5 this week); each main lift's 1RM is in My goal's Strength corner.
   const lifts = page.getByTestId("main-lifts");
   await expect(lifts.getByTestId("chart-legend")).toHaveCount(0);
   await expect(lifts.getByRole("img")).toHaveAttribute("aria-label", /latest Bench 157\.5$/);
-  await expect(lifts.locator("th").nth(2)).toHaveText("vs last week");
+  await expect(lifts.locator("table")).toHaveCount(0);
   // The chart's label says what it shows: the sessions start a week ago, inside the 8-week window (Payam, 2026-10-16).
   const since = `lb, since ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/Denver" }).format(days(7))}`;
   await expect(lifts.locator(".card__head .caption")).toHaveText(since);
-  await expect(lifts.locator('tr[data-lift="bench"] td')).toHaveText(["Barbell Bench Press", "157.5", "+3.8%"]);
-  await expect(lifts.locator('tr[data-lift="squat"] td')).toHaveText(["Barbell Back Squat", "–", "–"]);
   // 1RM shows nowhere else on the page.
   await expect(page.getByTestId("week-lifts")).toHaveCount(0);
   // The details are folded until asked for.
@@ -84,34 +81,28 @@ test("weekly, monthly and progress reports with muscle map, CSV and PNG export",
   await page.getByTestId("share-png").click();
   expect((await pngDownload).suggestedFilename()).toBe("gym-time-report.png");
 
-  // Previous week: 130 × 5, Epley 151.7.
+  // Previous week: 130 × 5, Epley 151.7; a past week shows its tiles here.
   await page.getByRole("button", { name: "Previous week" }).click();
-  await expect(page.getByTestId("main-lifts").locator('tr[data-lift="bench"] td').nth(1)).toHaveText("151.7");
+  await expect(page.getByTestId("main-lifts").getByRole("img")).toHaveAttribute("aria-label", /latest Bench 151\.7$/);
+  await expect(page.getByTestId("reports").getByTestId("week-stats").locator(".card--tile").nth(0)).toHaveText(/^1\/4\s*Sessions$/);
 
   // Monthly (Gregorian month): the same layout; the change runs from the month's first session to its last.
   await page.getByRole("tab", { name: "Month" }).click();
   await expect(page.getByTestId("period-label")).toHaveText(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "America/Denver" }).format(now));
   await expect(page.getByTestId("month-stats").locator(".card--tile").nth(2)).toHaveText(/^\d+\/10\s*Groups on target/);
-  await expect(page.getByTestId("main-lifts").locator("th").nth(2)).toHaveText("this month");
   await expect(page.getByTestId("main-lifts").locator(".card__head .caption")).toHaveText(since);
-  await expect(page.getByTestId("main-lifts").locator('tr[data-lift="bench"] td').nth(1)).toHaveText("157.5");
+  await expect(page.getByTestId("main-lifts").getByRole("img")).toHaveAttribute("aria-label", /latest Bench 157\.5$/);
   await expect(page.getByTestId("month-numbers")).toHaveCount(0);
   await page.getByTestId("report-details").click();
   await expect(page.getByTestId("month-numbers")).toContainText("Adherence");
   await expect(page.getByTestId("month-body")).toContainText("Body weight");
 
-  // All (since the first session) with the muscle map.
+  // All (since the first session) with the muscle balance list (My body on Profile is the only body).
   await page.getByRole("tab", { name: "All" }).click();
-  await expect(page.getByTestId("main-lifts").locator("th").nth(2)).toHaveText("since start");
   await expect(page.getByTestId("main-lifts").locator(".card__head .caption")).toHaveText(since);
-  await expect(page.getByTestId("main-lifts").locator('tr[data-lift="bench"] td')).toHaveText(["Barbell Bench Press", "157.5", "+3.8%"]);
   // One record moment since the first session (this week's bench).
   await expect(page.getByTestId("all-stats").locator(".card--tile").nth(1)).toHaveText(/^1\s*New records/);
-  // The 3D muscle map (SPEC-v6 §8) colours chest by its status; the list holds the numbers.
-  await expect(page.getByTestId("balance-stage")).toHaveAttribute("data-mode", "3d", { timeout: 30_000 });
-  const colorOf = (m: string) => page.evaluate((k) => (window as unknown as { __anatomy: { view: { colorOf(m: string): string } } }).__anatomy.view.colorOf(k), m);
-  expect(await colorOf("chest")).toBe(STAGE_STATUS_COLOR.under);
-  expect(await colorOf("quads")).toBe(STAGE_STATUS_COLOR.none);
+  await expect(page.getByTestId("muscle-map").locator("canvas")).toHaveCount(0);
   await expect(page.getByTestId("muscle-chest")).toContainText("7 · 7 / 13");
   await expect(page.getByTestId("muscle-chest")).toContainText("Under target");
   // Fractional (SPEC-v2 §7.4): face pull 3 sets (primary) + seated cable row 3 sets × 0.5 (secondary) = 4.5, against the

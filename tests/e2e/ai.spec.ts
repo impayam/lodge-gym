@@ -29,13 +29,13 @@ async function startDay1(page: Page) {
 const report = (page: Page) => page.getByTestId("session-report");
 const status = (page: Page) => page.getByTestId("report-status");
 
-/** After Finish the report waits for its timing rule; Write report now writes it, and it opens on the Reports tab. */
+/** After Finish the report waits for its timing rule; Write report now writes it, and it opens on the Profile tab. */
 async function writeNowAndOpen(page: Page) {
   await expect(status(page)).toHaveAttribute("data-phase", "waiting", { timeout: 30_000 });
   await status(page).getByTestId("report-write").click();
   await expect(status(page)).toHaveAttribute("data-phase", "ready", { timeout: 30_000 });
   await status(page).getByTestId("report-open").click();
-  await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("report-summary")).toBeVisible();
 }
 

@@ -2,7 +2,7 @@
 // when that day's body weight and the Apple Health workout are both in, or 2 hours after the session ends, whichever
 // comes first; "Write report now" writes it at once. On top, today (summary, records, volume against the week's target);
 // at the bottom, "Where you are" in 2–4 lines. Persian, right-to-left, inside the English app (like the weekly review).
-// Right after Finish the screen shows only the report's status; the report itself opens on the Reports tab.
+// Right after Finish the screen shows only the report's status; the report itself opens on the Profile tab.
 // "Report unavailable" comes with Retry; Regenerate writes a new report and the older ones are kept.
 
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -11,7 +11,7 @@ import type { BalanceStatus } from "../../../worker/lib/reports";
 import { localDate } from "../../../worker/lib/time";
 import { fetchReport, lastReport, requestReport, sessionUnsynced, unavailableReason, type ReportResponse } from "../ai";
 import { ApiError, errorText, NetworkError } from "../api";
-import { STATUS_ICON, STATUS_NAME } from "../components/MuscleMap";
+import { STATUS_ICON, STATUS_NAME } from "../components/BalanceList";
 import { IconBack } from "../components/PulseIcons";
 import { LoadError } from "../components/States";
 import { SyncStatus } from "../components/SyncStatus";
@@ -242,7 +242,7 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
   );
 }
 
-/** Right after Finish: the report's status only; a written report opens on the Reports tab. */
+/** Right after Finish: the report's status only; a written report opens on the Profile tab. */
 export function ReportStatus({ sessionId }: { sessionId: string }) {
   const tz = useStore((s) => s.boot!.settings.timezone);
   const date = useStore((s) => s.sessions[sessionId]?.local_date ?? "");
@@ -260,7 +260,7 @@ export function ReportStatus({ sessionId }: { sessionId: string }) {
             Your report is ready.
           </p>
           <button type="button" class="clay press btn t-pink" data-testid="report-open" onClick={() => openReport(sessionId, false, true)}>
-            Open in Reports
+            Open in Profile
           </button>
         </>
       ) : null}

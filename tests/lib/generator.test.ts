@@ -11,10 +11,12 @@ import {
   GeneratorInputError,
   REAR_DELT_MIN,
   SEED_PRIORITY,
-  SESSION_MINUTES,
+  WEEKLY_CAP,
   checkPlan,
   dayMinutes,
   generateProgram,
+  goalScheme,
+  holdSeconds,
   isHeavyHinge,
   isOlympicLift,
   programVolume,
@@ -26,6 +28,7 @@ import {
   type ResolvedStyle,
   type TargetGroup,
 } from "../../worker/lib/generator";
+import type { TrainingGoal } from "../../worker/lib/goals";
 import { TARGET_GROUPS, groupOf } from "../../worker/lib/muscles";
 import { REGIONS } from "../../worker/lib/regions";
 import type { RotationStatus } from "../../worker/lib/rotation";
@@ -35,13 +38,15 @@ const exercises = libraryExercises();
 const exMap = new Map(exercises.map((e) => [e.id, e]));
 const { current, historyIds } = currentProgram();
 const ctx = { exercises, historyIds, current, currentPriority: SEED_PRIORITY };
-const payam: GeneratorInput = { days_per_week: 4, style: "full_body", session_minutes: 60, priority_muscles: ["chest"], avoid: [], equipment: "full_gym", seed: 1 };
+const payam: GeneratorInput = { days_per_week: 4, style: "full_body", priority_muscles: ["chest"], avoid: [], equipment: "full_gym", seed: 1 };
 const SEEDS = Array.from({ length: 50 }, (_, i) => i + 1);
 
-/** Combinations whose floors are reachable under the per-session cap, pull ≥ push and the session length (decided
- *  2026-10-12: elsewhere a floor miss is a warning, not a block). */
+/** Combinations whose floors are reachable under the per-session cap and pull ≥ push (decided 2026-10-12: elsewhere a
+ *  floor miss is a warning, not a block). Session length no longer limits a program (SPEC-v12 M15 §1). */
 const FLOORS_REACHABLE: Partial<Record<ResolvedStyle, number[]>> = { full_body: [3, 4], upper_lower: [4], ppl: [6], ppl_ul: [5], strength: [3, 4] };
-const floorsReachable = (style: ResolvedStyle, days: number, minutes: number) => minutes >= 60 && (FLOORS_REACHABLE[style] ?? []).includes(days);
+const floorsReachable = (style: ResolvedStyle, days: number) => (FLOORS_REACHABLE[style] ?? []).includes(days);
+/** No goal (the Growth schemes), each heavier and lighter goal, and a pair (SPEC-v12 M15 §2). */
+const GOAL_CASES: (TrainingGoal[] | null)[] = [null, ["strength"], ["endurance"], ["growth", "power"]];
 
 describe("inputs and targets", () => {
   it("auto picks the style from the days (§8.3); styles only run their allowed days", () => {
@@ -63,27 +68,29 @@ describe("inputs and targets", () => {
   });
 });
 
-describe("property: every style × days × session length × 50 seeds (§8.8)", () => {
+describe("property: every style × days × goal × 50 seeds (§8.8, SPEC-v12 M15)", () => {
   for (const equipment of EQUIPMENT_CHOICES)
     for (const [style, dayList] of Object.entries(ALLOWED_DAYS) as [ResolvedStyle, readonly number[]][])
       for (const days of dayList) {
         if (style === "strength" && equipment !== "full_gym") continue;
-        // 150 generated programs per case, 1–4 s each run; a busy machine can pass the default 5 s.
+        // 200 generated programs per case, 1–4 s each run; a busy machine can pass the default 5 s.
         it(`${equipment} ${style} ${days} days`, { timeout: 30_000 }, () => {
-          for (const session_minutes of SESSION_MINUTES)
+          for (const training of GOAL_CASES)
             for (const seed of SEEDS) {
-              const p = generateProgram({ days_per_week: days, style, session_minutes, priority_muscles: ["chest"], avoid: [], equipment, seed }, ctx);
-              const at = `${session_minutes} min, seed ${seed}`;
+              const goals = training ? { training, body: "maintain" as const } : null;
+              const p = generateProgram({ days_per_week: days, style, priority_muscles: ["chest"], avoid: [], equipment, seed, goals }, ctx);
+              const at = `${training?.join("+") ?? "no goal"}, seed ${seed}`;
               expect(p.check.violations, at).toEqual([]);
               expect(p.check.pull_sets, at).toBeGreaterThanOrEqual(p.check.push_sets);
-              expect(p.check.minutes.every((m) => m <= session_minutes), at).toBe(true);
-              expect(p.check.warnings.filter((w) => w.code === "unfilled" || w.code === "too_long"), at).toEqual([]);
+              expect(p.check.warnings.filter((w) => w.code === "unfilled" || w.code === "weekly_cap"), at).toEqual([]);
               expect(p.days.map((d) => d.offset)).toEqual(p.days.map((d) => d.offset).sort((a, b) => a - b));
               const vol = new Map(p.check.volume.map((v) => [v.group, v.planned]));
               expect(vol.get("rear_delts")!, at).toBeGreaterThanOrEqual(REAR_DELT_MIN);
+              // The weekly cap: never more than 20 fractional sets a week for one group (Payam, 2026-10-17).
+              for (const v of p.check.volume) expect(v.planned, `${v.group} ${at}`).toBeLessThanOrEqual(WEEKLY_CAP);
               for (const [g, floor] of Object.entries(FLOORS) as [TargetGroup, number][]) {
                 const below = vol.get(g)! < floor;
-                if (floorsReachable(style, days, session_minutes)) expect(below, `${g} ${at}`).toBe(false);
+                if (floorsReachable(style, days)) expect(below, `${g} ${at}`).toBe(false);
                 // Elsewhere a floor miss is always reported to Payam as a warning.
                 if (below) expect(p.check.warnings.some((w) => w.code === "floor" && w.message.startsWith(`${g === "hamstrings_glutes" ? "Hamstrings & glutes" : g[0].toUpperCase() + g.slice(1)}:`)), `${g} ${at}`).toBe(true);
               }
@@ -105,7 +112,7 @@ describe("property: every style × days × session length × 50 seeds (§8.8)", 
       }
 });
 
-describe("Payam's inputs: 4 days, full body, 60 min, priority chest (§8.8 snapshot)", () => {
+describe("Payam's inputs: 4 days, full body, priority chest (§8.8 snapshot)", () => {
   it("keeps the main lifts and their days; deterministic for a seed", () => {
     const p = generateProgram(payam, ctx);
     expect(p.name).toBe("Full body · 4 days");
@@ -148,7 +155,7 @@ describe("Payam's inputs: 4 days, full body, 60 min, priority chest (§8.8 snaps
     expect(arms.check.volume.find((v) => v.group === "biceps")!.planned).toBeGreaterThan(generateProgram(payam, ctx).check.volume.find((v) => v.group === "biceps")!.planned);
   });
   it("strength: the four barbell lifts as main lifts, 3–5 reps at RIR 1–2", () => {
-    const p = generateProgram({ ...payam, style: "strength", days_per_week: 4, session_minutes: 75 }, ctx);
+    const p = generateProgram({ ...payam, style: "strength", days_per_week: 4 }, ctx);
     const mains = p.days.map((d) => exMap.get(d.exercises[0].exercise_id)!);
     expect(mains.map((e) => e.equipment)).toEqual(["barbell", "barbell", "barbell", "barbell"]);
     expect(mains.map((e) => e.name_en)).toEqual(["Barbell Back Squat", "Barbell Bench Press", "Conventional Deadlift", "Standing Overhead Press"]);
@@ -173,12 +180,12 @@ function rotationOf(allDue = false): RotationStatus[] {
   );
 }
 
-describe("Phase B: Payam's inputs at 75 min, block B (SPEC-v11, approved 2026-10-17)", () => {
-  const b: GeneratorInput = { ...payam, session_minutes: 75, block: 2 };
+describe("Phase B: Payam's inputs, block B (SPEC-v11, approved 2026-10-17)", { timeout: 30_000 }, () => {
+  const b: GeneratorInput = { ...payam, block: 2 };
   const today = { ...ctx, rotation: rotationOf() };
   const ids = (p: { days: { exercises: { exercise_id: string }[] }[] }) => new Set(p.days.flatMap((d) => d.exercises.map((x) => x.exercise_id)));
 
-  it("every seed: all 30 regions, forearms 4 and neck 2 direct sets, within 75 min, no hard rule broken, every group on target", () => {
+  it("every seed: all 30 regions, forearms 4 and neck 2 direct sets, no group above 20 a week, no hard rule broken, every group on target", { timeout: 30_000 }, () => {
     for (const seed of SEEDS) {
       const p = generateProgram({ ...b, seed }, today);
       const at = `seed ${seed}`;
@@ -188,8 +195,8 @@ describe("Phase B: Payam's inputs at 75 min, block B (SPEC-v11, approved 2026-10
         { group: "forearms", target: 4, planned: 4 },
         { group: "neck", target: 2, planned: 2 },
       ]);
-      expect(p.check.minutes.every((m) => m <= 75), at).toBe(true);
-      expect(p.check.warnings.filter((w) => ["coverage", "direct_under", "unfilled", "too_long", "region_equipment", "floor", "under_target", "day_all_new"].includes(w.code)), at).toEqual([]);
+      for (const v of p.check.volume) expect(v.planned, `${v.group} ${at}`).toBeLessThanOrEqual(WEEKLY_CAP);
+      expect(p.check.warnings.filter((w) => ["coverage", "direct_under", "unfilled", "weekly_cap", "region_equipment", "floor", "under_target", "day_all_new"].includes(w.code)), at).toEqual([]);
       // No group under its target; region work may take some over it (Payam, 2026-10-17: longer sessions for it).
       for (const v of p.check.volume) expect(v.planned, `${v.group} ${at}`).toBeGreaterThanOrEqual(v.target - 0.5);
     }
@@ -268,7 +275,7 @@ describe("plan check: each hard rule (§8.4) and the decided rules", () => {
   });
   const base = programVolume(current, exMap);
   const plan = (style: Plan["style"], days: [number, PlanExercise[]][]): Plan => ({
-    style, days_per_week: days.length, session_minutes: 90, days: days.map(([offset, exercises], i) => ({ name_en: `D${i + 1}`, kind: "full", offset, exercises })),
+    style, days_per_week: days.length, days: days.map(([offset, exercises], i) => ({ name_en: `D${i + 1}`, kind: "full", offset, exercises })),
   });
   const codes = (p: Plan) => checkPlan(p, exMap, base).violations.map((v) => v.code);
   const ok: [number, PlanExercise[]][] = [
@@ -316,5 +323,57 @@ describe("plan check: each hard rule (§8.4) and the decided rules", () => {
   });
   it("every target group has a volume row", () => {
     expect(checkPlan(plan("full_body", ok), exMap, base).volume.map((v) => v.group)).toEqual([...TARGET_GROUPS]);
+  });
+});
+
+describe("SPEC-v12 M15: goals change the slot schemes, never the time", () => {
+  const withGoal = (training: TrainingGoal[], over: Partial<GeneratorInput> = {}) => generateProgram({ ...payam, ...over, goals: { training, body: "maintain" } }, ctx);
+  const bySlot = (p: ReturnType<typeof generateProgram>, slot: PlanExercise["slot"]) => p.days.flatMap((d) => d.exercises).filter((x) => x.slot === slot && !x.is_time && groupOf(exMap.get(x.exercise_id)!.muscle_primary) !== "neck");
+
+  it("no goal and Growth give the same program (the app's own schemes)", () => {
+    expect(withGoal(["growth"]).days).toEqual(generateProgram(payam, ctx).days);
+  });
+  it("Strength: main lifts 4 × 3–5 at RIR 1–2, rest 210 s; secondary 4–6; isolation 8–12", () => {
+    const p = withGoal(["strength"]);
+    for (const x of bySlot(p, "main")) expect(x).toMatchObject({ reps_min: 3, reps_max: 5, target_rir_min: 1, target_rir_max: 2, rest_sec: 210 });
+    for (const x of bySlot(p, "secondary")) expect(x).toMatchObject({ reps_min: 4, reps_max: 6, rest_sec: 150 });
+    for (const x of bySlot(p, "isolation")) expect(x).toMatchObject({ reps_min: 8, reps_max: 12, rest_sec: 90 });
+    expect(p.check.violations).toEqual([]);
+  });
+  it("Endurance: light, high-rep, short rest; core holds 45–60 s", () => {
+    const p = withGoal(["endurance"]);
+    for (const x of bySlot(p, "main")) expect(x).toMatchObject({ sets: 3, reps_min: 8, reps_max: 12, target_rir_min: 2, target_rir_max: 3, rest_sec: 120 });
+    for (const x of bySlot(p, "accessory")) expect(x).toMatchObject({ reps_min: 15, reps_max: 20, rest_sec: 60 });
+    for (const x of bySlot(p, "isolation")) expect(x).toMatchObject({ reps_min: 15, reps_max: 25, rest_sec: 50 });
+    const hold = p.days.flatMap((d) => d.exercises).find((x) => x.is_time);
+    if (hold) expect(hold).toMatchObject({ reps_min: 45, reps_max: 60 });
+    expect(holdSeconds(["endurance"])).toEqual([45, 60]);
+    expect(holdSeconds(["growth", "endurance"])).toEqual([45, 60]);
+    expect(holdSeconds(["strength"])).toEqual([30, 45]);
+  });
+  it("a pair: main and secondary follow the heavier goal, the rest the other (Growth + Endurance, Growth + Strength)", () => {
+    const ge = withGoal(["endurance", "growth"]);
+    for (const x of bySlot(ge, "main")) expect(x).toMatchObject({ reps_min: 5, reps_max: 8 });
+    for (const x of bySlot(ge, "accessory")) expect(x).toMatchObject({ reps_min: 15, reps_max: 20 });
+    const gs = withGoal(["growth", "strength"]);
+    for (const x of bySlot(gs, "main")) expect(x).toMatchObject({ reps_min: 3, reps_max: 5 });
+    for (const x of bySlot(gs, "isolation")) expect(x).toMatchObject({ reps_min: 10, reps_max: 15 });
+  });
+  it("Power: main and secondary as Strength, the rest as Growth; the Strength style keeps its barbell main scheme", () => {
+    expect(goalScheme("main", false, "power")).toEqual(goalScheme("main", false, "strength"));
+    expect(goalScheme("secondary", false, "power")).toEqual(goalScheme("secondary", false, "strength"));
+    expect(goalScheme("isolation", false, "power")).toEqual(goalScheme("isolation", false, "growth"));
+    expect(goalScheme("main", true, "endurance")).toMatchObject({ reps: [3, 5], rir: [1, 2] });
+  });
+  it("the goal is kept in the proposal's params", () => {
+    expect(withGoal(["strength", "endurance"]).params.goals).toEqual({ training: ["strength", "endurance"], body: "maintain" });
+  });
+  it("no day is cut for time: a long day keeps every exercise and its estimate is information", () => {
+    for (const training of GOAL_CASES) {
+      const p = generateProgram({ ...payam, block: 2, goals: training ? { training, body: "gain" } : null }, { ...ctx, rotation: rotationOf() });
+      expect(p.check.coverage.filter((c) => !c.exercises.length)).toEqual([]);
+      expect(p.check.warnings.map((w) => w.code)).not.toContain("too_long");
+      expect(p.check.minutes.length).toBe(4);
+    }
   });
 });

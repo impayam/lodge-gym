@@ -330,7 +330,7 @@ describe("coach answers (SPEC-v9 M12)", () => {
       expect(b.thinking).toEqual({ type: "adaptive", display: "updates", block_binding: { prefix_mismatch_behavior: "drop_block" } });
       expect(b.stream).toBe(true);
       expect(b.system).toEqual([{ type: "text", text: COACH_SYSTEM, cache_control: { type: "ephemeral" } }]);
-      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "suggest_replacements", "propose_exercise", "propose_session_additions", "propose_program"]);
+      expect(b.tools.map((t: { name: string }) => t.name)).toEqual(["get_sessions", "get_e1rm_history", "get_volume", "get_adherence", "get_prs", "get_program", "get_library", "get_body_weight", "get_body", "get_photos", "get_recovery", "get_training_pattern", "get_calendar", "find_free_slots", "propose_schedule", "suggest_replacements", "propose_exercise", "propose_session_additions", "propose_program"]);
       expect(b.messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
       for (const beta of COACH_BETAS) expect(c.headers["anthropic-beta"]).toContain(beta);
     }

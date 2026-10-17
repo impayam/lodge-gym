@@ -118,7 +118,7 @@ test("a question streams: the coach's progress note in the typing line, the app'
   await expect(page.locator('[data-card="get_volume"]')).toBeVisible();
 });
 
-test("a program draft card: Change prefills the question; Add to Planner saves an inactive draft under Me → Program → Drafts", async ({ page }) => {
+test("a program draft card: Change prefills the question; Add to Planner saves an inactive draft under Profile → Program → Drafts", async ({ page }) => {
   const activeBefore = sql("SELECT id FROM programs WHERE active = 1");
   await openCoach(page);
   await ask(page, "Write me a chest program");
@@ -143,11 +143,11 @@ test("a program draft card: Change prefills the question; Add to Planner saves a
   await page.getByTestId("coach-input").fill("");
 
   await draft.getByTestId("coach-add-draft").click();
-  await expect(draft.getByTestId("coach-draft-added")).toContainText("Me → Program → Drafts");
+  await expect(draft.getByTestId("coach-draft-added")).toContainText("Profile → Program → Drafts");
   expect(sql("SELECT name, active, generated_by FROM programs WHERE generated_by = 'coach'")).toEqual([{ name: "Chest focus · 2 days", active: 0, generated_by: "coach" }]);
   expect(sql("SELECT id FROM programs WHERE active = 1")).toEqual(activeBefore);
 
-  // Open goes to Me → Program, where the draft is listed with the other drafts.
+  // Open goes to Profile → Program, where the draft is listed with the other drafts.
   await draft.getByTestId("coach-open-drafts").click();
   const drafts = page.getByTestId("program-screen-drafts");
   await expect(drafts).toContainText("From the coach");
